@@ -25,7 +25,6 @@ logger.setLevel(logging.INFO)
 class FrameDataProcessor:
     def __init__(
         self,
-        name: str,
         video_vrs: str,
         stream_id: StreamId,
         data_source: str = "unknown",
@@ -36,14 +35,12 @@ class FrameDataProcessor:
         gt_data_processor: Optional[BaseGtDataProcessor] = None,
     ):
         """
-        name: data type readable name
-        target_framerate: Downsample the frame rate to target_framerate. None means original rate.
+        target_framerate: Downsample the frame rate to target_framerate. None means orignal rate.
         timecode_mapping: DataFrame : timecode mapping from vrs timestamps to unified timestamps
         target_linear_camera_params: Optional[np.adrray] [image_height, image_width, Optional[focal_length_xy]]
             We will use the fxfy inferred from the original camera calibration if it's not provided in target params.
         """
 
-        self.name = name
         self.data_source = data_source
         self.time_domain = time_domain
         self.stream_id = stream_id
@@ -158,8 +155,8 @@ class FrameDataProcessor:
         # Frame rate sanity check.
         subsample_factor = self.rate_hz / target_hz
         assert math.isclose(subsample_factor, round(subsample_factor), rel_tol=1e-4), (
-            f"Can not subsample the image stream {self.name} from {self.rate_hz}hz ",
-            f"to {target_hz}hz with the integer subsample factor ({subsample_factor})",
+            f"Can not subsample the image stream {self.stream_id} from {self.rate_hz}hz ",
+            f"to {target_hz}hz with the interger subsample factor ({subsample_factor})",
         )
         return int(round(subsample_factor))
 

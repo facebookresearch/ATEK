@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass, fields
-from typing import List
+from typing import Dict, List
 
 import numpy as np
 
@@ -54,8 +54,8 @@ class Frame:
     # +++++++++++++++++++++++ TRAJECTORY DATA END +++++++++++++++++++++++++++++
 
     # ======================= TARGET DATA BEGIN ===============================
-    # Mapping for category id to name.
-    category_id_to_name: dict[int, str] = None
+    # Maping for category id to name.
+    category_id_to_name: Dict[int, str] = None
 
     # Object instances ids.
     object_instance_ids: List[int] = None
@@ -64,16 +64,16 @@ class Frame:
     object_category_ids: List[int] = None
 
     # Transformation form object to camera for each object instance. List[ 3x4 [R|t] ]
-    Ts_camera_object: list[np.ndarray] = None
+    Ts_camera_object: List[np.ndarray] = None
 
     # Transformation from object to world for each object instance. List[ 3x4 [R|t] ]
-    Ts_world_object: list[np.ndarray] = None
+    Ts_world_object: List[np.ndarray] = None
 
     # Object bounding box dimensions in meters. List[ 3 [xyz] ]
-    object_dimensions: list[np.ndarray] = None
+    object_dimensions: List[np.ndarray] = None
 
     # Object 2d bounding boxes in pixels. List[ [xmin, xmax, ymin, ymax] ]
-    bb2ds: list[np.ndarray] = None
+    bb2ds: List[np.ndarray] = None
     # ======================= TARGET DATA END =================================
 
     @staticmethod
@@ -157,7 +157,7 @@ class Frameset:
 
     # ------------------------ INPUT IMAGE DATA BEGIN -------------------------
     # The frames in the frame set.
-    frames: list[Frame] = None
+    frames: List[Frame] = None
 
     # The sequence name of the vrs.
     sequence_name: str = None
@@ -181,7 +181,7 @@ class Frameset:
 
     # Transformation from frameset to camera coordinate frame. 3x4 [R|t]
     # Note this is aligned with the frame list.
-    Ts_frameset_camera: list[np.ndarray] = None
+    Ts_frameset_camera: List[np.ndarray] = None
     # ------------------------ INPUT IMAGE DATA END ---------------------------
 
     # +++++++++++++++++++++++ TRAJECTORY DATA BEGIN +++++++++++++++++++++++++++
@@ -200,8 +200,8 @@ class Frameset:
     # Frameset target is in the context for the frameset. For example, all the objects
     # seen by any frame in the frameset are considered as the target of the frameset.
 
-    # Mapping for category id to name.
-    category_id_to_name: dict[int, str] = None
+    # Maping for category id to name.
+    category_id_to_name: Dict[int, str] = None
 
     # Object instances ids.
     object_instance_ids: List[int] = None
@@ -210,13 +210,13 @@ class Frameset:
     object_category_ids: List[int] = None
 
     # Transformation from object to world for each object instance. List[ 3x4 [R|t] ]
-    Ts_world_object: list[np.ndarray] = None
+    Ts_world_object: List[np.ndarray] = None
 
     # Object bounding box dimensions in meters. List[ 3 [xyz] ]
-    object_dimensions: list[np.ndarray] = None
+    object_dimensions: List[np.ndarray] = None
 
     # Transformation form object to frame for each object instance. List[ 3x4 [R|t] ]
-    Ts_frameset_object: list[np.ndarray] = None
+    Ts_frameset_object: List[np.ndarray] = None
 
     # ======================= TARGET DATA END =================================
     @staticmethod
@@ -287,7 +287,7 @@ class FramesetGroup:
 
     # ------------------------ INPUT IMAGE DATA BEGIN -------------------------
     # The framesets in the frameset group.
-    framesets: list[Frameset] = None
+    framesets: List[Frameset] = None
 
     # The sequence name of the vrs.
     sequence_name: str = None
@@ -312,15 +312,15 @@ class FramesetGroup:
 
     # Transformation from local to frameset coordinate frames. 3x4 [R|t]
     # Note this is aligned with the frameset list.
-    Ts_local_frameset: list[np.ndarray] = None
+    Ts_local_frameset: List[np.ndarray] = None
     # +++++++++++++++++++++++ TRAJECTORY DATA END +++++++++++++++++++++++++++++
 
     # ======================= TARGET DATA BEGIN ===============================
     # Frameset target is in the context for the frameset. For example, all the objects
     # seen by any frame in the frameset are considered as the target of the frameset.
 
-    # Mapping for category id to name.
-    category_id_to_name: dict[int, str] = None
+    # Maping for category id to name.
+    category_id_to_name: Dict[int, str] = None
 
     # Object instances ids.
     object_instance_ids: List[int] = None
@@ -329,13 +329,13 @@ class FramesetGroup:
     object_category_ids: List[int] = None
 
     # Transformation from object to world for each object instance. List[ 3x4 [R|t] ]
-    Ts_world_object: list[np.ndarray] = None
+    Ts_world_object: List[np.ndarray] = None
 
     # Object bounding box dimensions in meters. List[ 3 [xyz] ]
-    object_dimensions: list[np.ndarray] = None
+    object_dimensions: List[np.ndarray] = None
 
     # Transformation form object to frame for each object instance. List[ 3x4 [R|t] ]
-    Ts_local_object: list[np.ndarray] = None
+    Ts_local_object: List[np.ndarray] = None
     # ======================= TARGET DATA END =================================
 
     @staticmethod

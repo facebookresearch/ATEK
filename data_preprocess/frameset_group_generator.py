@@ -3,6 +3,7 @@
 import logging
 
 from dataclasses import asdict, dataclass
+from typing import Optional
 
 import numpy as np
 from atek.data_preprocess.data_schema import FramesetGroup
@@ -30,7 +31,7 @@ class FramesetSelectionConfig:
     """
 
     # The number of framesets to group together.
-    num_framesets: int = 3
+    num_framesets_per_group: int = 3
 
     # Skip first n framesets in the frameset aligner.
     skip_first_n_framesets: int = 0
@@ -42,16 +43,16 @@ class FramesetSelectionConfig:
     stride: int = 1
 
     # Time threshold for selecting framesets. If set to None, we don't do any timestamp
-    # thresholding for selection frameset for grouping.
-    time_duration_ns_threshold: int = None
+    # thresholding for selection framest for grouping.
+    time_duration_ns_threshold: Optional[int] = None
 
     # Distance threshold for selecting framesets. If set to None, we don't do any translation
-    # thresholding for selection frameset for grouping.
-    translation_m_threshold: float = None
+    # thresholding for selection framest for grouping.
+    translation_m_threshold: Optional[float] = None
 
     # Rotation threshold for selecting framesets. If set to None, we don't do any rotation
-    # thresholding for selection frameset for grouping.
-    rotation_deg_threshold: float = None
+    # thresholding for selection framest for grouping.
+    rotation_deg_threshold: Optional[float] = None
 
     # Fov overlapping ratio threshold for selecting framesets. If set to None, we don't do any
     # overlapping ratio thresholding for selection frameset for grouping. This mechanism is that build
@@ -59,10 +60,10 @@ class FramesetSelectionConfig:
     # the overlapping ratio between two framesets to make sure the viewing perspective have changed enough.
     # We only select a frameset when the overlapping ratio is getting smaller than this threshold.
     # CAUTION: The compute of the mesh intersection is expensive and slow so only use this when necessary.
-    fov_overlapping_ratio_threshold: float = None
+    fov_overlaping_ratio_threshold: Optional[float] = None
 
-    # The near clipping distance for computing the fov overlapping ratio.
-    far_clipping_distance: float = 4.0
+    # The near clipping distance for computing the fov overlaping ratio.
+    far_clipping_distance: Optional[float] = 4.0
 
     # The frameset idx which selected as the local coordinate frame.
     local_selection: int = 0
@@ -191,26 +192,32 @@ class FramesetGroupGenerator:
             # Quick return if not enough framesets left to group.
             if (
                 num_framesets - start_index - 1
-                < self.frameset_selection_config.num_framesets - 1
+                < self.frameset_selection_config.num_framesets_per_group - 1
             ):
                 return None
             else:
                 return list(
                     range(
                         start_index,
-                        start_index + self.frameset_selection_config.num_framesets,
+                        start_index
+                        + self.frameset_selection_config.num_framesets_per_group,
                     )
                 )
 
         frameset_group_ids = [start_index]
         last_frameset_info = self.get_frameset_selection_info_by_index(start_index)
         for i in range(start_index + 1, num_framesets):
-            if len(frameset_group_ids) == self.frameset_selection_config.num_framesets:
+            if (
+                len(frameset_group_ids)
+                == self.frameset_selection_config.num_framesets_per_group
+            ):
                 return frameset_group_ids
 
             # Quick return if not enough framesets left to group.
-            if num_framesets - i < self.frameset_selection_config.num_framesets - len(
-                frameset_group_ids
+            if (
+                num_framesets - i
+                < self.frameset_selection_config.num_framesets_per_group
+                - len(frameset_group_ids)
             ):
                 return None
 
@@ -328,7 +335,9 @@ class FramesetGroupGenerator:
         """
         assert 0 <= index < self.frameset_group_number(), f"Index {index} out of bound."
         frameset_meshes = []
-        colors = generate_disjoint_colors(self.frameset_selection_config.num_framesets)
+        colors = generate_disjoint_colors(
+            self.frameset_selection_config.num_framesets_per_group
+        )
         for i, frameset_id in enumerate(self.frameset_ids_for_groups[index]):
             frameset_mesh = self.frameset_aligner.get_frameset_fov_mesh()
             T_world_frameset = self.frameset_aligner.get_T_world_frameset_by_index(

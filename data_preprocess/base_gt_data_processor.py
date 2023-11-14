@@ -15,17 +15,11 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-class GtConfig:
-    bb2d_enable = False
-    bb3d_enable = False
-
-
 class BaseGtDataProcessor(ABC):
     def __init__(
         self,
         name: str,
         stream_id: StreamId,
-        config: GtConfig,
     ):
         """
         name: data type readable name
@@ -33,7 +27,6 @@ class BaseGtDataProcessor(ABC):
         self.name = name
         self.data_source = "Unknown"
         self.stream_id = stream_id
-        self.config = config
 
     @abstractmethod
     def set_undistortion_params(

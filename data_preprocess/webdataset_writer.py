@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import re
 from dataclasses import dataclass
 
@@ -337,12 +338,12 @@ class AtekWdsWriter:
         self,
         output_path: str,
         data_selection_settings: DataSelectionSettings,
-        max_shard_size: int = 32,
+        max_samples_per_shard: int = 32,
         encryption_handler: Optional[Callable[[bytes], bytes]] = None,
     ):
         self.output_path = output_path
         self.settings = data_selection_settings
-        self.max_shard_size = max_shard_size
+        self.max_samples_per_shard = max_samples_per_shard
         self.encryption_handler = encryption_handler
 
         # Initialize sink when writing the first sample
@@ -357,8 +358,12 @@ class AtekWdsWriter:
             sample_dict = encrypt_wds_dict(sample_dict, self.encryption_handler)
 
         if self.sink is None:
+            if not os.path.exists(self.output_path):
+                os.makedirs(self.output_path)
+
             self.sink = wds.ShardWriter(
-                f"{self.output_path}/shards-%04d.tar", maxcount=self.max_shard_size
+                f"{self.output_path}/shards-%04d.tar",
+                maxcount=self.max_samples_per_shard,
             )
 
         self.sink.write(sample_dict)

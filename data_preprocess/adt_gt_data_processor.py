@@ -7,7 +7,7 @@ from functools import partial
 from typing import Optional
 
 import numpy as np
-from atek.data_preprocess.base_gt_data_processor import BaseGtDataProcessor, GtConfig
+from atek.data_preprocess.base_gt_data_processor import BaseGtDataProcessor
 from atek.data_preprocess.data_schema import Frame
 from atek.data_preprocess.data_utils import insert_and_check
 from projectaria_tools.core import calibration
@@ -114,11 +114,10 @@ class AdtGtDataProcessor(BaseGtDataProcessor):
         name: str,
         data_source: str,
         stream_id: StreamId,
-        config: GtConfig,
         data_path: AriaDigitalTwinDataPaths,
     ):
-        super().__init__(name, stream_id, config)
-        self.data_source = data_source
+        super().__init__(name, stream_id)
+        self.data_srouce = data_source
         self.gt_provider = AriaDigitalTwinDataProvider(data_path)
         self.bb2d_transform_fn = identity_transform
 

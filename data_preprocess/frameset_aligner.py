@@ -32,7 +32,7 @@ def get_stream_index_key(stream_name: str) -> str:
     return f"{stream_name}_index"
 
 
-def get_frameset_timestamp(frames_timestamp_ns: list[int], timestamp_type: str):
+def get_frameset_timestamp(frames_timestamp_ns: List[int], timestamp_type: str):
     """
     Return the timestamp of the frameset computed from the frames timestamp
     based on the timestmap type.
@@ -99,7 +99,7 @@ class FramesetAligner:
         Update the frameset dataframe with timestamp information.
         """
         stream_timestamp_ns_keys = [
-            get_stream_timestamp_key(frame_data_processor.name)
+            get_stream_timestamp_key(str(frame_data_processor.stream_id))
             for frame_data_processor in self.frame_data_processors
         ]
         srteam_timestamp_ns_data = self.frameset_df[stream_timestamp_ns_keys].values
@@ -136,7 +136,7 @@ class FramesetAligner:
         key_for_align = "timestamp_ns_for_align"
         for frame_data_processor in self.frame_data_processors:
             tss_ns = frame_data_processor.get_timestamps_ns()
-            stream_name = frame_data_processor.name
+            stream_name = str(frame_data_processor.stream_id)
 
             subsample_factor_after_alignment = (
                 min(
@@ -281,7 +281,7 @@ class FramesetAligner:
         frameset = Frameset()
         frameset.frames = []
         for frame_data_processor in self.frame_data_processors:
-            stream_name = frame_data_processor.name
+            stream_name = str(frame_data_processor.stream_id)
             target_frame_index = int(
                 self.frameset_df.loc[index, get_stream_index_key(stream_name)]
             )
