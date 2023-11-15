@@ -43,15 +43,15 @@ class FramesetSelectionConfig:
     stride: int = 1
 
     # Time threshold for selecting framesets. If set to None, we don't do any timestamp
-    # thresholding for selection framest for grouping.
+    # thresholding for selection frameset for grouping.
     time_duration_ns_threshold: Optional[int] = None
 
     # Distance threshold for selecting framesets. If set to None, we don't do any translation
-    # thresholding for selection framest for grouping.
+    # thresholding for selection frameset for grouping.
     translation_m_threshold: Optional[float] = None
 
     # Rotation threshold for selecting framesets. If set to None, we don't do any rotation
-    # thresholding for selection framest for grouping.
+    # thresholding for selection frameset for grouping.
     rotation_deg_threshold: Optional[float] = None
 
     # Fov overlapping ratio threshold for selecting framesets. If set to None, we don't do any
@@ -60,9 +60,9 @@ class FramesetSelectionConfig:
     # the overlapping ratio between two framesets to make sure the viewing perspective have changed enough.
     # We only select a frameset when the overlapping ratio is getting smaller than this threshold.
     # CAUTION: The compute of the mesh intersection is expensive and slow so only use this when necessary.
-    fov_overlaping_ratio_threshold: Optional[float] = None
+    fov_overlapping_ratio_threshold: Optional[float] = None
 
-    # The near clipping distance for computing the fov overlaping ratio.
+    # The near clipping distance for computing the fov overlapping ratio.
     far_clipping_distance: Optional[float] = 4.0
 
     # The frameset idx which selected as the local coordinate frame.
