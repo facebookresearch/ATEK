@@ -231,4 +231,3 @@ dependencies:
   - zstd=1.5.5=h4f39d0f_0
   - pip:
       - projectaria-tools==1.2.1a1
-prefix: /Users/shangyic/miniconda3/envs/atek
