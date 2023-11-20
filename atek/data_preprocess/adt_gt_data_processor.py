@@ -159,6 +159,18 @@ class AdtGtDataProcessor(BaseGtDataProcessor):
         T_camera_world: SE3,
         tolerance_ns: int = 1000_0000,
     ):
+        # We expecting valid data for the adt frames. Initialize the empty object data for frame.
+        # Note that there are rare cases that frame can not find the corresponding gt in the time
+        # threadhold. Use the empty list or dict for those cases instead of returning None for soft
+        # handling.
+        frame.category_id_to_name = {}
+        frame.object_instance_ids = []
+        frame.object_category_ids = []
+        frame.Ts_world_object = []
+        frame.object_dimensions = []
+        frame.Ts_camera_object = []
+        frame.bb2ds = []
+
         # Getting 2d bounding boxes from GT first. We must need to have 2d info first to
         # find the 3d bounding box visibility. Default by querying the closest timestamp.
         bbox2d_with_dt = self.gt_provider.get_object_2d_boundingboxes_by_timestamp_ns(
@@ -199,17 +211,6 @@ class AdtGtDataProcessor(BaseGtDataProcessor):
             bb3d_available = False
 
         bbox2d_all = bbox2d_with_dt.data()
-
-        frame.category_id_to_name = {}
-
-        frame.object_instance_ids = []
-        frame.object_category_ids = []
-        frame.bb2ds = []
-
-        frame.object_dimensions = []
-        frame.Ts_world_object = []
-        frame.Ts_camera_object = []
-
         for instance_id, bbox2d_data in bbox2d_all.items():
             instance_info = self.gt_provider.get_instance_info_by_id(instance_id)
             category_name = instance_info.category

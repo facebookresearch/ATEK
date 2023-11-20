@@ -56,6 +56,7 @@ class FrameDataProcessor:
         self.frame_df["timestamp_ns"] = np.array(
             self.data_provider.get_timestamps_ns(self.stream_id, self.time_domain)
         )
+        self.frame_df["image_vrs_index"] = range(len(self.frame_df["timestamp_ns"]))
         self.rate_hz = self.data_provider.get_nominalRateHz(self.stream_id)
 
         stream_sensor_calib = self.data_provider.get_sensor_calibration(self.stream_id)
@@ -214,17 +215,17 @@ class FrameDataProcessor:
     def get_frame_by_index(self, index: int) -> Frame:
         frame = Frame()
         # fill in the input image data
-        frame.frame_id = index
+        frame.frame_id = int(self.frame_df["image_vrs_index"][index])
         frame.sequence_name = self.video_vrs
         frame.data_source = self.data_source
 
         frame.stream_id = str(self.stream_id)
         frame.camera_name = self.vrs_camera_calib.get_label()
-        frame.timestamp_ns = int(self.frame_df.loc[index, "timestamp_ns"])
+        frame.timestamp_ns = int(self.frame_df["timestamp_ns"][index])
 
-        image = self.data_provider.get_image_data_by_index(self.stream_id, index)[
-            0
-        ].to_numpy_array()
+        image = self.data_provider.get_image_data_by_index(
+            self.stream_id, frame.frame_id
+        )[0].to_numpy_array()
 
         frame.camera_model = self.final_camera_calib.model_name().name
         frame.camera_parameters = self.final_camera_calib.projection_params()

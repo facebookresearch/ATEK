@@ -45,11 +45,6 @@ def strict_update_dict(dict_A, dict_B):
     The update will either insert a new key-value pair into a dictionary,
     or check that the existing value matches the new one
     """
-
-    # TODO: WORKaround to make sure the data could be generated.
-    if dict_B is None:
-        return
-
     for k, v in dict_B.items():
         insert_and_check(dict_A, k, v)
 
@@ -102,7 +97,7 @@ def unify_object_target(
             unified_target.category_id_to_name, member.category_id_to_name
         )
         unified_target.object_instance_ids += member.object_instance_ids
-        unified_target.object_category_ids += member.object_instance_ids
+        unified_target.object_category_ids += member.object_category_ids
         unified_target.Ts_world_object += member.Ts_world_object
         unified_target.object_dimensions += member.object_dimensions
 
