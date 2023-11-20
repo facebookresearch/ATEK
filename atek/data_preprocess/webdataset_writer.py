@@ -202,7 +202,6 @@ def add_frameset_group_object_3d_data_to_wds(flatten_fsg_dict, wds_dict):
         flatten_fsg_dict,
         FramesetGroup.flatten_dict_key_pattern(),
         FramesetGroup.object_3d_data_fields(),
-        return_as_list_of_tensor=True,
     )
 
 
