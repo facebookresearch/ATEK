@@ -2,11 +2,11 @@ DATALOADER:
   REPEAT_THRESHOLD: 0.1
   SAMPLER_TRAIN: RepeatFactorTrainingSampler
 DATASETS:
-  CATEGORY_NAMES: ('pedestrian', 'car', 'cyclist', 'van', 'truck', 'tram', 'person')
+  CATEGORY_NAMES: []
   IGNORE_NAMES: '[''dontcare'', ''ignore'', ''void'']'
   MIN_HEIGHT_THRES: 0.05
-  TEST: ('KITTI_test',)
-  TRAIN: ('KITTI_train', 'KITTI_val')
+  TEST: ("val_overfit_tars",)
+  TRAIN: ("train_overfit_tars",)
   TRUNCATION_THRES: 0.75
   TRUNC_2D_BOXES: true
   VISIBILITY_THRES: 0.25
@@ -105,17 +105,17 @@ MODEL:
   USE_BN: true
 OUTPUT_DIR:
 SOLVER:
-  BASE_LR: 0.02
+  BASE_LR: 0.001
   IMS_PER_BATCH: 32
   LR_SCHEDULER_NAME: WarmupMultiStepLR
-  MAX_ITER: 32000
+  MAX_ITER: 1000
   STEPS: (19200, 25600)
   TYPE: sgd
   WEIGHT_DECAY: 0.0001
 TEST:
-  EVAL_PERIOD: 16000
+  EVAL_PERIOD: 500
   TRUNCATION_THRES: 0.33333333
   VISIBILITY_THRES: 0.33333333
 VERSION: 2
-VIS_PERIOD: 640
+VIS_PERIOD: 500
 _BASE_: Base.yaml

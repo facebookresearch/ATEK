@@ -46,7 +46,11 @@ def process_sample(sample):
                     else:
                         data_dict[sub_k] = [torch.stack(tensor_data)]
                 else:
-                    raise ValueError(f"Unknown type {type(tensor_data)}")
+                    raise ValueError(
+                        "Unknown type {} for key: {} and sub_key: {} at seq: {}".format(
+                            type(tensor_data), k, sub_k, sample["frame_info.json"]["F#214-1+sequence_name"]
+                        )
+                    )
 
         elif k.endswith(".json"):
             for sub_k, json_data in v.items():
@@ -213,6 +217,7 @@ def get_adt_wds_dataset(
     nodesplitter=simple_split_by_node,
     shard_shuffle=None,
     shuffle_sample=None,
+    repeat=False,
 ):
     wds_data = wds.WebDataset(
         wds_tars, nodesplitter=nodesplitter, shardshuffle=shard_shuffle
@@ -226,6 +231,8 @@ def get_adt_wds_dataset(
         map_fn_list=[convert_data, to_omni3d_partial, to_batch],
         map_fn_dict=None,
     )
+    if repeat:
+        dataset = dataset.repeat()
 
     return dataset
 
@@ -249,8 +256,8 @@ def get_id_map(id_map_json):
     return id_map
 
 
-def get_loader(tar_files, id_map_json, shuffle=False):
+def get_loader(tar_files, id_map_json, shuffle=False, repeat=False):
     id_map = get_id_map(id_map_json)
-    adt_dataset = get_adt_wds_dataset(tar_files, id_map)
+    adt_dataset = get_adt_wds_dataset(tar_files, id_map, repeat=repeat)
     adt_dataloader = get_adt_dataloader(adt_dataset)
     return adt_dataloader

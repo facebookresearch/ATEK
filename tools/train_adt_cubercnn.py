@@ -1,5 +1,6 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
+import json
 import logging
 import os
 import sys
@@ -53,16 +54,36 @@ def add_configs(_C):
     _C.TRAIN_LIST = ""
     _C.TEST_LIST = ""
     _C.ID_MAP_JSON = ""
+    _C.CATEGORY_JSON = ""
+
+
+def get_tars(tar_yaml, use_relative_path=False):
+    with open(tar_yaml, "r") as f:
+        tar_files = yaml.safe_load(f)["tars"]
+    if use_relative_path:
+        data_dir = os.path.dirname(tar_yaml)
+        tar_files = [os.path.join(data_dir, x) for x in tar_files]
+    return tar_files
 
 
 def build_test_loader(cfg):
-    data_dir = os.path.dirname(cfg.TEST_LIST)
-    with open(cfg.TEST_LIST, "r") as f:
-        test_files = yaml.safe_load(f)["tars"]
-    test_files = [os.path.join(data_dir, x) for x in test_files]
+    test_files = get_tars(cfg.TEST_LIST)
     test_adt_loader = get_loader(test_files, cfg.ID_MAP_JSON)
 
+    dataset_name = os.path.basename(cfg.TEST_LIST).split(".")[0]
+    MetadataCatalog.get(dataset_name).set(json_file="", image_root="", evaluator_type="coco")
+
     return test_adt_loader
+
+
+def build_train_loader(cfg):
+    train_files = get_tars(cfg.TRAIN_LIST)
+    train_adt_loader = get_loader(train_files, cfg.ID_MAP_JSON, repeat=True)
+
+    dataset_name = os.path.basename(cfg.TRAIN_LIST).split(".")[0]
+    MetadataCatalog.get(dataset_name).set(json_file="", image_root="", evaluator_type="coco")
+
+    return train_adt_loader
 
 
 def do_test(cfg, model, iteration="final", storage=None):
@@ -71,6 +92,8 @@ def do_test(cfg, model, iteration="final", storage=None):
     filter_settings["truncation_thres"] = cfg.TEST.TRUNCATION_THRES
     filter_settings["min_height_thres"] = 0.0625
     filter_settings["max_depth"] = 1e8
+
+    pdb.set_trace()
 
     dataset_names_test = cfg.DATASETS.TEST
     only_2d = cfg.MODEL.ROI_CUBE_HEAD.LOSS_W_3D == 0.0
@@ -131,16 +154,6 @@ def do_test(cfg, model, iteration="final", storage=None):
         eval_helper.summarize_all()
 
 
-def build_train_loader(cfg):
-    data_dir = os.path.dirname(cfg.TRAIN_LIST)
-    with open(cfg.TRAIN_LIST, "r") as f:
-        train_files = yaml.safe_load(f)["tars"]
-    train_files = [os.path.join(data_dir, x) for x in train_files]
-    train_adt_loader = get_loader(train_files, cfg.ID_MAP_JSON)
-
-    return train_adt_loader
-
-
 def do_train(cfg, model, resume=False):
     max_iter = cfg.SOLVER.MAX_ITER
     do_eval = cfg.TEST.EVAL_PERIOD > 0
@@ -163,6 +176,7 @@ def do_train(cfg, model, resume=False):
 
     # create the dataloader
     data_loader = build_train_loader(cfg)
+    data_iter = iter(data_loader)
 
     if cfg.MODEL.WEIGHTS_PRETRAIN != "":
         # load ONLY the model, no checkpointables.
@@ -197,8 +211,6 @@ def do_train(cfg, model, resume=False):
 
     GAMMA = 0.02  # rolling average weight gain
     recent_loss = None  # stores the most recent loss magnitude
-
-    data_iter = iter(data_loader)
 
     # model.parameters() is surprisingly expensive at 150ms, so cache it
     named_params = list(model.named_parameters())
@@ -386,6 +398,16 @@ def setup(args):
 
     cfg.merge_from_file(config_file)
     cfg.merge_from_list(args.opts)
+
+    with open(cfg.CATEGORY_JSON, "r") as f:
+        category_id_to_names = json.load(f)
+        cfg.DATASETS.CATEGORY_NAMES = list(category_id_to_names.values())
+
+        MetadataCatalog.get('omni3d_model').thing_classes = cfg.DATASETS.CATEGORY_NAMES
+        cat_ids = [int(x) for x in category_id_to_names.keys()]
+        id_map = {id: i for i, id in enumerate(cat_ids)}
+        MetadataCatalog.get('omni3d_model').thing_dataset_id_to_contiguous_id = id_map
+
     cfg.freeze()
     default_setup(cfg, args)
 
@@ -410,7 +432,6 @@ def main(args):
     while remaining_attempts > 0:
         # build the training model.
         model = build_model_with_priors(cfg, priors=None)
-        pdb.set_trace()
 
         if remaining_attempts == cfg.MAX_TRAINING_ATTEMPTS:
             # log the first attempt's settings.
