@@ -93,8 +93,6 @@ def do_test(cfg, model, iteration="final", storage=None):
     filter_settings["min_height_thres"] = 0.0625
     filter_settings["max_depth"] = 1e8
 
-    pdb.set_trace()
-
     dataset_names_test = cfg.DATASETS.TEST
     only_2d = cfg.MODEL.ROI_CUBE_HEAD.LOSS_W_3D == 0.0
     output_folder = os.path.join(
@@ -354,8 +352,9 @@ def do_train(cfg, model, resume=False):
                 and ((iteration + 1) % cfg.TEST.EVAL_PERIOD) == 0
                 and iteration != (max_iter - 1)
             ):
-                logger.info("Starting test for iteration {}".format(iteration + 1))
-                do_test(cfg, model, iteration=iteration + 1, storage=storage)
+                logger.info("Skipping test")
+                # logger.info("Starting test for iteration {}".format(iteration + 1))
+                # do_test(cfg, model, iteration=iteration + 1, storage=storage)
                 comm.synchronize()
 
                 if not cfg.MODEL.USE_BN:
@@ -421,8 +420,6 @@ def setup(args):
 def main(args):
     cfg = setup(args)
 
-    pdb.set_trace()
-
     """
     The training loops can attempt to train for N times.
     This catches a divergence or other failure modes.
@@ -442,7 +439,8 @@ def main(args):
             DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
                 cfg.MODEL.WEIGHTS, resume=args.resume
             )
-            return do_test(cfg, model)
+            # return do_test(cfg, model)
+            return
 
         # setup distributed training.
         distributed = comm.get_world_size() > 1
@@ -466,7 +464,8 @@ def main(args):
         # Exit if the model could not finish without diverging.
         raise ValueError("Training failed")
 
-    return do_test(cfg, model)
+    # return do_test(cfg, model)
+    return
 
 
 def allreduce_dict(input_dict, average=True):
