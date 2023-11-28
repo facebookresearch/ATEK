@@ -1,12 +1,13 @@
 DATALOADER:
+  NUM_WORKERS: 8
   REPEAT_THRESHOLD: 0.1
   SAMPLER_TRAIN: RepeatFactorTrainingSampler
 DATASETS:
   CATEGORY_NAMES: []
   IGNORE_NAMES: '[''dontcare'', ''ignore'', ''void'']'
   MIN_HEIGHT_THRES: 0.05
-  TEST: ("val_overfit_tars",)
-  TRAIN: ("train_overfit_tars",)
+  TEST: ("val_tars",)
+  TRAIN: ("train_tars",)
   TRUNCATION_THRES: 0.75
   TRUNC_2D_BOXES: true
   VISIBILITY_THRES: 0.25
@@ -106,7 +107,7 @@ MODEL:
 OUTPUT_DIR:
 SOLVER:
   BASE_LR: 0.001
-  IMS_PER_BATCH: 192
+  IMS_PER_BATCH: 32
   LR_SCHEDULER_NAME: WarmupMultiStepLR
   MAX_ITER: 20000
   STEPS: (4000, 12000)

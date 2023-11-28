@@ -35,7 +35,6 @@ def to_omni3d(data_dict, *, id_map):
 
         obj["iscrowd"] = False
 
-        # TODO: add ignore flag based on filtering settings
         ignore = False
         obj["ignore"] = ignore
         obj["ignore2D"] = ignore
@@ -53,6 +52,18 @@ def to_omni3d(data_dict, *, id_map):
 
         objs.append(obj)
     data_dict["annotations"] = objs
+
+    # convert instances
+    image = (data_dict["image"] * 255.0).astype(np.uint8)
+    data_dict["image"] = torch.tensor(image).permute(2, 0, 1)
+
+    annos = []
+    for anno in data_dict["annotations"]:
+        annos.append(transform_instance_anno(anno, K=data_dict["K"]))
+    image_shape = data_dict["height"], data_dict["width"]
+    instances = annotations_to_instances(annos, image_shape)
+
+    data_dict["instances"] = detection_utils.filter_empty_instances(instances)
 
     return data_dict
 

@@ -67,7 +67,7 @@ def get_tars(tar_yaml, use_relative_path=False):
 
 
 def build_test_loader(cfg):
-    test_files = get_tars(cfg.TEST_LIST)
+    test_files = get_tars(cfg.TEST_LIST, use_relative_path=True)
     test_adt_loader = get_loader(test_files, cfg.ID_MAP_JSON)
 
     dataset_name = os.path.basename(cfg.TEST_LIST).split(".")[0]
@@ -77,8 +77,14 @@ def build_test_loader(cfg):
 
 
 def build_train_loader(cfg):
-    train_files = get_tars(cfg.TRAIN_LIST)
-    train_adt_loader = get_loader(train_files, cfg.ID_MAP_JSON, repeat=True)
+    train_files = get_tars(cfg.TRAIN_LIST, use_relative_path=True)
+    train_adt_loader = get_loader(
+        train_files,
+        cfg.ID_MAP_JSON,
+        batch_size=cfg.SOLVER.IMS_PER_BATCH,
+        num_workers=cfg.DATALOADER.NUM_WORKERS,
+        repeat=True,
+    )
 
     dataset_name = os.path.basename(cfg.TRAIN_LIST).split(".")[0]
     MetadataCatalog.get(dataset_name).set(json_file="", image_root="", evaluator_type="coco")

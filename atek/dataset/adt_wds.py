@@ -11,7 +11,7 @@ import torch
 import webdataset as wds
 
 import yaml
-from atek.dataset.cubercnn_utils import to_batch, to_omni3d
+from atek.dataset.cubercnn_utils import to_omni3d
 from atek.dataset.dataset_utils import KEY_MAPPING, SELECTED_KEYS, simple_split_by_node
 from atek.utils.transform_utils import batch_transform_points
 
@@ -45,6 +45,8 @@ def process_sample(sample):
                         data_dict[sub_k] = tensor_data
                     else:
                         data_dict[sub_k] = [torch.stack(tensor_data)]
+                elif tensor_data is None:
+                    continue
                 else:
                     raise ValueError(
                         "Unknown type {} for key: {} and sub_key: {} at seq: {}".format(
@@ -60,6 +62,8 @@ def process_sample(sample):
         data_dict = {k: data_dict[k] for k in SELECTED_KEYS}
 
     if KEY_MAPPING:
+        for k in KEY_MAPPING.keys():
+            assert k in data_dict
         data_dict = {KEY_MAPPING.get(k, k): v for k, v in data_dict.items()}
 
     return data_dict
@@ -124,13 +128,11 @@ def convert_data(data_dict):
     data_dict_new["R_cam"] = [T_cam_obj[:, :3].tolist() for T_cam_obj in Ts_cam_obj]
     data_dict_new["center_cam"] = [T_cam_obj[:, 3].tolist() for T_cam_obj in Ts_cam_obj]
 
-    # FIXME: double-check if reversing object dimensions is correct
     orig_dims = data_dict["original_object_dimensions"][0]
     data_dict_new["dimensions"] = [dim.tolist()[::-1] for dim in orig_dims]
 
     data_dict_new["bbox2D_proj"] = data_dict["bbox_2d"][0].tolist()
 
-    # FIXME: double-check if the eight corners are in correct order
     corners = [
         get_eight_corners_omni3d(
             -dim[0] / 2,
@@ -208,6 +210,7 @@ def adt_collate(batch):
 
 
 def trivial_collate(batch):
+    batch = list(filter(lambda x: x is not None, batch))
     return batch
 
 
@@ -228,7 +231,7 @@ def get_adt_wds_dataset(
     dataset = data_transform(
         wds_data,
         shuffle_sample,
-        map_fn_list=[convert_data, to_omni3d_partial, to_batch],
+        map_fn_list=[convert_data, to_omni3d_partial],
         map_fn_dict=None,
     )
     if repeat:
@@ -256,8 +259,8 @@ def get_id_map(id_map_json):
     return id_map
 
 
-def get_loader(tar_files, id_map_json, shuffle=False, repeat=False):
+def get_loader(tar_files, id_map_json, batch_size=4, num_workers=4, shuffle=False, repeat=False):
     id_map = get_id_map(id_map_json)
     adt_dataset = get_adt_wds_dataset(tar_files, id_map, repeat=repeat)
-    adt_dataloader = get_adt_dataloader(adt_dataset)
+    adt_dataloader = get_adt_dataloader(adt_dataset, batch_size=batch_size, num_workers=num_workers)
     return adt_dataloader
