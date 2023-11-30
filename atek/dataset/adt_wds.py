@@ -12,7 +12,12 @@ import webdataset as wds
 
 import yaml
 from atek.dataset.cubercnn_utils import to_omni3d
-from atek.dataset.dataset_utils import KEY_MAPPING, SELECTED_KEYS, simple_split_by_node
+from atek.dataset.dataset_utils import (
+    KEY_MAPPING,
+    SELECTED_KEYS,
+    simple_split_by_node,
+    simple_split_by_worker,
+)
 from atek.utils.transform_utils import batch_transform_points
 
 from torch.utils.data.dataloader import default_collate
@@ -45,14 +50,16 @@ def process_sample(sample):
                         data_dict[sub_k] = tensor_data
                     else:
                         data_dict[sub_k] = [torch.stack(tensor_data)]
-                elif tensor_data is None:
-                    continue
                 else:
-                    raise ValueError(
-                        "Unknown type {} for key: {} and sub_key: {} at seq: {}".format(
-                            type(tensor_data), k, sub_k, sample["frame_info.json"]["F#214-1+sequence_name"]
-                        )
-                    )
+                    # raise ValueError(
+                    #     "Unknown type {} for key: {} and sub_key: {} at seq: {}".format(
+                    #         type(tensor_data),
+                    #         k,
+                    #         sub_k,
+                    #         sample["frame_info.json"]["F#214-1+sequence_name"],
+                    #     )
+                    # )
+                    return None
 
         elif k.endswith(".json"):
             for sub_k, json_data in v.items():
@@ -105,6 +112,9 @@ def get_eight_corners_omni3d(xmin, xmax, ymin, ymax, zmin, zmax):
 
 
 def convert_data(data_dict):
+    if data_dict is None:
+        return None
+
     data_dict_new = {}
 
     # RGB -> BGR
@@ -174,7 +184,7 @@ def data_transform(
     if shuffle_sample:
         wds_data = wds_data.shuffle(shuffle_sample)
 
-    wds_data = wds_data.decode("rgb").map(process_sample)
+    wds_data = wds_data.decode("rgb")
 
     if map_fn_list is not None:
         for map_fn in map_fn_list:
@@ -217,13 +227,14 @@ def trivial_collate(batch):
 def get_adt_wds_dataset(
     wds_tars,
     id_map,
-    nodesplitter=simple_split_by_node,
+    nodesplitter=simple_split_by_worker,
     shard_shuffle=None,
     shuffle_sample=None,
     repeat=False,
 ):
     wds_data = wds.WebDataset(
-        wds_tars, nodesplitter=nodesplitter, shardshuffle=shard_shuffle
+        wds_tars,
+        shardshuffle=shard_shuffle,
     )
 
     to_omni3d_partial = partial(to_omni3d, id_map=id_map)
@@ -231,7 +242,7 @@ def get_adt_wds_dataset(
     dataset = data_transform(
         wds_data,
         shuffle_sample,
-        map_fn_list=[convert_data, to_omni3d_partial],
+        map_fn_list=[process_sample, convert_data, to_omni3d_partial],
         map_fn_dict=None,
     )
     if repeat:
@@ -248,6 +259,7 @@ def get_adt_dataloader(
         batch_size=batch_size,
         num_workers=num_workers,
         collate_fn=collate_fn,
+        pin_memory=True,
     )
     return dataloader
 
@@ -259,8 +271,12 @@ def get_id_map(id_map_json):
     return id_map
 
 
-def get_loader(tar_files, id_map_json, batch_size=4, num_workers=4, shuffle=False, repeat=False):
+def get_loader(
+    tar_files, id_map_json, batch_size=4, num_workers=4, shuffle=False, repeat=False
+):
     id_map = get_id_map(id_map_json)
     adt_dataset = get_adt_wds_dataset(tar_files, id_map, repeat=repeat)
-    adt_dataloader = get_adt_dataloader(adt_dataset, batch_size=batch_size, num_workers=num_workers)
+    adt_dataloader = get_adt_dataloader(
+        adt_dataset, batch_size=batch_size, num_workers=num_workers
+    )
     return adt_dataloader

@@ -77,11 +77,19 @@ def build_test_loader(cfg):
 
 
 def build_train_loader(cfg):
+    print("Getting tars from rank:", comm.get_local_rank())
     train_files = get_tars(cfg.TRAIN_LIST, use_relative_path=True)
+
+    local_rank = comm.get_local_rank()
+    world_size = comm.get_world_size()
+    train_files_local = train_files[local_rank::world_size]
+
+    local_batch_size = cfg.SOLVER.IMS_PER_BATCH // world_size
+
     train_adt_loader = get_loader(
-        train_files,
+        train_files_local,
         cfg.ID_MAP_JSON,
-        batch_size=cfg.SOLVER.IMS_PER_BATCH,
+        batch_size=local_batch_size,
         num_workers=cfg.DATALOADER.NUM_WORKERS,
         repeat=True,
     )
@@ -178,6 +186,10 @@ def do_train(cfg, model, resume=False):
         default_writers(cfg.OUTPUT_DIR, max_iter) if comm.is_main_process() else []
     )
 
+    # pdb.set_trace()
+    print("====" * 20)
+    print("Local rank:", comm.get_local_rank())
+
     # create the dataloader
     data_loader = build_train_loader(cfg)
     data_iter = iter(data_loader)
@@ -218,6 +230,16 @@ def do_train(cfg, model, resume=False):
 
     # model.parameters() is surprisingly expensive at 150ms, so cache it
     named_params = list(model.named_parameters())
+
+    # with torch.profiler.profile(
+    #     schedule=torch.profiler.schedule(
+    #         wait=2,
+    #         warmup=2,
+    #         active=6,
+    #         repeat=1),
+    #     on_trace_ready=torch.profiler.tensorboard_trace_handler(cfg.OUTPUT_DIR),
+    #     with_stack=False
+    # ) as profiler:
 
     with EventStorage(start_iter) as storage:
         while True:
@@ -307,6 +329,8 @@ def do_train(cfg, model, resume=False):
                     "lr", optimizer.param_groups[0]["lr"], smoothing_hint=False
                 )
                 iterations_success += 1
+
+            # profiler.step()
 
             total_iterations = iterations_success + iterations_explode
 

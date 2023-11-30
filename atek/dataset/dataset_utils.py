@@ -3,6 +3,7 @@
 import logging
 import os
 from typing import List
+import torch
 
 
 logging.basicConfig()
@@ -96,6 +97,8 @@ def get_rank_world_size(group=None):
                 world_size = torch.distributed.get_world_size(group=group)
         except ModuleNotFoundError:
             pass
+    print("----" * 20)
+    print("rank:", rank, "world_size:", world_size)
     return rank, world_size
 
 
@@ -111,3 +114,13 @@ def base_simple_split_by_node(urls: List[str], node_id: int = 0, node_count: int
 def simple_split_by_node(urls: List[str]):
     rank, world_size = get_rank_world_size()
     return base_simple_split_by_node(urls, rank, world_size)
+
+
+def simple_split_by_worker(urls):
+    wi = torch.utils.data.get_worker_info()
+    print("----" * 10)
+    print("worker id:", wi.id)
+    if wi is None:
+        return urls
+    else:
+        return urls[wi.id :: wi.num_workers]

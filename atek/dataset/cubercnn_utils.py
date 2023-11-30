@@ -11,6 +11,9 @@ def to_omni3d(data_dict, *, id_map):
     """
     Convert data_dict to Omni3D format.
     """
+    if data_dict is None:
+        return None
+
     ann_keys = [
         "bbox",
         "bbox3D_cam",
@@ -64,6 +67,9 @@ def to_omni3d(data_dict, *, id_map):
     instances = annotations_to_instances(annos, image_shape)
 
     data_dict["instances"] = detection_utils.filter_empty_instances(instances)
+
+    if len(data_dict["instances"]) == 0:
+        return None
 
     return data_dict
 
