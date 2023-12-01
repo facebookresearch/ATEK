@@ -47,6 +47,13 @@ import cubercnn.vis.logperf as utils_logperf
 from atek.dataset.adt_wds import get_loader
 from atek.model.cubercnn import build_model_with_priors
 
+from datetime import timedelta
+
+DEFAULT_TIMEOUT = timedelta(minutes=10)
+
+
+torch.backends.cudnn.benchmark = True
+
 
 def add_configs(_C):
     _C.MAX_TRAINING_ATTEMPTS = 3
@@ -67,8 +74,8 @@ def get_tars(tar_yaml, use_relative_path=False):
 
 
 def build_test_loader(cfg):
-    test_files = get_tars(cfg.TEST_LIST, use_relative_path=True)
-    test_adt_loader = get_loader(test_files, cfg.ID_MAP_JSON)
+    test_tars = get_tars(cfg.TEST_LIST, use_relative_path=True)
+    test_adt_loader = get_loader(test_tars, cfg.ID_MAP_JSON)
 
     dataset_name = os.path.basename(cfg.TEST_LIST).split(".")[0]
     MetadataCatalog.get(dataset_name).set(json_file="", image_root="", evaluator_type="coco")
@@ -77,20 +84,24 @@ def build_test_loader(cfg):
 
 
 def build_train_loader(cfg):
-    print("Getting tars from rank:", comm.get_local_rank())
-    train_files = get_tars(cfg.TRAIN_LIST, use_relative_path=True)
-
-    local_rank = comm.get_local_rank()
+    rank = comm.get_rank()
     world_size = comm.get_world_size()
-    train_files_local = train_files[local_rank::world_size]
+
+    print("World size:", world_size)
+    print("Getting tars from rank:", rank)
+    train_tars = get_tars(cfg.TRAIN_LIST, use_relative_path=True)
+
+    train_tars_local = train_tars[rank::world_size]
 
     local_batch_size = cfg.SOLVER.IMS_PER_BATCH // world_size
+    print("local_batch_size:", local_batch_size)
 
     train_adt_loader = get_loader(
-        train_files_local,
+        train_tars_local,
         cfg.ID_MAP_JSON,
         batch_size=local_batch_size,
         num_workers=cfg.DATALOADER.NUM_WORKERS,
+        shard_shuffle=None,
         repeat=True,
     )
 
@@ -185,10 +196,6 @@ def do_train(cfg, model, resume=False):
     writers = (
         default_writers(cfg.OUTPUT_DIR, max_iter) if comm.is_main_process() else []
     )
-
-    # pdb.set_trace()
-    print("====" * 20)
-    print("Local rank:", comm.get_local_rank())
 
     # create the dataloader
     data_loader = build_train_loader(cfg)
@@ -538,4 +545,5 @@ if __name__ == "__main__":
         machine_rank=args.machine_rank,
         dist_url=args.dist_url,
         args=(args,),
+        timeout=DEFAULT_TIMEOUT,
     )

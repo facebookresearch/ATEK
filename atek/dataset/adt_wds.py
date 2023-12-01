@@ -227,15 +227,22 @@ def trivial_collate(batch):
 def get_adt_wds_dataset(
     wds_tars,
     id_map,
-    nodesplitter=simple_split_by_worker,
+    nodesplitter=None,
     shard_shuffle=None,
     shuffle_sample=None,
     repeat=False,
 ):
-    wds_data = wds.WebDataset(
-        wds_tars,
-        shardshuffle=shard_shuffle,
-    )
+    if nodesplitter is not None:
+        wds_data = wds.WebDataset(
+            wds_tars,
+            shardshuffle=shard_shuffle,
+            nodesplitter=nodesplitter,
+        )
+    else:
+        wds_data = wds.WebDataset(
+            wds_tars,
+            shardshuffle=shard_shuffle,
+        )
 
     to_omni3d_partial = partial(to_omni3d, id_map=id_map)
 
@@ -272,11 +279,25 @@ def get_id_map(id_map_json):
 
 
 def get_loader(
-    tar_files, id_map_json, batch_size=4, num_workers=4, shuffle=False, repeat=False
+    tar_files,
+    id_map_json,
+    nodesplitter=None,
+    batch_size=4,
+    num_workers=4,
+    shard_shuffle=None,
+    repeat=False,
 ):
     id_map = get_id_map(id_map_json)
-    adt_dataset = get_adt_wds_dataset(tar_files, id_map, repeat=repeat)
-    adt_dataloader = get_adt_dataloader(
-        adt_dataset, batch_size=batch_size, num_workers=num_workers
+    adt_dataset = get_adt_wds_dataset(
+        tar_files, id_map, nodesplitter=nodesplitter, shard_shuffle=shard_shuffle, repeat=repeat
     )
+
+    adt_dataloader = torch.utils.data.DataLoader(
+        adt_dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        collate_fn=trivial_collate,
+        pin_memory=True,
+    )
+
     return adt_dataloader
