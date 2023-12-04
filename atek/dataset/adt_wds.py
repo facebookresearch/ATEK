@@ -1,5 +1,6 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
+import os
 from collections import defaultdict
 from functools import partial
 import json
@@ -22,6 +23,10 @@ from atek.utils.transform_utils import batch_transform_points
 
 from torch.utils.data.dataloader import default_collate
 from torchvision import transforms
+
+
+# convert original 2d bbox format from xxyy to xyxy
+BBOX_2D_NEW_ORDER = [0, 2, 1, 3]
 
 
 def apply_map(sample, map_fn_dict=None):
@@ -141,7 +146,9 @@ def convert_data(data_dict):
     orig_dims = data_dict["original_object_dimensions"][0]
     data_dict_new["dimensions"] = [dim.tolist()[::-1] for dim in orig_dims]
 
-    data_dict_new["bbox2D_proj"] = data_dict["bbox_2d"][0].tolist()
+    data_dict_new["bbox2D_proj"] = data_dict["bbox_2d"][0][
+        :, BBOX_2D_NEW_ORDER
+    ].tolist()
 
     corners = [
         get_eight_corners_omni3d(
@@ -168,7 +175,9 @@ def convert_data(data_dict):
 
     # add metadata
     data_dict_new["valid3D"] = True
-    data_dict_new["sequence_name"] = data_dict["sequence_name"][0]
+    data_dict_new["sequence_name"] = os.path.basename(
+        os.path.dirname(data_dict["sequence_name"][0])
+    )
     data_dict_new["frame_id"] = data_dict["frame_id"][0]
     data_dict_new["timestamp_ns"] = data_dict["timestamp_ns"][0]
 
@@ -289,7 +298,11 @@ def get_loader(
 ):
     id_map = get_id_map(id_map_json)
     adt_dataset = get_adt_wds_dataset(
-        tar_files, id_map, nodesplitter=nodesplitter, shard_shuffle=shard_shuffle, repeat=repeat
+        tar_files,
+        id_map,
+        nodesplitter=nodesplitter,
+        shard_shuffle=shard_shuffle,
+        repeat=repeat,
     )
 
     adt_dataloader = torch.utils.data.DataLoader(

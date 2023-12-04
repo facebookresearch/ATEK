@@ -6,6 +6,10 @@ import torch
 from detectron2.data import detection_utils
 from detectron2.structures import Boxes, BoxMode, Instances, Keypoints
 
+MIN_BBOX_AREA = 100
+MIN_OBJ_DEPTH = 0.1
+MAX_OBJ_DEPTH = 50
+
 
 def to_omni3d(data_dict, *, id_map):
     """
@@ -33,9 +37,6 @@ def to_omni3d(data_dict, *, id_map):
 
         annotation_category_id = obj["category_id"]
 
-        assert annotation_category_id in id_map
-        annotation_category_id = id_map[annotation_category_id]
-
         obj["iscrowd"] = False
 
         ignore = False
@@ -47,11 +48,25 @@ def to_omni3d(data_dict, *, id_map):
         obj["bbox"] = obj["bbox2D_proj"]
         obj["pose"] = obj["R_cam"]
 
+        if annotation_category_id in id_map:
+            annotation_category_id = id_map[annotation_category_id]
+        else:
+            annotation_category_id = -1
+            obj["ignore"] = True
+
         obj["category_id"] = -1 if ignore else annotation_category_id
         obj["depth"] = obj["bbox3D_cam"][2]
 
         width, height = obj["bbox"][2] - obj["bbox"][0], obj["bbox"][3] - obj["bbox"][1]
         obj["area"] = width * height
+
+        # filter instances
+        if obj["area"] < MIN_BBOX_AREA:
+            continue
+        if obj["category_id"] < 0:
+            continue
+        if obj["center_cam"][-1] < MIN_OBJ_DEPTH or obj["center_cam"][-1] > MAX_OBJ_DEPTH:
+            continue
 
         objs.append(obj)
     data_dict["annotations"] = objs
