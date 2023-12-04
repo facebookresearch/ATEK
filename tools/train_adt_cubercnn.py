@@ -62,6 +62,7 @@ def add_configs(_C):
     _C.TEST_LIST = ""
     _C.ID_MAP_JSON = ""
     _C.CATEGORY_JSON = ""
+    _C.SOLVER.VAL_MAX_ITER = 0
 
 
 def get_tars(tar_yaml, use_relative_path=False):
@@ -74,8 +75,25 @@ def get_tars(tar_yaml, use_relative_path=False):
 
 
 def build_test_loader(cfg):
+    rank = comm.get_rank()
+    world_size = comm.get_world_size()
+
+    print("World size:", world_size)
+    print("Getting tars from rank:", rank)
     test_tars = get_tars(cfg.TEST_LIST, use_relative_path=True)
-    test_adt_loader = get_loader(test_tars, cfg.ID_MAP_JSON)
+
+    test_tars_local = test_tars[rank::world_size]
+    local_batch_size = cfg.SOLVER.IMS_PER_BATCH // world_size
+    print("local_batch_size:", local_batch_size)
+
+    test_adt_loader = get_loader(
+        test_tars_local,
+        cfg.ID_MAP_JSON,
+        batch_size=local_batch_size,
+        num_workers=cfg.DATALOADER.NUM_WORKERS,
+        shard_shuffle=None,
+        repeat=True,
+    )
 
     dataset_name = os.path.basename(cfg.TEST_LIST).split(".")[0]
     MetadataCatalog.get(dataset_name).set(json_file="", image_root="", evaluator_type="coco")
@@ -92,7 +110,6 @@ def build_train_loader(cfg):
     train_tars = get_tars(cfg.TRAIN_LIST, use_relative_path=True)
 
     train_tars_local = train_tars[rank::world_size]
-
     local_batch_size = cfg.SOLVER.IMS_PER_BATCH // world_size
     print("local_batch_size:", local_batch_size)
 
@@ -109,6 +126,47 @@ def build_train_loader(cfg):
     MetadataCatalog.get(dataset_name).set(json_file="", image_root="", evaluator_type="coco")
 
     return train_adt_loader
+
+
+def do_val(cfg, model, iteration, writers, max_iter=100):
+
+    data_loader = build_test_loader(cfg)
+    start_iter = iteration
+
+    with torch.no_grad():
+        for data in data_loader:
+
+            loss_dict = model(data)
+            losses = sum(loss_dict.values())
+
+            # reduce
+            loss_dict_reduced = {
+                k: v.item() for k, v in allreduce_dict(loss_dict).items()
+            }
+            losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+
+            # sync up
+            comm.synchronize()
+
+            if comm.is_main_process():
+                if iteration - start_iter > 5 and iteration % 20 == 0:
+                    print("val_iter: {}".format(iteration))
+
+                # send loss scalars to tensorboard.
+                loss_dict_reduced = {"Val_" + k: v for k, v in loss_dict_reduced.items()}
+                loss_dict_reduced.update({"Val_total_loss": losses_reduced})
+
+                if iteration - start_iter > 5 and (iteration + 1) % 20 == 0:
+                    for k, v in loss_dict_reduced.items():
+                        # TODO: use last writer (TensorboardXWriter) to save validation losses
+                        writers[-1]._writer.add_scalar(k, v, iteration)
+
+            iteration += 1
+
+            if iteration - start_iter > max_iter:
+                break
+
+    return iteration
 
 
 def do_test(cfg, model, iteration="final", storage=None):
@@ -206,12 +264,9 @@ def do_train(cfg, model, resume=False):
         checkpointer.load(cfg.MODEL.WEIGHTS_PRETRAIN, checkpointables=[])
 
     # determine the starting iteration, if resuming
-    start_iter = (
-        checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume).get(
-            "iteration", -1
-        )
-        + 1
-    )
+    ckpt = checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume)
+    start_iter = ckpt.get("iteration", -1) + 1
+    val_iter = ckpt.get("val_iter", -1) + 1
     iteration = start_iter
 
     logger.info("Starting training from iteration {}".format(start_iter))
@@ -220,6 +275,7 @@ def do_train(cfg, model, resume=False):
         freeze_bn(model)
 
     world_size = comm.get_world_size()
+    rank = comm.get_rank()
 
     # if the loss diverges for more than the below TOLERANCE
     # as a percent of the iterations, the training will stop.
@@ -237,16 +293,6 @@ def do_train(cfg, model, resume=False):
 
     # model.parameters() is surprisingly expensive at 150ms, so cache it
     named_params = list(model.named_parameters())
-
-    # with torch.profiler.profile(
-    #     schedule=torch.profiler.schedule(
-    #         wait=2,
-    #         warmup=2,
-    #         active=6,
-    #         repeat=1),
-    #     on_trace_ready=torch.profiler.tensorboard_trace_handler(cfg.OUTPUT_DIR),
-    #     with_stack=False
-    # ) as profiler:
 
     with EventStorage(start_iter) as storage:
         while True:
@@ -337,8 +383,6 @@ def do_train(cfg, model, resume=False):
                 )
                 iterations_success += 1
 
-            # profiler.step()
-
             total_iterations = iterations_success + iterations_explode
 
             # Only retry if we have trained sufficiently long relative
@@ -374,7 +418,6 @@ def do_train(cfg, model, resume=False):
                 )
 
                 # send these to garbage, for ideally a cleaner restart.
-                del data_mapper
                 del data_loader
                 del optimizer
                 del checkpointer
@@ -383,20 +426,6 @@ def do_train(cfg, model, resume=False):
 
             scheduler.step()
 
-            # Evaluate only when the loss is not diverging.
-            if not (diverging_model > 0) and (
-                do_eval
-                and ((iteration + 1) % cfg.TEST.EVAL_PERIOD) == 0
-                and iteration != (max_iter - 1)
-            ):
-                logger.info("Skipping test")
-                # logger.info("Starting test for iteration {}".format(iteration + 1))
-                # do_test(cfg, model, iteration=iteration + 1, storage=storage)
-                comm.synchronize()
-
-                if not cfg.MODEL.USE_BN:
-                    freeze_bn(model)
-
             # Flush events
             if iteration - start_iter > 5 and (
                 (iteration + 1) % 20 == 0 or iteration == max_iter - 1
@@ -404,12 +433,30 @@ def do_train(cfg, model, resume=False):
                 for writer in writers:
                     writer.write()
 
+            # Evaluate only when the loss is not diverging.
+            if not (diverging_model > 0) and (
+                do_eval
+                and ((iteration + 1) % cfg.TEST.EVAL_PERIOD) == 0
+                and iteration != (max_iter - 1)
+            ):
+                # logger.info("Starting test for iteration {}".format(iteration + 1))
+                # do_test(cfg, model, iteration=iteration + 1, storage=storage)
+                # comm.synchronize()
+
+                print("Starting validation for iteration {}".format(iteration + 1))
+                val_iter = do_val(cfg, model, val_iter + 1, writers, max_iter=cfg.SOLVER.VAL_MAX_ITER)
+                comm.synchronize()
+
+                if not cfg.MODEL.USE_BN:
+                    freeze_bn(model)
+
             # Do not bother checkpointing if there is potential for a diverging model.
             if (
                 not (diverging_model > 0)
                 and (iterations_explode / total_iterations) < 0.5 * cfg.MODEL.STABILIZE
             ):
-                periodic_checkpointer.step(iteration)
+                additional_state = {"val_iter": val_iter}
+                periodic_checkpointer.step(iteration, **additional_state)
 
             iteration += 1
 
