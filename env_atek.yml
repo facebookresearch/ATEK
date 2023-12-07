@@ -20,6 +20,7 @@ dependencies:
   - webdataset
   - trimesh
   - pybind11
+  - toolz
   - pip:
     - projectaria-tools==1.2.1a1
     - git+https://github.com/facebookresearch/pytorch3d.git@stable
