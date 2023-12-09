@@ -1,6 +1,5 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
-import json
 import numpy as np
 import torch
 from detectron2.data import detection_utils
@@ -65,7 +64,10 @@ def to_omni3d(data_dict, *, id_map):
             continue
         if obj["category_id"] < 0:
             continue
-        if obj["center_cam"][-1] < MIN_OBJ_DEPTH or obj["center_cam"][-1] > MAX_OBJ_DEPTH:
+        if (
+            obj["center_cam"][-1] < MIN_OBJ_DEPTH
+            or obj["center_cam"][-1] > MAX_OBJ_DEPTH
+        ):
             continue
 
         objs.append(obj)
@@ -87,28 +89,6 @@ def to_omni3d(data_dict, *, id_map):
         return None
 
     return data_dict
-
-
-def to_batch(data_dict):
-    batch = {}
-    image = (data_dict["image"] * 255.0).astype(np.uint8)
-    batch["image"] = torch.tensor(image).permute(2, 0, 1)
-    batch["width"] = data_dict["width"]
-    batch["height"] = data_dict["height"]
-    batch["K"] = data_dict["K"]
-
-    annos = []
-    for anno in data_dict["annotations"]:
-        annos.append(transform_instance_anno(anno, K=data_dict["K"]))
-    image_shape = batch["height"], batch["width"]
-    instances = annotations_to_instances(annos, image_shape)
-
-    batch["instances"] = detection_utils.filter_empty_instances(instances)
-    batch["sequence_name"] = data_dict["sequence_name"]
-    batch["frame_id"] = data_dict["frame_id"]
-    batch["timestamp_ns"] = data_dict["timestamp_ns"]
-
-    return batch
 
 
 def transform_instance_anno(annotation, *, K):

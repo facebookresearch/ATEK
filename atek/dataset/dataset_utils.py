@@ -3,8 +3,8 @@
 import logging
 import os
 from typing import List
-import torch
 
+import torch
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -54,28 +54,6 @@ for stream_id in STREAM_IDS:
     INFO_KEYS.append(f"F#{stream_id}+object_instance_ids")
     INFO_KEYS.append(f"F#{stream_id}+object_category_ids")
 
-# TENSOR_KEYS.append("FS+T_world_frameset")
-# TENSOR_KEYS.append("FS+Ts_frameset_camera")
-# TENSOR_KEYS.append("FS+Ts_world_object")
-# TENSOR_KEYS.append("FS+Ts_frameset_object")
-# TENSOR_KEYS.append("FS+object_dimensions")
-
-# TENSOR_KEYS.append("FSG+T_world_local")
-# TENSOR_KEYS.append("FSG+Ts_local_frameset")
-# TENSOR_KEYS.append("FSG+Ts_world_object")
-# TENSOR_KEYS.append("FSG+Ts_local_object")
-# TENSOR_KEYS.append("FSG+object_dimensions")
-
-# INFO_KEYS.append("FS+origin_selection")
-
-# INFO_KEYS.append("FS+category_id_to_name")
-# INFO_KEYS.append("FS+object_instance_ids")
-# INFO_KEYS.append("FS+object_category_ids")
-
-# INFO_KEYS.append("FSG+category_id_to_name")
-# INFO_KEYS.append("FSG+object_instance_ids")
-# INFO_KEYS.append("FSG+object_category_ids")
-
 
 SELECTED_KEYS = IMAGE_KEYS + TENSOR_KEYS + INFO_KEYS
 
@@ -97,8 +75,6 @@ def get_rank_world_size(group=None):
                 world_size = torch.distributed.get_world_size(group=group)
         except ModuleNotFoundError:
             pass
-    print("----" * 20)
-    print("rank:", rank, "world_size:", world_size)
     return rank, world_size
 
 
@@ -114,13 +90,3 @@ def base_simple_split_by_node(urls: List[str], node_id: int = 0, node_count: int
 def simple_split_by_node(urls: List[str]):
     rank, world_size = get_rank_world_size()
     return base_simple_split_by_node(urls, rank, world_size)
-
-
-def simple_split_by_worker(urls):
-    wi = torch.utils.data.get_worker_info()
-    print("----" * 10)
-    print("worker id:", wi.id)
-    if wi is None:
-        return urls
-    else:
-        return urls[wi.id :: wi.num_workers]

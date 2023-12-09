@@ -2,20 +2,16 @@ import argparse
 import json
 import os
 import sys
-from collections import OrderedDict
-from dataclasses import asdict
 from typing import List, Union
 
 import cv2
 import detectron2.utils.comm as comm
-import matplotlib.patches as patches
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
 import torch.distributed as dist
 import tqdm
-from cubercnn import data, util, vis
+from cubercnn import util, vis
 from cubercnn.config import get_cfg_defaults
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg
@@ -135,8 +131,8 @@ def export_predictions(
     prototype_list,
     save_confidence=True,
 ):
-    center_cam = np.stack(predictions_df.loc[:, "center_cam"])
-    R_cam = np.stack(predictions_df.loc[:, "pose"])
+    ts_cam_obj = np.stack(predictions_df.loc[:, "t_cam_obj"])
+    Rs_cam_obj = np.stack(predictions_df.loc[:, "R_cam_obj"])
     dimensions = np.stack(predictions_df.loc[:, "dimensions"])
     bbox_2D = np.stack(predictions_df.loc[:, "bbox_2D"])
     confidence = np.stack(predictions_df.loc[:, "score"])
@@ -152,14 +148,14 @@ def export_predictions(
     Ts_world_cam = predictions_df.loc[:, "T_world_cam"]
     translations = []
     quaternions = []
-    for rot, trans, T_world_cam in zip(R_cam, center_cam, Ts_world_cam):
-        T_cam_obj = np.concatenate((rot, trans[:, np.newaxis]), axis=1)
+    for R_cam_obj, t_cam_obj, T_world_cam in zip(Rs_cam_obj, ts_cam_obj, Ts_world_cam):
+        T_cam_obj = np.concatenate((R_cam_obj, t_cam_obj[:, np.newaxis]), axis=1)
         T_cam_obj = SE3.from_matrix3x4(T_cam_obj)
         T_world_cam = SE3.from_matrix3x4(T_world_cam)
-        T_world_obj = SE3.from_matrix(T_world_cam.to_matrix() * T_cam_obj.to_matrix())
+        T_world_obj = T_world_cam @ T_cam_obj
 
-        trans = T_world_obj.translation()[0]
-        quat = T_world_obj.rotation().to_quat()[0]
+        trans = T_world_obj.translation().squeeze()
+        quat = T_world_obj.rotation().to_quat().squeeze()
         translations.append(trans)
         quaternions.append([quat[0], quat[1], quat[2], quat[3]])
     translations = np.array(translations)
@@ -236,8 +232,6 @@ def export_predictions(
     submission_data = pd.DataFrame(submission_data)
     submission_data = submission_data[submission_data["prototype"].isin(prototype_list)]
     seq_name = predictions_df["sequence_name"].tolist()[0]
-    print(seq_name)
-    print(f"{pred_dir}/{seq_name}.csv")
     submission_data.to_csv(f"{pred_dir}/{seq_name}.csv", index=False)
 
 
@@ -302,8 +296,8 @@ def do_test(args, cfg, seq_data_path, model):
                         "sequence_name": seq_name,
                         "timestamp_ns": batched[0]["timestamp_ns"],
                         "T_world_cam": batched[0]["T_world_cam"],
-                        "center_cam": center_cam.tolist(),
-                        "pose": pose.tolist(),
+                        "t_cam_obj": center_cam.tolist(),
+                        "R_cam_obj": pose.tolist(),
                         # CubeRCNN dimensions are in reversed order of our conventions
                         "dimensions": dimensions.tolist()[::-1],
                         "corners3D": corners3D.tolist(),
@@ -392,17 +386,20 @@ def main(args):
         model, save_dir=os.path.dirname(args.config_file)
     ).resume_or_load(cfg.MODEL.WEIGHTS, resume=True)
 
+    if comm.get_world_size() > 1:
+        model = DistributedDataParallel(
+            model,
+            device_ids=[comm.get_local_rank()],
+            broadcast_buffers=False,
+            find_unused_parameters=True,
+        )
+
     # load test sequences
     with open(args.input_file, "r") as f:
         sequence_list = f.read().splitlines()
     world_size = comm.get_world_size()
     rank = comm.get_rank()
     sequence_list_local = sequence_list[rank::world_size]
-
-    import pprint
-    print("world_size:", world_size)
-    print("rank:", rank)
-    pprint.pprint(sequence_list_local)
 
     # test
     model = model.eval()

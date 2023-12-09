@@ -1,29 +1,17 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
-import os
-from collections import defaultdict
-from functools import partial
 import json
+import os
+from functools import partial
 
 import numpy as np
-
 import torch
-
 import webdataset as wds
-
-import yaml
-from atek.dataset.cubercnn_utils import to_omni3d
-from atek.dataset.dataset_utils import (
-    KEY_MAPPING,
-    SELECTED_KEYS,
-    simple_split_by_node,
-    simple_split_by_worker,
-)
-from atek.utils.transform_utils import batch_transform_points
-
 from torch.utils.data.dataloader import default_collate
-from torchvision import transforms
 
+from atek.dataset.cubercnn_utils import to_omni3d
+from atek.dataset.dataset_utils import (KEY_MAPPING, SELECTED_KEYS)
+from atek.utils.transform_utils import batch_transform_points
 
 # convert original 2d bbox format from xxyy to xyxy
 BBOX_2D_NEW_ORDER = [0, 2, 1, 3]
@@ -56,14 +44,6 @@ def process_sample(sample):
                     else:
                         data_dict[sub_k] = [torch.stack(tensor_data)]
                 else:
-                    # raise ValueError(
-                    #     "Unknown type {} for key: {} and sub_key: {} at seq: {}".format(
-                    #         type(tensor_data),
-                    #         k,
-                    #         sub_k,
-                    #         sample["frame_info.json"]["F#214-1+sequence_name"],
-                    #     )
-                    # )
                     return None
 
         elif k.endswith(".json"):

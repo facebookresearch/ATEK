@@ -4,55 +4,37 @@ import json
 import logging
 import os
 import sys
-import numpy as np
-import copy
-from collections import OrderedDict
-import yaml
-import torch
-from torch.nn.parallel import DistributedDataParallel
-import torch.distributed as dist
+from datetime import timedelta
+
 import detectron2.utils.comm as comm
+import numpy as np
+import torch
+import torch.distributed as dist
+import yaml
+from cubercnn.config import get_cfg_defaults
+from cubercnn.solver import (PeriodicCheckpointerOnlyOne, build_optimizer,
+                             freeze_bn)
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg
-from detectron2.data import DatasetCatalog, MetadataCatalog
-from detectron2.engine import (
-    default_argument_parser,
-    default_setup,
-    default_writers,
-    launch,
-)
+from detectron2.data import MetadataCatalog
+from detectron2.engine import (default_argument_parser, default_setup,
+                               default_writers, launch)
 from detectron2.solver import build_lr_scheduler
 from detectron2.utils.events import EventStorage
 from detectron2.utils.logger import setup_logger
+from torch.nn.parallel import DistributedDataParallel
 
-import pdb
+from atek.dataset.adt_wds import get_loader
+from atek.model.cubercnn import build_model_with_priors
+
+DEFAULT_TIMEOUT = timedelta(minutes=10)
+
 
 logger = logging.getLogger("cubercnn")
 
 sys.dont_write_bytecode = True
 sys.path.append(os.getcwd())
 np.set_printoptions(suppress=True)
-
-from cubercnn.solver import build_optimizer, freeze_bn, PeriodicCheckpointerOnlyOne
-from cubercnn.config import get_cfg_defaults
-from cubercnn.evaluation import (
-    Omni3DEvaluator,
-    Omni3Deval,
-    Omni3DEvaluationHelper,
-    inference_on_dataset,
-)
-from cubercnn import util, vis, data
-import cubercnn.vis.logperf as utils_logperf
-
-from atek.dataset.adt_wds import get_loader
-from atek.model.cubercnn import build_model_with_priors
-
-from datetime import timedelta
-
-DEFAULT_TIMEOUT = timedelta(minutes=10)
-
-
-torch.backends.cudnn.benchmark = True
 
 
 def add_configs(_C):
@@ -96,7 +78,9 @@ def build_test_loader(cfg):
     )
 
     dataset_name = os.path.basename(cfg.TEST_LIST).split(".")[0]
-    MetadataCatalog.get(dataset_name).set(json_file="", image_root="", evaluator_type="coco")
+    MetadataCatalog.get(dataset_name).set(
+        json_file="", image_root="", evaluator_type="coco"
+    )
 
     return test_adt_loader
 
@@ -123,21 +107,20 @@ def build_train_loader(cfg):
     )
 
     dataset_name = os.path.basename(cfg.TRAIN_LIST).split(".")[0]
-    MetadataCatalog.get(dataset_name).set(json_file="", image_root="", evaluator_type="coco")
+    MetadataCatalog.get(dataset_name).set(
+        json_file="", image_root="", evaluator_type="coco"
+    )
 
     return train_adt_loader
 
 
 def do_val(cfg, model, iteration, writers, max_iter=100):
-
     data_loader = build_test_loader(cfg)
     start_iter = iteration
 
     with torch.no_grad():
         for data in data_loader:
-
             loss_dict = model(data)
-            losses = sum(loss_dict.values())
 
             # reduce
             loss_dict_reduced = {
@@ -153,7 +136,9 @@ def do_val(cfg, model, iteration, writers, max_iter=100):
                     print("val_iter: {}".format(iteration))
 
                 # send loss scalars to tensorboard.
-                loss_dict_reduced = {"Val_" + k: v for k, v in loss_dict_reduced.items()}
+                loss_dict_reduced = {
+                    "Val_" + k: v for k, v in loss_dict_reduced.items()
+                }
                 loss_dict_reduced.update({"Val_total_loss": losses_reduced})
 
                 if iteration - start_iter > 5 and (iteration + 1) % 20 == 0:
@@ -167,72 +152,6 @@ def do_val(cfg, model, iteration, writers, max_iter=100):
                 break
 
     return iteration
-
-
-def do_test(cfg, model, iteration="final", storage=None):
-    filter_settings = data.get_filter_settings_from_cfg(cfg)
-    filter_settings["visibility_thres"] = cfg.TEST.VISIBILITY_THRES
-    filter_settings["truncation_thres"] = cfg.TEST.TRUNCATION_THRES
-    filter_settings["min_height_thres"] = 0.0625
-    filter_settings["max_depth"] = 1e8
-
-    dataset_names_test = cfg.DATASETS.TEST
-    only_2d = cfg.MODEL.ROI_CUBE_HEAD.LOSS_W_3D == 0.0
-    output_folder = os.path.join(
-        cfg.OUTPUT_DIR, "inference", "iter_{}".format(iteration)
-    )
-
-    eval_helper = Omni3DEvaluationHelper(
-        dataset_names_test,
-        filter_settings,
-        output_folder,
-        iter_label=iteration,
-        only_2d=only_2d,
-    )
-
-    for dataset_name in dataset_names_test:
-        """
-        Cycle through each dataset and test them individually.
-        This loop keeps track of each per-image evaluation result,
-        so that it doesn't need to be re-computed for the collective.
-        """
-
-        """
-        Distributed Cube R-CNN inference
-        """
-        data_loader = build_test_loader(cfg)
-        results_json = inference_on_dataset(model, data_loader)
-
-        if comm.is_main_process():
-            """
-            Individual dataset evaluation
-            """
-            eval_helper.add_predictions(dataset_name, results_json)
-            eval_helper.save_predictions(dataset_name)
-            eval_helper.evaluate(dataset_name)
-
-            """
-            Optionally, visualize some instances
-            """
-            instances = torch.load(
-                os.path.join(output_folder, dataset_name, "instances_predictions.pth")
-            )
-            log_str = vis.visualize_from_instances(
-                instances,
-                data_loader.dataset,
-                dataset_name,
-                cfg.INPUT.MIN_SIZE_TEST,
-                os.path.join(output_folder, dataset_name),
-                MetadataCatalog.get("omni3d_model").thing_classes,
-                iteration,
-            )
-            logger.info(log_str)
-
-    if comm.is_main_process():
-        """
-        Summarize each Omni3D Evaluation metric
-        """
-        eval_helper.summarize_all()
 
 
 def do_train(cfg, model, resume=False):
@@ -439,12 +358,10 @@ def do_train(cfg, model, resume=False):
                 and ((iteration + 1) % cfg.TEST.EVAL_PERIOD) == 0
                 and iteration != (max_iter - 1)
             ):
-                # logger.info("Starting test for iteration {}".format(iteration + 1))
-                # do_test(cfg, model, iteration=iteration + 1, storage=storage)
-                # comm.synchronize()
-
                 print("Starting validation for iteration {}".format(iteration + 1))
-                val_iter = do_val(cfg, model, val_iter + 1, writers, max_iter=cfg.SOLVER.VAL_MAX_ITER)
+                val_iter = do_val(
+                    cfg, model, val_iter + 1, writers, max_iter=cfg.SOLVER.VAL_MAX_ITER
+                )
                 comm.synchronize()
 
                 if not cfg.MODEL.USE_BN:
@@ -486,10 +403,10 @@ def setup(args):
         category_id_to_names = json.load(f)
         cfg.DATASETS.CATEGORY_NAMES = list(category_id_to_names.values())
 
-        MetadataCatalog.get('omni3d_model').thing_classes = cfg.DATASETS.CATEGORY_NAMES
+        MetadataCatalog.get("omni3d_model").thing_classes = cfg.DATASETS.CATEGORY_NAMES
         cat_ids = [int(x) for x in category_id_to_names.keys()]
         id_map = {id: i for i, id in enumerate(cat_ids)}
-        MetadataCatalog.get('omni3d_model').thing_dataset_id_to_contiguous_id = id_map
+        MetadataCatalog.get("omni3d_model").thing_dataset_id_to_contiguous_id = id_map
 
     cfg.freeze()
     default_setup(cfg, args)
