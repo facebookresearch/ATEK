@@ -35,8 +35,7 @@ py::object convertEigenToTrimesh(
 
 } // namespace
 
-namespace atek {
-namespace utils {
+namespace atek::utils {
 
 py::object unionMeshes(const py::object& trimeshA, const py::object& trimeshB) {
   const auto [VA, FA] = convertTrimeshToEigen(trimeshA);
@@ -64,6 +63,5 @@ py::object intersectMeshes(
   return convertEigenToTrimesh(VI, FI);
 }
 
-} // namespace utils
-} // namespace atek
+} // namespace atek::utils
 ;

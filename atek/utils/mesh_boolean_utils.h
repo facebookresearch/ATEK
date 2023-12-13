@@ -4,8 +4,7 @@
 
 namespace py = pybind11;
 
-namespace atek {
-namespace utils {
+namespace atek::utils {
 
 /**
  * Calls the igl library to compute the union of two trimesh meshes.
@@ -31,5 +30,4 @@ PYBIND11_MODULE(mesh_boolean_utils, m) {
   m.def("intersect_meshes", &intersectMeshes);
 }
 
-} // namespace utils
-} // namespace atek
+} // namespace atek::utils
