@@ -1,5 +1,6 @@
 import webdataset as wds
 import torch
+import json
 
 from typing import Callable, Dict, List, Optional
 from functools import partial
@@ -117,16 +118,22 @@ def create_atek_webdataset(
     urls,
     batch_size: Optional[int] = None,
     collation_fn: Callable = atek_collation_fn,
-    nodesplitter: Callable = wds.shardlists.split_by_node,
+    nodesplitter: Callable = wds.shardlists.single_node_only,
     select_key_fn: Optional[Callable[[str], bool]] = None,
     remap_key_fn: Optional[Callable[[str], str]] = None,
     data_transform_fn: Optional[Callable] = None,
+    repeat: bool = False,
 ) -> wds.WebDataset:
     """
     A general standard webdataset processing data pipeline pattern:
     urls-> full atek dict-> [select keys] -> [remap keys] -> [more transform] -> [batch collation]
     Note that we keep the collation in the dataset part for better performance.
     A custom collation function may be required to be compatible with the custom data transform added.
+
+    nodesplitter: set the node splitter properly to handle the multiple node/gpu training. Node that 
+    wds shardlists splitting function may not work as expected because of different distributed training 
+    settings. The safest way is to do the splitting manually or write the custom splitting function.
+    repeat: set to true makes the dataset to be a infinite iterable dataset.
     """
 
     dataset = wds.WebDataset(urls, nodesplitter=nodesplitter).decode(
@@ -142,6 +149,9 @@ def create_atek_webdataset(
         dataset = dataset.compose(data_transform_fn)
     if batch_size is not None:
         dataset = dataset.batched(batch_size, collation_fn=collation_fn)
+    if repeat:
+        dataset = dataset.repeat()
+
     return dataset
 
 

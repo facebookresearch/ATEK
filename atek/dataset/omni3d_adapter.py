@@ -1,11 +1,13 @@
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Callable
 import torch
 import os
+import json
 
 from detectron2.data import detection_utils
 from detectron2.structures import Boxes, BoxMode, Instances
 
 from webdataset.filters import pipelinefilter
+from webdataset.shardlists import single_node_only
 from atek.dataset.atek_webdataset import create_atek_webdataset
 
 
@@ -33,6 +35,13 @@ def omni3d_key_remap(key: str) -> str:
         return KEY_MAPPING[key]
     else:
         return key
+
+
+def get_id_map(id_map_json):
+    with open(id_map_json, "r") as f:
+        id_map = json.load(f)
+        id_map = {int(k): int(v) for k, v in id_map.items()}
+    return id_map
 
 
 def get_camera_matrix(camera_params_fufvu0v0: torch.Tensor) -> torch.Tensor:
@@ -63,8 +72,8 @@ def atek_to_omni3d(
     max_bb3d_depth=5,
 ):
     """
-    A helper data transform functino to convert the ATEK webdataset data to omni3d unbatched
-    samples. Yield one unbatched sample a time to use the collation and batching mechnism in 
+    A helper data transform function to convert the ATEK webdataset data to omni3d unbatched
+    samples. Yield one unbatched sample a time to use the collation and batching mechanism in 
     the webdataset properly.
     """
     for sample in data:
@@ -79,7 +88,7 @@ def atek_to_omni3d(
         for idx in range(len(images)):
             sample_new = {
                 "image": images[idx],
-                "K": Ks[idx],
+                "K": Ks[idx].tolist(),  # CubeRCNN requires list input
                 "height": image_height,
                 "width": image_width,
 
@@ -117,73 +126,26 @@ def atek_to_omni3d(
                 Ts_camera_object_filtered = sample["Ts_camera_object"][idx][final_filter]
                 ts_camera_object_filtered = Ts_camera_object_filtered[:, :, 3]
 
-                filtered_projection_2d = (sample_new["K"].repeat(len(
+                filtered_projection_2d = (Ks[idx].repeat(len(
                     ts_camera_object_filtered), 1, 1) @ ts_camera_object_filtered.unsqueeze(-1)).squeeze(-1)
                 filtered_projection_2d = filtered_projection_2d[:,
                                                                 :2] / filtered_projection_2d[:, 2].unsqueeze(-1)
 
                 instances.gt_classes = sem_ids[final_filter]
                 instances.gt_boxes = Boxes(bb2ds_x0y0x1y1[final_filter])
-                instances.gt_poses = Ts_camera_object_filtered[:, :3]
+                instances.gt_poses = Ts_camera_object_filtered[:, :, :3]
                 instances.gt_boxes3D = torch.cat([
                     filtered_projection_2d,
                     bb3ds_depth[final_filter].unsqueeze(-1),
-                    sample["object_dimensions"][idx][final_filter],
+                    # Omni3d has the inverted zyx dimensions
+                    # https://github.com/facebookresearch/omni3d/blob/main/cubercnn/util/math_util.py#L144C1-L181C40
+                    sample["object_dimensions"][idx][final_filter].flip(-1),
                     ts_camera_object_filtered,
                 ],
                     axis=-1)
 
                 sample_new["instances"] = instances
                 yield sample_new
-
-            # annotations = []
-            # category_id_to_name = sample["category_id_to_name"][idx]
-            # for T_camera_object, dimension, bb2d_x0x1y0y1, instance_id, category_id in zip(
-            #     sample["Ts_camera_object"][idx],
-            #     sample["object_dimensions"][idx],
-            #     sample["bb2ds_x0x1y0y1"][idx],
-            #     sample["object_instance_ids"][idx],
-            # ):
-            #     target_obj = {}
-            #     target_obj["pose"] = T_camera_object[:, :3] # R_camera_object
-            #     target_obj["center_cam"] = T_camera_object[:, 3] # t_camera_object
-            #     target_obj["dimensions"]= dimension
-
-            #     # Remap the semantic id and filter classes
-            #     sem_id = instance_id # Use instance ids as category ids for instance-based detection
-            #     if category_id_remapping is not None:
-            #         if sem_id not in category_id_remapping.keys():
-            #             continue
-            #         else:
-            #            sem_id = category_id_remapping[sem_id]
-            #     target_obj["category_id"] = sem_id
-            #     target_obj["category_name"] = category_id_to_name[category_id]
-
-            #     # Change the bb2d format to x0y0x1y1
-            #     target_obj["bbox_mode"]= BoxMode.XYXY_ABS
-            #     target_obj["bbox"].append(bb2d_x0x1y0y1.numpy()[0, 2, 1, 3])
-
-            #     # Filter obj with small bb2d area
-            #     bb2d_area = (target_obj["bbox"][2] - target_obj["bbox"][0]) * (target_obj["bbox"][3] - target_obj["bbox"][1])
-            #     if bb2d_area < min_bbox2d_area:
-            #         continue
-
-            #     # Filter obj with depth range
-            #     depth = target_obj["center_cam"][2]
-            #     if depth < min_bbox3d_depth or depth > max_bbox3d_depth:
-            #         continue
-
-            #     # project the 3D box annotation XYZ_3D to screen
-            #     t_camera_object = target_obj['center_cam']
-            #     object_center_in_camera = K @ np.array(t_camera_object)
-            #     object_center_in_camera[:2] = object_center_in_camera[:2] / object_center_in_camera[-1]
-            #     target_obj["center_cam_proj"] = object_center_in_camera[:2]
-
-            #     annotations.append(target_obj)
-
-            # sample_new["instances"] = annotations_to_instances(annos, sample_new["image"].shape[2:])
-
-            # yield sample_new
 
 
 def collate_as_list(batch):
@@ -193,17 +155,24 @@ def collate_as_list(batch):
 def create_omni3d_webdataset(
     urls: List,
     batch_size: int,
-    category_id_remapping: Optional[Dict] = None,
+    repeat: bool = False,
+    nodesplitter: Callable = single_node_only,
+    category_id_remapping_json: Optional[str] = None,
     min_bb2d_area=100,
     min_bb3d_depth=0.3,
     max_bb3d_depth=5,
 ):
+    if category_id_remapping_json is not None:
+        category_id_remapping = get_id_map(category_id_remapping_json)
+
     return create_atek_webdataset(
         urls,
         batch_size,
+        nodesplitter=nodesplitter,
         select_key_fn=omni3d_key_selection,
         remap_key_fn=omni3d_key_remap,
         data_transform_fn=pipelinefilter(atek_to_omni3d)(
             category_id_remapping, min_bb2d_area, min_bb3d_depth, max_bb3d_depth),
         collation_fn=collate_as_list,
+        repeat=repeat,
     )

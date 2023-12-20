@@ -12,19 +12,26 @@ import torch
 import torch.distributed as dist
 import yaml
 from cubercnn.config import get_cfg_defaults
-from cubercnn.solver import (PeriodicCheckpointerOnlyOne, build_optimizer,
-                             freeze_bn)
+from cubercnn.solver import PeriodicCheckpointerOnlyOne, build_optimizer, freeze_bn
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg
 from detectron2.data import MetadataCatalog
-from detectron2.engine import (default_argument_parser, default_setup,
-                               default_writers, launch)
+from detectron2.engine import (
+    default_argument_parser,
+    default_setup,
+    default_writers,
+    launch,
+)
 from detectron2.solver import build_lr_scheduler
 from detectron2.utils.events import EventStorage
 from detectron2.utils.logger import setup_logger
 from torch.nn.parallel import DistributedDataParallel
 
-from atek.dataset.adt_wds import get_loader
+# from atek.dataset.adt_wds import get_loader
+from atek.dataset.atek_webdataset import create_wds_dataloader
+from atek.dataset.omni3d_adapter import create_omni3d_webdataset
+from webdataset.shardlists import single_node_only
+
 from atek.model.cubercnn import build_model_with_priors
 
 DEFAULT_TIMEOUT = timedelta(minutes=10)
@@ -65,16 +72,17 @@ def build_test_loader(cfg):
     test_tars = get_tars(cfg.TEST_LIST, use_relative_path=True)
 
     test_tars_local = test_tars[rank::world_size]
-    local_batch_size = cfg.SOLVER.IMS_PER_BATCH // world_size
+    local_batch_size = max(cfg.SOLVER.IMS_PER_BATCH // world_size, 1)
     print("local_batch_size:", local_batch_size)
 
-    test_adt_loader = get_loader(
+    test_wds = create_omni3d_webdataset(
         test_tars_local,
-        cfg.ID_MAP_JSON,
         batch_size=local_batch_size,
-        num_workers=cfg.DATALOADER.NUM_WORKERS,
-        shard_shuffle=None,
         repeat=True,
+        category_id_remapping_json=cfg.ID_MAP_JSON,
+    )
+    test_dataloader = create_wds_dataloader(
+        test_wds, num_workers=cfg.DATALOADER.NUM_WORKERS, pin_memory=True
     )
 
     dataset_name = os.path.basename(cfg.TEST_LIST).split(".")[0]
@@ -82,7 +90,7 @@ def build_test_loader(cfg):
         json_file="", image_root="", evaluator_type="coco"
     )
 
-    return test_adt_loader
+    return test_dataloader
 
 
 def build_train_loader(cfg):
@@ -94,16 +102,17 @@ def build_train_loader(cfg):
     train_tars = get_tars(cfg.TRAIN_LIST, use_relative_path=True)
 
     train_tars_local = train_tars[rank::world_size]
-    local_batch_size = cfg.SOLVER.IMS_PER_BATCH // world_size
+    local_batch_size = max(cfg.SOLVER.IMS_PER_BATCH // world_size, 1)
     print("local_batch_size:", local_batch_size)
 
-    train_adt_loader = get_loader(
+    train_wds = create_omni3d_webdataset(
         train_tars_local,
-        cfg.ID_MAP_JSON,
         batch_size=local_batch_size,
-        num_workers=cfg.DATALOADER.NUM_WORKERS,
-        shard_shuffle=None,
         repeat=True,
+        category_id_remapping_json=cfg.ID_MAP_JSON,
+    )
+    train_dataloader = create_wds_dataloader(
+        train_wds, num_workers=cfg.DATALOADER.NUM_WORKERS, pin_memory=True
     )
 
     dataset_name = os.path.basename(cfg.TRAIN_LIST).split(".")[0]
@@ -111,7 +120,7 @@ def build_train_loader(cfg):
         json_file="", image_root="", evaluator_type="coco"
     )
 
-    return train_adt_loader
+    return train_dataloader
 
 
 def do_val(cfg, model, iteration, writers, max_iter=100):
@@ -171,7 +180,8 @@ def do_train(cfg, model, resume=False):
         checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, max_iter=max_iter
     )
     writers = (
-        default_writers(cfg.OUTPUT_DIR, max_iter) if comm.is_main_process() else []
+        default_writers(
+            cfg.OUTPUT_DIR, max_iter) if comm.is_main_process() else []
     )
 
     # create the dataloader
@@ -252,11 +262,13 @@ def do_train(cfg, model, resume=False):
                 )
             else:
                 # compute rolling average of loss
-                recent_loss = recent_loss * (1 - GAMMA) + losses_reduced * GAMMA
+                recent_loss = recent_loss * \
+                    (1 - GAMMA) + losses_reduced * GAMMA
 
             if comm.is_main_process():
                 # send loss scalars to tensorboard.
-                storage.put_scalars(total_loss=losses_reduced, **loss_dict_reduced)
+                storage.put_scalars(
+                    total_loss=losses_reduced, **loss_dict_reduced)
 
             # backward and step
             optimizer.zero_grad()
@@ -403,10 +415,12 @@ def setup(args):
         category_id_to_names = json.load(f)
         cfg.DATASETS.CATEGORY_NAMES = list(category_id_to_names.values())
 
-        MetadataCatalog.get("omni3d_model").thing_classes = cfg.DATASETS.CATEGORY_NAMES
+        MetadataCatalog.get(
+            "omni3d_model").thing_classes = cfg.DATASETS.CATEGORY_NAMES
         cat_ids = [int(x) for x in category_id_to_names.keys()]
         id_map = {id: i for i, id in enumerate(cat_ids)}
-        MetadataCatalog.get("omni3d_model").thing_dataset_id_to_contiguous_id = id_map
+        MetadataCatalog.get(
+            "omni3d_model").thing_dataset_id_to_contiguous_id = id_map
 
     cfg.freeze()
     default_setup(cfg, args)
