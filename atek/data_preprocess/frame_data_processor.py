@@ -48,7 +48,9 @@ class FrameDataProcessor:
         self.data_provider = self.setup_data_provider()
         self.pose_data_processor = pose_data_processor
 
-        assert self.stream_id == gt_data_processor.stream_id
+        assert (
+            gt_data_processor is None or self.stream_id == gt_data_processor.stream_id
+        )
         self.gt_data_processor = gt_data_processor
 
         # Use a data frame to hold various data for fast access and alignment.
@@ -125,6 +127,9 @@ class FrameDataProcessor:
             )
 
         self.camera_fov = None
+
+    def __len__(self):
+        return len(self.frame_df)
 
     def cleanup_df(self):
         valid_df = self.frame_df.dropna()

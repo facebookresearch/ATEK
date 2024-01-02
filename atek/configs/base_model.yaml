@@ -1,0 +1,125 @@
+DATALOADER:
+  NUM_WORKERS: 4
+  REPEAT_THRESHOLD: 0.1
+  SAMPLER_TRAIN: RepeatFactorTrainingSampler
+DATASETS:
+  CATEGORY_NAMES: []
+  IGNORE_NAMES: '[''dontcare'', ''ignore'', ''void'']'
+  MIN_HEIGHT_THRES: 0.05
+  TEST: ("val_tars",)
+  TRAIN: ("train_tars",)
+  TRUNCATION_THRES: 0.75
+  TRUNC_2D_BOXES: true
+  VISIBILITY_THRES: 0.25
+INPUT:
+  MAX_SIZE_TEST: 4096
+  MAX_SIZE_TRAIN: 4096
+  MIN_SIZE_TEST: 512
+  MIN_SIZE_TRAIN: (256, 272, 288, 304, 320, 336, 352, 368, 384, 400, 416, 432, 448,
+    464, 480, 496, 512, 528, 544, 560, 576, 592, 608, 624, 640,)
+MODEL:
+  ANCHOR_GENERATOR:
+    ASPECT_RATIOS:
+    - - 0.5
+      - 1.0
+      - 2.0
+    SIZES:
+    - - 32
+    - - 64
+    - - 128
+    - - 256
+    - - 512
+  BACKBONE:
+    FREEZE_AT: 0
+    NAME: build_dla_from_vision_fpn_backbone
+  DLA:
+    TYPE: dla34
+  FPN:
+    IN_FEATURES:
+    - p2
+    - p3
+    - p4
+    - p5
+    - p6
+  MASK_ON: false
+  META_ARCHITECTURE: RCNN3D
+  PIXEL_MEAN:
+  - 103.53
+  - 116.28
+  - 123.675
+  PIXEL_STD:
+  - 57.375
+  - 57.12
+  - 58.395
+  PROPOSAL_GENERATOR:
+    NAME: RPNWithIgnore
+  ROI_BOX_HEAD:
+    NAME: FastRCNNConvFCHead
+    NUM_FC: 2
+    POOLER_RESOLUTION: 7
+  ROI_CUBE_HEAD:
+    ALLOCENTRIC_POSE: true
+    CHAMFER_POSE: true
+    DIMS_PRIORS_ENABLED: true
+    DISENTANGLED_LOSS: true
+    LOSS_W_3D: 1.0
+    NAME: CubeHead
+    NUM_FC: 2
+    POOLER_RESOLUTION: 7
+    POOLER_TYPE: ROIAlignV2
+    POSE_TYPE: 6d
+    SHARED_FC: true
+    USE_CONFIDENCE: 1.0
+    VIRTUAL_DEPTH: true
+    VIRTUAL_FOCAL: 512.0
+    Z_TYPE: direct
+  ROI_HEADS:
+    BATCH_SIZE_PER_IMAGE: 512
+    IN_FEATURES:
+    - p2
+    - p3
+    - p4
+    - p5
+    - p6
+    NAME: ROIHeads3D
+    NUM_CLASSES: 405
+    SCORE_THRESH_TEST: 0.01
+  RPN:
+    BOUNDARY_THRESH: -1
+    HEAD_NAME: StandardRPNHead
+    IN_FEATURES:
+    - p2
+    - p3
+    - p4
+    - p5
+    - p6
+    IOU_THRESHOLDS:
+    - 0.05
+    - 0.05
+    OBJECTNESS_UNCERTAINTY: IoUness
+    POSITIVE_FRACTION: 1.0
+    POST_NMS_TOPK_TEST: 1000
+    POST_NMS_TOPK_TRAIN: 1000
+    PRE_NMS_TOPK_TEST: 1000
+    PRE_NMS_TOPK_TRAIN: 2000
+  STABILIZE: 0.02
+  USE_BN: true
+OUTPUT_DIR:
+SOLVER:
+  BASE_LR: 0.001
+  IMS_PER_BATCH: 256
+  LR_SCHEDULER_NAME: WarmupMultiStepLR
+  WARMUP_ITERS: 3300
+  MAX_ITER: 20000
+  STEPS: (12000, 16000)
+  TYPE: sgd
+  WEIGHT_DECAY: 0.0001
+  CHECKPOINT_PERIOD: 5000
+  VAL_MAX_ITER: 60
+TEST:
+  EVAL_PERIOD: 500
+  TRUNCATION_THRES: 0.33333333
+  VISIBILITY_THRES: 0.33333333
+VERSION: 2
+VIS_PERIOD: 500
+_BASE_: Base.yaml

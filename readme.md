@@ -13,16 +13,19 @@ git clone git@github.com:fairinternal/ATEK.git
 srun -N 1 --gres=gpu:1 --pty bash
 ```
 
-Init conda
+Init mamba, note that mamba is a drop in replacement for the conda which is much faster in the complex cloud environment such
+as the AWS for package management. Conda also works but mamba is a better choice here.
 ```
 export PATH=/data/home/$USER/miniconda3/bin:$PATH
 conda init bash
+conda install mamba -n base -c conda-forge
+mamba init
 ```
 
 Then create a conda environment with the ATEK environment.yaml
 
 ```
-conda create -f environment_aws.yml
+mamba create -f env_atek.yml
 ```
 
 ### 4. Setup the pybind library
