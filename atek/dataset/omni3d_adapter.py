@@ -119,7 +119,8 @@ def atek_to_omni3d(
                 # Use instance ids as category ids for instance-based detection
                 sem_ids = sample["object_instance_ids"][idx]
                 if category_id_remapping is not None:
-                    sem_ids = [category_id_remapping.get(id, -1) for id in sem_ids]
+                    sem_ids = [category_id_remapping.get(
+                        id, -1) for id in sem_ids]
                 sem_ids = torch.tensor(sem_ids)
                 filter_ids = sem_ids >= 0
 
@@ -146,7 +147,8 @@ def atek_to_omni3d(
                         bb3ds_depth[final_filter].unsqueeze(-1),
                         # Omni3d has the inverted zyx dimensions
                         # https://github.com/facebookresearch/omni3d/blob/main/cubercnn/util/math_util.py#L144C1-L181C40
-                        sample["object_dimensions"][idx][final_filter].flip(-1),
+                        sample["object_dimensions"][idx][final_filter].flip(
+                            -1),
                         ts_camera_object_filtered,
                     ],
                     axis=-1,
@@ -172,6 +174,8 @@ def create_omni3d_webdataset(
 ):
     if category_id_remapping_json is not None:
         category_id_remapping = get_id_map(category_id_remapping_json)
+    else:
+        category_id_remapping = None
 
     return create_atek_webdataset(
         urls,
