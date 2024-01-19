@@ -117,7 +117,7 @@ class AdtGtDataProcessor(BaseGtDataProcessor):
         data_path: AriaDigitalTwinDataPaths,
     ):
         super().__init__(name, stream_id)
-        self.data_srouce = data_source
+        self.data_source = data_source
         self.gt_provider = AriaDigitalTwinDataProvider(data_path)
         self.bb2d_transform_fn = identity_transform
 
@@ -161,7 +161,7 @@ class AdtGtDataProcessor(BaseGtDataProcessor):
     ):
         # We expecting valid data for the adt frames. Initialize the empty object data for frame.
         # Note that there are rare cases that frame can not find the corresponding gt in the time
-        # threadhold. Use the empty list or dict for those cases instead of returning None for soft
+        # threshold. Use the empty list or dict for those cases instead of returning None for soft
         # handling.
         frame.category_id_to_name = {}
         frame.object_instance_ids = []

@@ -54,7 +54,7 @@ class Frame:
     # +++++++++++++++++++++++ TRAJECTORY DATA END +++++++++++++++++++++++++++++
 
     # ======================= TARGET DATA BEGIN ===============================
-    # Maping for category id to name.
+    # Mapping for category id to name.
     category_id_to_name: Dict[int, str] = None
 
     # Object instances ids.
@@ -200,7 +200,7 @@ class Frameset:
     # Frameset target is in the context for the frameset. For example, all the objects
     # seen by any frame in the frameset are considered as the target of the frameset.
 
-    # Maping for category id to name.
+    # Mapping for category id to name.
     category_id_to_name: Dict[int, str] = None
 
     # Object instances ids.
@@ -319,7 +319,7 @@ class FramesetGroup:
     # Frameset target is in the context for the frameset. For example, all the objects
     # seen by any frame in the frameset are considered as the target of the frameset.
 
-    # Maping for category id to name.
+    # Mapping for category id to name.
     category_id_to_name: Dict[int, str] = None
 
     # Object instances ids.

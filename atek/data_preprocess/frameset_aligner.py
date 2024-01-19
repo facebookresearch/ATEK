@@ -35,7 +35,7 @@ def get_stream_index_key(stream_name: str) -> str:
 def get_frameset_timestamp(frames_timestamp_ns: List[int], timestamp_type: str):
     """
     Return the timestamp of the frameset computed from the frames timestamp
-    based on the timestmap type.
+    based on the timestamp type.
     """
     if timestamp_type == "Average":
         return round(np.mean(frames_timestamp_ns))

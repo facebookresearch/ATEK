@@ -2,7 +2,7 @@
 Aria train and evaluation kits.
 
 ## How to set up ATEK on AWS
-### 1. Make sure you have the right AWS access and can ssh to the frl surreal reserach AWS cluster.
+### 1. Make sure you have the right AWS access and can ssh to the frl surreal research AWS cluster.
 ### 2. In the submit node, go to the /work_1a/$USER folder to clone the ATEK repo. Make sure the github ssh access set up properly.
 ```
 git clone git@github.com:fairinternal/ATEK.git
