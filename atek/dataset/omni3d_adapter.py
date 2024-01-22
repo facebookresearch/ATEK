@@ -172,6 +172,8 @@ def create_omni3d_webdataset(
 ):
     if category_id_remapping_json is not None:
         category_id_remapping = get_id_map(category_id_remapping_json)
+    else:
+        category_id_remapping = None
 
     return create_atek_webdataset(
         urls,
