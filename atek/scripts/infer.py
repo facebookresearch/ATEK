@@ -19,7 +19,7 @@ def do_test(args, cfg, seq_path, model):
     # run inference, with optional callbacks
     dataset = build_dataset(seq_path, args, cfg)
     prediction_list = []
-    for idx in tqdm.tqdm(range(len(dataset) // 10)):
+    for idx in tqdm.tqdm(range(len(dataset))):
         data = dataset[idx]
         prediction = model(data)
 
