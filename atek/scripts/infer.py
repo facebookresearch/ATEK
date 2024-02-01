@@ -13,11 +13,13 @@ from atek.utils.file_utils import read_txt
 
 
 def do_test(args, cfg, seq_path, model):
+    # setup dataset
+    dataset = build_dataset(seq_path, args, cfg)
+
     # setup callback functions
-    callbacks = setup_callback(args, cfg)
+    callbacks = setup_callback(dataset, args, cfg)
 
     # run inference, with optional callbacks
-    dataset = build_dataset(seq_path, args, cfg)
     prediction_list = []
     for idx in tqdm.tqdm(range(len(dataset))):
         data = dataset[idx]
@@ -109,6 +111,16 @@ def get_args():
         default=False,
         action="store_true",
         help="whether to visualize inference results",
+    )
+    parser.add_argument(
+        "--web-port",
+        default=8888,
+        help="The port to serve the web viewer on (defaults to 8888).",
+    )
+    parser.add_argument(
+        "--ws-port",
+        default=8877,
+        help="The port to serve the WebSocket server on (defaults to 8877)",
     )
     parser.add_argument(
         "--num-gpus", type=int, default=1, help="number of gpus *per machine*"

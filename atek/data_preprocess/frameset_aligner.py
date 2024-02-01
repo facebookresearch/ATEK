@@ -73,6 +73,9 @@ class FramesetAligner:
 
         self.frameset_fov = None
 
+    def __len__(self):
+        return len(self.frameset_df)
+
     def get_T_device_frameset(self):
         """
         Get the device to frameset transform matrix.

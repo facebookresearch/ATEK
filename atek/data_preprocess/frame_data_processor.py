@@ -217,6 +217,20 @@ class FrameDataProcessor:
 
         return copy.deepcopy(self.camera_fov)
 
+    def get_T_world_camera_by_index(self, index: int) -> SE3:
+        T_world_device = SE3.from_quat_and_translation(
+            self.frame_df.loc[index, "qw_world_device"],
+            self.frame_df.loc[
+                index, ["qx_world_device", "qy_world_device", "qz_world_device"]
+            ],
+            self.frame_df.loc[
+                index, ["tx_world_device", "ty_world_device", "tz_world_device"]
+            ],
+        )
+        T_world_camera = T_world_device @ self.T_device_camera
+
+        return T_world_camera
+
     def get_frame_by_index(self, index: int) -> Frame:
         frame = Frame()
         # fill in the input image data
