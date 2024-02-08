@@ -30,7 +30,7 @@ GT_COLOR: List[int] = [30, 200, 30]
 PRED_COLOR: List[int] = [200, 30, 30]
 
 
-def log_pinhold_camera_data(frameset_index, camera_calib, camera_name):
+def log_pinhole_camera_data(frameset_index, camera_calib, camera_name):
     rr.log(
         f"world/device-{frameset_index}/{camera_name}",
         rr.Pinhole(
@@ -67,7 +67,7 @@ def log_static_data(frameset_group_generator):
         for frame_processor in frameset_aligner.frame_data_processors:
             camera_calib = frame_processor.final_camera_calib
             camera_name = frame_processor.vrs_camera_calib.get_label()
-            log_pinhold_camera_data(frameset_index, camera_calib, camera_name)
+            log_pinhole_camera_data(frameset_index, camera_calib, camera_name)
 
 
 def log_instance_data(
@@ -373,7 +373,7 @@ def run_wds_viewer(dataset, visualize_label):
                 camera_calib = calibration.get_linear_camera_calibration(
                     images.shape[2], images.shape[3], focal, camera_name
                 )
-                log_pinhold_camera_data(frameset_index, camera_calib, camera_name)
+                log_pinhole_camera_data(frameset_index, camera_calib, camera_name)
 
     # log instance data
     for obj in dataset:
