@@ -3,6 +3,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=10
 ## %j is the job id, %u is the user id
+## change $USER to actual user name
 #SBATCH --output=/data/home/$USER/jupyter_log/jupyter-%j.log
 source activate base
 conda activate atek

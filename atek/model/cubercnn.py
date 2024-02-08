@@ -1,41 +1,39 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
-
 import itertools
 import os
+from argparse import Namespace
+from typing import Dict, List
 
 import numpy as np
-import rerun as rr
 import pandas as pd
+import torch
 from cubercnn.config import get_cfg_defaults
 from cubercnn.modeling.backbone import build_dla_from_vision_fpn_backbone  # noqa
 from cubercnn.modeling.meta_arch import RCNN3D, build_model
 from cubercnn.modeling.proposal_generator import RPNWithIgnore  # noqa
 from cubercnn.modeling.roi_heads import ROIHeads3D  # noqa
 from detectron2.checkpoint import DetectionCheckpointer
-from detectron2.config import get_cfg
+from detectron2.config import CfgNode, get_cfg
 from detectron2.engine import default_setup
 from projectaria_tools.core.sophus import SE3
-from projectaria_tools.utils.rerun import ToTransform3D
 
 from atek.utils.file_utils import read_json, read_txt, write_json
 
 
-TRAJECTORY_COLOR = [30, 100, 30]
-GT_COLOR = [30, 200, 30]
-PRED_COLOR = [200, 30, 30]
+def add_configs(cfg: CfgNode):
+    """
+    Add more options for CubeRCNN model config, based on detectron2 CfgNode
+    """
+    cfg.MAX_TRAINING_ATTEMPTS = 3
+
+    cfg.TRAIN_LIST = ""
+    cfg.TEST_LIST = ""
+    cfg.ID_MAP_JSON = ""
+    cfg.CATEGORY_JSON = ""
+    cfg.SOLVER.VAL_MAX_ITER = 0
 
 
-def add_configs(_C):
-    _C.MAX_TRAINING_ATTEMPTS = 3
-
-    _C.TRAIN_LIST = ""
-    _C.TEST_LIST = ""
-    _C.ID_MAP_JSON = ""
-    _C.CATEGORY_JSON = ""
-    _C.SOLVER.VAL_MAX_ITER = 0
-
-
-def setup(args):
+def create_config(args: Namespace) -> CfgNode:
     """
     Create configs and perform basic setups.
     """
@@ -53,16 +51,16 @@ def setup(args):
     return cfg
 
 
-def build_model_with_priors(cfg, priors=None):
-    model = build_model(cfg, priors=priors)
-    return model
-
-
-def build_cubercnn_model(args):
-    cfg = setup(args)
+def create_cubercnn_model(args: Namespace) -> (CfgNode, torch.nn.Module):
+    """
+    Build CubeRCNN model architecture.
+    """
+    cfg = create_config(args)
 
     # build model and load weights
-    model = build_model_with_priors(cfg, priors=None)
+    model = build_model(cfg, priors=None)
+
+    # load model checkpoint
     _ = DetectionCheckpointer(
         model, save_dir=os.path.dirname(args.config_file)
     ).resume_or_load(cfg.MODEL.WEIGHTS, resume=True)
@@ -70,7 +68,9 @@ def build_cubercnn_model(args):
     return cfg, model
 
 
-def convert_cubercnn_prediction(data, prediction, args, cfg):
+def convert_cubercnn_prediction(
+    data: List[Dict], prediction: List, args: Namespace, cfg: CfgNode
+) -> List[Dict]:
     """
     Converts per-frame predictions to list of dicts
     """
@@ -133,41 +133,105 @@ def convert_cubercnn_prediction(data, prediction, args, cfg):
     return preds_per_frame
 
 
+def load_bbox3d_data(bbox3d_csv):
+    bbox3d_df = pd.read_csv(bbox3d_csv)
+    bbox3d_data = {}
+    for i in range(len(bbox3d_df)):
+        row = bbox3d_df.iloc[i]
+        prototype = row["prototype"]
+        bbox3d_data[prototype] = np.array(
+            [
+                row["p_local_obj_xmin[m]"],
+                row["p_local_obj_xmax[m]"],
+                row["p_local_obj_ymin[m]"],
+                row["p_local_obj_ymax[m]"],
+                row["p_local_obj_zmin[m]"],
+                row["p_local_obj_zmax[m]"],
+            ]
+        )
+    return bbox3d_data
+
+
+def move_back_object_center(bb3d_aabb, T_world_object):
+    t_center_in_object = (bb3d_aabb[1::2] + bb3d_aabb[::2]) / 2
+    T_object_center_bb3d = SE3.from_quat_and_translation(
+        1, np.array([0, 0, 0]), -t_center_in_object
+    )
+    T_world_bb3d = T_world_object @ T_object_center_bb3d
+
+    return T_world_bb3d
+
+
+def save_adt_challenge_submission(
+    args,
+    pred_dir,
+    seq_name,
+    instance_metadata,
+    object_uids,
+    Rs_cam_obj,
+    ts_cam_obj,
+    Ts_world_cam,
+    timestamps,
+):
+    """
+    Save model prediction to ADT challenge submission format
+    """
+    # if bbox3d_csv is available, save each object's 6DoF pose for ADT challenge submission
+    if args.bbox3d_csv is not None:
+        selected_prototypes = read_txt(args.prototype_file)
+        prototypes = [
+            instance_metadata[str(uid)]["prototype_name"] for uid in object_uids
+        ]
+        bbox3d_data = load_bbox3d_data(args.bbox3d_csv)
+
+        canonical_translations = []
+        canonical_quaternions = []
+        for proto, R_cam_obj, t_cam_obj, T_world_cam in zip(
+            prototypes, Rs_cam_obj, ts_cam_obj, Ts_world_cam
+        ):
+            T_cam_obj = np.concatenate((R_cam_obj, t_cam_obj[:, np.newaxis]), axis=1)
+            T_cam_obj = SE3.from_matrix3x4(T_cam_obj)
+            T_world_cam = SE3.from_matrix3x4(T_world_cam)
+            T_world_obj = T_world_cam @ T_cam_obj
+
+            # compute prototype canonical pose by moving object center
+            # back based on canonical prototype pose definition
+            if proto in bbox3d_data:
+                T_world_obj = move_back_object_center(bbox3d_data[proto], T_world_obj)
+            trans = T_world_obj.translation().squeeze()
+            quat = T_world_obj.rotation().to_quat().squeeze()
+            canonical_translations.append(trans)
+            canonical_quaternions.append([quat[0], quat[1], quat[2], quat[3]])
+        canonical_translations = np.array(canonical_translations)
+        canonical_quaternions = np.array(canonical_quaternions)
+        submission_data = {
+            "prototype": prototypes,
+            "timestamp_ns": timestamps,
+            "t_wo_x": canonical_translations[:, 0],
+            "t_wo_y": canonical_translations[:, 1],
+            "t_wo_z": canonical_translations[:, 2],
+            "q_wo_w": canonical_quaternions[:, 0],
+            "q_wo_x": canonical_quaternions[:, 1],
+            "q_wo_y": canonical_quaternions[:, 2],
+            "q_wo_z": canonical_quaternions[:, 3],
+        }
+        submission_data = pd.DataFrame(submission_data)
+        submission_data = submission_data[
+            submission_data["prototype"].isin(selected_prototypes)
+        ]
+        submission_data.to_csv(f"{pred_dir}/{seq_name}.csv", index=False)
+
+
 def save_cubercnn_prediction(
     dataset,
     prediction_list,
     args,
     cfg,
 ):
-    def load_bbox3d_data(bbox3d_csv):
-        bbox3d_df = pd.read_csv(bbox3d_csv)
-        bbox3d_data = {}
-        for i in range(len(bbox3d_df)):
-            row = bbox3d_df.iloc[i]
-            prototype = row["prototype"]
-            bbox3d_data[prototype] = np.array(
-                [
-                    row["p_local_obj_xmin[m]"],
-                    row["p_local_obj_xmax[m]"],
-                    row["p_local_obj_ymin[m]"],
-                    row["p_local_obj_ymax[m]"],
-                    row["p_local_obj_zmin[m]"],
-                    row["p_local_obj_zmax[m]"],
-                ]
-            )
-        return bbox3d_data
-
-    def move_back_object_center(bb3d_aabb, T_world_object):
-        t_center_in_object = (bb3d_aabb[1::2] + bb3d_aabb[::2]) / 2
-        T_object_center_bb3d = SE3.from_quat_and_translation(
-            1, np.array([0, 0, 0]), -t_center_in_object
-        )
-        T_world_bb3d = T_world_object @ T_object_center_bb3d
-
-        return T_world_bb3d
-
+    """
+    Save CubeRCNN model predictions in the same format as ADT annotations.
+    """
     # load instance information and instance id to category id mapping
-    selected_prototypes = read_txt(args.prototype_file)
     instance_metadata = read_json(args.metadata_file)
     inst_ids_to_cat_ids = read_json(cfg.ID_MAP_JSON)
     cat_ids_to_inst_ids = {
@@ -255,147 +319,15 @@ def save_cubercnn_prediction(
     bbox_2d_data.to_csv(f"{pred_dir}/2d_bounding_box.csv", index=False)
     write_json(instances_data, f"{pred_dir}/instances.json")
 
-    # if bbox3d_csv is available, save each object's 6DoF pose for ADT challenge submission
-    if args.bbox3d_csv is not None:
-        prototypes = [
-            instance_metadata[str(uid)]["prototype_name"] for uid in object_uids
-        ]
-        bbox3d_data = load_bbox3d_data(args.bbox3d_csv)
-
-        canonical_translations = []
-        canonical_quaternions = []
-        for proto, R_cam_obj, t_cam_obj, T_world_cam in zip(
-            prototypes, Rs_cam_obj, ts_cam_obj, Ts_world_cam
-        ):
-            T_cam_obj = np.concatenate((R_cam_obj, t_cam_obj[:, np.newaxis]), axis=1)
-            T_cam_obj = SE3.from_matrix3x4(T_cam_obj)
-            T_world_cam = SE3.from_matrix3x4(T_world_cam)
-            T_world_obj = T_world_cam @ T_cam_obj
-
-            # compute prototype canonical pose by moving object center
-            # back based on canonical prototype pose definition
-            if proto in bbox3d_data:
-                T_world_obj = move_back_object_center(bbox3d_data[proto], T_world_obj)
-            trans = T_world_obj.translation().squeeze()
-            quat = T_world_obj.rotation().to_quat().squeeze()
-            canonical_translations.append(trans)
-            canonical_quaternions.append([quat[0], quat[1], quat[2], quat[3]])
-        canonical_translations = np.array(canonical_translations)
-        canonical_quaternions = np.array(canonical_quaternions)
-        submission_data = {
-            "prototype": prototypes,
-            "timestamp_ns": timestamps,
-            "t_wo_x": canonical_translations[:, 0],
-            "t_wo_y": canonical_translations[:, 1],
-            "t_wo_z": canonical_translations[:, 2],
-            "q_wo_w": canonical_quaternions[:, 0],
-            "q_wo_x": canonical_quaternions[:, 1],
-            "q_wo_y": canonical_quaternions[:, 2],
-            "q_wo_z": canonical_quaternions[:, 3],
-        }
-        submission_data = pd.DataFrame(submission_data)
-        submission_data = submission_data[
-            submission_data["prototype"].isin(selected_prototypes)
-        ]
-        submission_data.to_csv(f"{pred_dir}/{seq_name}.csv", index=False)
-
-
-class CubeRCNNViewer:
-    def __init__(self, dataset, args):
-        self.dataset = dataset
-        self.data_processor = dataset.data_processor
-        self.camera_name = self.data_processor.vrs_camera_calib.get_label()
-
-        rr.init("ATEK Viewer", spawn=True)
-        rr.serve(web_port=args.web_port, ws_port=args.ws_port)
-
-        # log trajectory
-        trajectory = [
-            self.data_processor.get_T_world_camera_by_index(i).translation()[0]
-            for i in range(len(self.data_processor))
-        ]
-        rr.log(
-            f"world/device/trajectory",
-            rr.LineStrips3D(trajectory, colors=TRAJECTORY_COLOR, radii=0.01),
-            timeless=True,
-        )
-
-        # log pinhole camera
-        camera_calib = dataset.data_processor.final_camera_calib
-        rr.log(
-            f"world/device/{self.camera_name}",
-            rr.Pinhole(
-                resolution=[
-                    int(camera_calib.get_image_size()[0]),
-                    int(camera_calib.get_image_size()[1]),
-                ],
-                focal_length=float(camera_calib.get_focal_lengths()[0]),
-            ),
-            timeless=True,
-        )
-
-    def __call__(self, data, prediction, args, cfg):
-        assert len(data) == 1
-        index = data[0]["index"]
-        ts = data[0]["timestamp_ns"]
-        # print(ts)
-        rr.set_time_nanos("frame_time_ns", ts)
-
-        # process 3D and 2D bounding boxes
-        T_world_cam = SE3.from_matrix3x4(data[0]["T_world_cam"])
-        bb2ds_XYXY_infer = []
-        labels_infer = []
-        bb3ds_centers_infer = []
-        bb3ds_sizes_infer = []
-
-        if len(prediction) == 0:
-            print("No prediction!")
-
-        for pred in prediction:
-            T_cam_obj_mat = np.zeros([3, 4])
-            T_cam_obj_mat[0:3, 0:3] = np.array(pred["R_cam_obj"])
-            T_cam_obj_mat[:, 3] = pred["t_cam_obj"]
-            T_cam_obj = SE3.from_matrix3x4(T_cam_obj_mat)
-            T_world_obj = T_world_cam @ T_cam_obj
-
-            bb2ds_XYXY_infer.append(pred["bbox_2D"])
-            labels_infer.append(pred["category"])
-            bb3ds_centers_infer.append(T_world_obj.translation()[0])
-            bb3ds_sizes_infer.append(np.array(pred["dimensions"]))
-
-        # log camera pose
-        rr.log(
-            f"world/device/{self.camera_name}",
-            ToTransform3D(T_world_cam, False),
-        )
-
-        # log 3D bounding boxes
-        rr.log(
-            f"world/device/bb3d_infer",
-            rr.Boxes3D(
-                sizes=bb3ds_sizes_infer,
-                centers=bb3ds_centers_infer,
-                radii=0.01,
-                colors=PRED_COLOR,
-                labels=labels_infer,
-            ),
-        )
-
-        # log image
-        image = data[0]["image"].detach().cpu().numpy().transpose(1, 2, 0)
-        rr.log(
-            f"world/device/{self.camera_name}/image",
-            rr.Image(image),
-        )
-
-        # log 2D bounding boxes
-        rr.log(
-            f"world/device/{self.camera_name}/bb2d_infer",
-            rr.Boxes2D(
-                array=bb2ds_XYXY_infer,
-                array_format=rr.Box2DFormat.XYXY,
-                radii=1,
-                colors=PRED_COLOR,
-                labels=labels_infer,
-            ),
-        )
+    # save model prediction to ADT challenge format
+    save_adt_challenge_submission(
+        args,
+        pred_dir,
+        seq_name,
+        instance_metadata,
+        object_uids,
+        Rs_cam_obj,
+        ts_cam_obj,
+        Ts_world_cam,
+        timestamps,
+    )

@@ -16,7 +16,7 @@ import yaml
 from atek.dataset.atek_webdataset import create_wds_dataloader
 from atek.dataset.omni3d_adapter import create_omni3d_webdataset
 
-from atek.model.cubercnn import build_model_with_priors
+from atek.model.cubercnn import build_model
 from cubercnn.config import get_cfg_defaults
 from cubercnn.solver import build_optimizer, freeze_bn, PeriodicCheckpointerOnlyOne
 from detectron2.checkpoint import DetectionCheckpointer
@@ -438,7 +438,7 @@ def main(args):
     remaining_attempts = cfg.MAX_TRAINING_ATTEMPTS
     while remaining_attempts > 0:
         # build the training model.
-        model = build_model_with_priors(cfg, priors=None)
+        model = build_model(cfg, priors=None)
 
         if remaining_attempts == cfg.MAX_TRAINING_ATTEMPTS:
             # log the first attempt's settings.

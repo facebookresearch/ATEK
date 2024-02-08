@@ -7,17 +7,25 @@ from detectron2.engine import launch
 from detectron2.utils import comm
 from torch.nn.parallel import DistributedDataParallel
 
-from atek.dataset.data_utils import build_dataset
-from atek.model.model_utils import build_model, setup_callback
+from atek.dataset.dataset_factory import create_inference_dataset
+from atek.model.model_factory import create_model, create_callback
 from atek.utils.file_utils import read_txt
 
 
-def do_test(args, cfg, seq_path, model):
+def run_inference(args, cfg, seq_path, model):
     # setup dataset
-    dataset = build_dataset(seq_path, args, cfg)
+    dataset = create_inference_dataset(seq_path, args)
 
-    # setup callback functions
-    callbacks = setup_callback(dataset, args, cfg)
+    # setup callbacks
+    callback_config = {
+        "model_name": args.model_name,
+        "viewer": {
+            "visualize": args.visualize,
+            "web_port": args.web_port,
+            "ws_port": args.ws_port,
+        }
+    }
+    callbacks = create_callback(dataset, callback_config)
 
     # run inference, with optional callbacks
     prediction_list = []
@@ -41,7 +49,7 @@ def do_test(args, cfg, seq_path, model):
 
 def main(args):
     # setup config and model
-    cfg, model = build_model(args)
+    cfg, model = create_model(args)
 
     # setup distributed inference
     world_size = comm.get_world_size()
@@ -59,7 +67,7 @@ def main(args):
     seq_paths_all = read_txt(args.input_file)
     seq_paths_local = seq_paths_all[rank::world_size]
     for seq_path in seq_paths_local:
-        do_test(args, cfg, seq_path, model)
+        run_inference(args, cfg, seq_path, model)
 
 
 def get_args():
