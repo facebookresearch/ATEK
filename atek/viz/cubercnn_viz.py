@@ -64,7 +64,6 @@ class AtekCubercnnInferViewer(AtekViewer):
         self, data: List[Dict], prediction: List, args: Namespace, cfg: CfgNode
     ):
         assert len(data) == 1
-        index = data[0]["index"]
         ts = data[0]["timestamp_ns"]
         rr.set_time_nanos("frame_time_ns", ts)
 
@@ -110,7 +109,7 @@ class AtekCubercnnInferViewer(AtekViewer):
         )
 
         # log image
-        image = data[0]["image"].detach().cpu().numpy().transpose(1, 2, 0)
+        image = data[0]["image"].detach().cpu().numpy().transpose(1, 2, 0)[:, :, ::-1]
         rr.log(
             f"world/device/{self.camera_name}/image",
             rr.Image(image),

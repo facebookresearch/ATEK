@@ -162,10 +162,9 @@ def move_back_object_center(bb3d_aabb, T_world_object):
     return T_world_bb3d
 
 
-def save_adt_challenge_submission(
+def save_predicted_canonical_object_poses_to_csv(
     args,
-    pred_dir,
-    seq_name,
+    output_csv_name,
     instance_metadata,
     object_uids,
     Rs_cam_obj,
@@ -174,52 +173,57 @@ def save_adt_challenge_submission(
     timestamps,
 ):
     """
-    Save model prediction to ADT challenge submission format
+    Save model-predicted object canonical 6DoF pose, which shifts model-predicted object center
+    based on the prototype's canonical pose definition.
     """
     # if bbox3d_csv is available, save each object's 6DoF pose for ADT challenge submission
-    if args.bbox3d_csv is not None:
-        selected_prototypes = read_txt(args.prototype_file)
-        prototypes = [
-            instance_metadata[str(uid)]["prototype_name"] for uid in object_uids
-        ]
-        bbox3d_data = load_bbox3d_data(args.bbox3d_csv)
+    if args.bbox3d_csv is None:
+        return
 
-        canonical_translations = []
-        canonical_quaternions = []
-        for proto, R_cam_obj, t_cam_obj, T_world_cam in zip(
-            prototypes, Rs_cam_obj, ts_cam_obj, Ts_world_cam
-        ):
-            T_cam_obj = np.concatenate((R_cam_obj, t_cam_obj[:, np.newaxis]), axis=1)
-            T_cam_obj = SE3.from_matrix3x4(T_cam_obj)
-            T_world_cam = SE3.from_matrix3x4(T_world_cam)
-            T_world_obj = T_world_cam @ T_cam_obj
+    selected_prototypes = read_txt(args.prototype_file)
+    prototypes = [instance_metadata[str(uid)]["prototype_name"] for uid in object_uids]
+    bbox3d_data = load_bbox3d_data(args.bbox3d_csv)
 
-            # compute prototype canonical pose by moving object center
-            # back based on canonical prototype pose definition
-            if proto in bbox3d_data:
-                T_world_obj = move_back_object_center(bbox3d_data[proto], T_world_obj)
-            trans = T_world_obj.translation().squeeze()
-            quat = T_world_obj.rotation().to_quat().squeeze()
-            canonical_translations.append(trans)
-            canonical_quaternions.append([quat[0], quat[1], quat[2], quat[3]])
-        canonical_translations = np.array(canonical_translations)
-        canonical_quaternions = np.array(canonical_quaternions)
-        submission_data = {
-            "prototype": prototypes,
-            "timestamp_ns": timestamps,
-            "t_wo_x": canonical_translations[:, 0],
-            "t_wo_y": canonical_translations[:, 1],
-            "t_wo_z": canonical_translations[:, 2],
-            "q_wo_w": canonical_quaternions[:, 0],
-            "q_wo_x": canonical_quaternions[:, 1],
-            "q_wo_y": canonical_quaternions[:, 2],
-            "q_wo_z": canonical_quaternions[:, 3],
-        }
-        submission_data = pd.DataFrame(submission_data)
-        submission_data = submission_data[
-            submission_data["prototype"].isin(selected_prototypes)
-        ]
-        submission_data.to_csv(f"{pred_dir}/{seq_name}.csv", index=False)
+    final_prototypes = []
+    final_timestamps = []
+    canonical_translations = []
+    canonical_quaternions = []
+    for ts, proto, R_cam_obj, t_cam_obj, T_world_cam in zip(
+        timestamps, prototypes, Rs_cam_obj, ts_cam_obj, Ts_world_cam
+    ):
+        if proto not in selected_prototypes and proto not in bbox3d_data:
+            continue
+        T_cam_obj = np.concatenate((R_cam_obj, t_cam_obj[:, np.newaxis]), axis=1)
+        T_cam_obj = SE3.from_matrix3x4(T_cam_obj)
+        T_world_cam = SE3.from_matrix3x4(T_world_cam)
+        T_world_obj = T_world_cam @ T_cam_obj
+
+        # compute prototype canonical pose by moving object center
+        # back based on canonical prototype pose definition
+        T_world_obj = move_back_object_center(bbox3d_data[proto], T_world_obj)
+        trans = T_world_obj.translation().squeeze()
+        quat = T_world_obj.rotation().to_quat().squeeze()
+
+        final_prototypes.append(proto)
+        final_timestamps.append(ts)
+        canonical_translations.append(trans)
+        canonical_quaternions.append([quat[0], quat[1], quat[2], quat[3]])
+    canonical_translations = np.array(canonical_translations)
+    canonical_quaternions = np.array(canonical_quaternions)
+
+    submission_data = {
+        "prototype": final_prototypes,
+        "timestamp_ns": final_timestamps,
+        "t_wo_x": canonical_translations[:, 0],
+        "t_wo_y": canonical_translations[:, 1],
+        "t_wo_z": canonical_translations[:, 2],
+        "q_wo_w": canonical_quaternions[:, 0],
+        "q_wo_x": canonical_quaternions[:, 1],
+        "q_wo_y": canonical_quaternions[:, 2],
+        "q_wo_z": canonical_quaternions[:, 3],
+    }
+    submission_data = pd.DataFrame(submission_data)
+    submission_data.to_csv(output_csv_name, index=False)
 
 
 def save_cubercnn_prediction(
@@ -255,9 +259,7 @@ def save_cubercnn_prediction(
     quaternions = []
     for R_cam_obj, t_cam_obj, T_world_cam in zip(Rs_cam_obj, ts_cam_obj, Ts_world_cam):
         T_cam_obj = np.concatenate((R_cam_obj, t_cam_obj[:, np.newaxis]), axis=1)
-        T_cam_obj = SE3.from_matrix3x4(T_cam_obj)
-        T_world_cam = SE3.from_matrix3x4(T_world_cam)
-        T_world_obj = T_world_cam @ T_cam_obj
+        T_world_obj = SE3.from_matrix3x4(T_world_cam) @ SE3.from_matrix3x4(T_cam_obj)
 
         trans = T_world_obj.translation().squeeze()
         quat = T_world_obj.rotation().to_quat().squeeze()
@@ -320,10 +322,10 @@ def save_cubercnn_prediction(
     write_json(instances_data, f"{pred_dir}/instances.json")
 
     # save model prediction to ADT challenge format
-    save_adt_challenge_submission(
+    output_csv_name = f"{pred_dir}/{seq_name}.csv"
+    save_predicted_canonical_object_poses_to_csv(
         args,
-        pred_dir,
-        seq_name,
+        output_csv_name,
         instance_metadata,
         object_uids,
         Rs_cam_obj,

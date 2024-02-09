@@ -9,7 +9,7 @@ from atek.model.cubercnn import (
 from atek.viz.cubercnn_viz import AtekCubercnnInferViewer
 
 
-def create_model(args: Namespace):
+def create_inference_model(args: Namespace):
     """
     Create the model for inference pipeline.
 
@@ -28,7 +28,7 @@ def create_model(args: Namespace):
     return cfg, model
 
 
-def create_callback(dataset: Dataset, callback_config: Dict) -> Dict[str, Callable]:
+def create_inference_callback(dataset: Dataset, callback_config: Dict) -> Dict[str, Callable]:
     """
     Create callback functions for the inference pipeline, such as pre-/post-processing
     of model input/output, visualizing and saving model predictions. Callback functions

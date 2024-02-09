@@ -8,13 +8,17 @@ from detectron2.utils import comm
 from torch.nn.parallel import DistributedDataParallel
 
 from atek.dataset.dataset_factory import create_inference_dataset
-from atek.model.model_factory import create_model, create_callback
+from atek.model.model_factory import create_inference_model, create_inference_callback
 from atek.utils.file_utils import read_txt
 
 
-def run_inference(args, cfg, seq_path, model):
+def run_inference(args, model_config, seq_path, model):
     # setup dataset
-    dataset = create_inference_dataset(seq_path, args)
+    dataset_config = {
+        "model_name": args.model_name,
+        "category_id_remapping_json": model_config.ID_MAP_JSON,
+    }
+    dataset = create_inference_dataset(seq_path, dataset_config)
 
     # setup callbacks
     callback_config = {
@@ -25,7 +29,7 @@ def run_inference(args, cfg, seq_path, model):
             "ws_port": args.ws_port,
         }
     }
-    callbacks = create_callback(dataset, callback_config)
+    callbacks = create_inference_callback(dataset, callback_config)
 
     # run inference, with optional callbacks
     prediction_list = []
@@ -34,22 +38,22 @@ def run_inference(args, cfg, seq_path, model):
         prediction = model(data)
 
         # postprocess prediction
-        prediction = callbacks["iter_postprocess"](data, prediction, args, cfg)
+        prediction = callbacks["iter_postprocess"](data, prediction, args, model_config)
 
         # run callbacks for current iteration
         for callback in callbacks["iter_callback"]:
-            callback(data, prediction, args, cfg)
+            callback(data, prediction, args, model_config)
 
         prediction_list.append(prediction)
 
     # run callbacks for whole sequence
     for callback in callbacks["seq_callback"]:
-        callback(dataset, prediction_list, args, cfg)
+        callback(dataset, prediction_list, args, model_config)
 
 
 def main(args):
     # setup config and model
-    cfg, model = create_model(args)
+    model_config, model = create_inference_model(args)
 
     # setup distributed inference
     world_size = comm.get_world_size()
@@ -67,7 +71,7 @@ def main(args):
     seq_paths_all = read_txt(args.input_file)
     seq_paths_local = seq_paths_all[rank::world_size]
     for seq_path in seq_paths_local:
-        run_inference(args, cfg, seq_path, model)
+        run_inference(args, model_config, seq_path, model)
 
 
 def get_args():
