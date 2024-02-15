@@ -1,9 +1,11 @@
+from dataclasses import asdict
 from typing import Dict, List
+
 import numpy as np
 import torch
-
 from projectaria_tools.projects.adt import AriaDigitalTwinDataPathsProvider
 
+from atek.data_preprocess.adt_gt_data_processor import AdtGtDataProcessor
 from atek.data_preprocess.frame_data_processor import FrameDataProcessor
 from atek.data_preprocess.pose_data_processor import PoseDataProcessor
 from atek.dataset.common import AriaStreamIds
@@ -60,6 +62,13 @@ class AtekCubercnnInferDataset(torch.utils.data.Dataset):
             name="pose",
             trajectory_file=data_paths.aria_trajectory_filepath,
         )
+        try:
+            self.rgb_adt_gt_data_processor = AdtGtDataProcessor(
+                "adt_gt", "ADT", stream_id, data_paths
+            )
+        except:
+            self.rgb_adt_gt_data_processor = None
+            print(f"Ground-truth NOT available for sequence: {data_path}")
         rgb_data_processor = FrameDataProcessor(
             video_vrs=data_paths.aria_vrs_filepath,
             stream_id=stream_id,
@@ -68,7 +77,7 @@ class AtekCubercnnInferDataset(torch.utils.data.Dataset):
                 [target_image_resolution[0], target_image_resolution[1]]
             ),
             pose_data_processor=pose_data_processor,
-            gt_data_processor=None,
+            gt_data_processor=self.rgb_adt_gt_data_processor,
         )
 
         self.data_processor = rgb_data_processor
@@ -89,19 +98,27 @@ class AtekCubercnnInferDataset(torch.utils.data.Dataset):
         # image dimension (height, width, channel) to (channel, height, width)
         image = image.transpose(2, 0, 1)
 
-        batched = [
-            {
-                "data_source": rgb_image_frame.data_source,
-                "sequence_name": rgb_image_frame.sequence_name,
-                "index": index,
-                "frame_id": rgb_image_frame.frame_id,
-                "timestamp_ns": rgb_image_frame.timestamp_ns,
-                "T_world_cam": rgb_image_frame.T_world_camera,
-                "image": torch.as_tensor(np.ascontiguousarray(image)),
-                "height": image.shape[1],
-                "width": image.shape[2],
-                "K": K,
-            }
-        ]
+        frame = {
+            "data_source": rgb_image_frame.data_source,
+            "sequence_name": rgb_image_frame.sequence_name.split("/")[-3],
+            "index": index,
+            "frame_id": rgb_image_frame.frame_id,
+            "timestamp_ns": rgb_image_frame.timestamp_ns,
+            "T_world_camera": rgb_image_frame.T_world_camera,
+            "image": torch.as_tensor(np.ascontiguousarray(image)),
+            "height": image.shape[1],
+            "width": image.shape[2],
+            "K": K,
+        }
 
-        return batched
+        # GT object annotation info
+        if "Ts_world_object" in asdict(rgb_image_frame).keys():
+            frame["Ts_world_object"] = rgb_image_frame.Ts_world_object
+            frame["object_dimensions"] = rgb_image_frame.object_dimensions
+            frame["category"] = [
+                rgb_image_frame.category_id_to_name[cat_id]
+                for cat_id in rgb_image_frame.object_category_ids
+            ]
+            frame["bb2ds_x0x1y0y1"] = rgb_image_frame.bb2ds
+
+        return [frame]

@@ -3,14 +3,11 @@ import os
 from typing import Callable, Dict, List, Optional
 
 import torch
-from atek.dataset.atek_webdataset import create_atek_webdataset
-
-from detectron2.data import detection_utils
-from detectron2.structures import Boxes, BoxMode, Instances
-
+from detectron2.structures import Boxes, Instances
 from webdataset.filters import pipelinefilter
 from webdataset.shardlists import single_node_only
 
+from atek.dataset.atek_webdataset import create_atek_webdataset
 
 KEY_MAPPING = {
     "f#214-1+image": "images",
@@ -24,6 +21,9 @@ KEY_MAPPING = {
     "F#214-1+sequence_name": "sequence_name",
     "F#214-1+frame_id": "frame_id",
     "F#214-1+timestamp_ns": "timestamp_ns",
+    "F#214-1+T_world_camera": "T_world_camera",
+    "F#214-1+Ts_world_object": "Ts_world_object",
+    "F#214-1+object_dimensions": "object_dimensions",
 }
 
 
@@ -87,11 +87,20 @@ def atek_to_omni3d(
         image_height, image_width = sample["images"].shape[2:]
 
         for idx in range(len(images)):
+            category = [
+                sample["category_id_to_name"][idx][str(cat_id)]
+                for cat_id in sample["object_category_ids"][idx]
+            ]
             sample_new = {
                 "image": images[idx],
                 "K": Ks[idx].tolist(),  # CubeRCNN requires list input
                 "height": image_height,
                 "width": image_width,
+                "T_world_camera": sample["T_world_camera"][idx],
+                "Ts_world_object": sample["Ts_world_object"][idx],
+                "object_dimensions": sample["object_dimensions"][idx],
+                "bb2ds_x0x1y0y1": sample["bb2ds_x0x1y0y1"][idx],
+                "category": category,
                 # Metadata
                 "frame_id": sample["frame_id"][idx],
                 "timestamp_ns": sample["timestamp_ns"][idx],

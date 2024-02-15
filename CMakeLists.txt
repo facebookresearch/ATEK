@@ -8,7 +8,7 @@ project(mesh_boolean_utils
 list(PREPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Build in Release mode by default
@@ -21,13 +21,7 @@ find_package(Python COMPONENTS Interpreter Development REQUIRED)
 message(STATUS "Python executable: ${Python_EXECUTABLE}")
 
 # Find pybind11
-include(FetchContent)
-FetchContent_Declare(
-    pybind11
-    GIT_REPOSITORY https://github.com/pybind/pybind11.git
-    GIT_TAG master
-)
-FetchContent_MakeAvailable(pybind11)
+find_package(pybind11 CONFIG REQUIRED)
 
 # Find libigl
 include(libigl)

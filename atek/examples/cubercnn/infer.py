@@ -7,53 +7,48 @@ from detectron2.engine import launch
 from detectron2.utils import comm
 from torch.nn.parallel import DistributedDataParallel
 
-from atek.dataset.dataset_factory import create_inference_dataset
-from atek.model.model_factory import create_inference_model, create_inference_callback
+from atek.dataset.dataset_factory import create_dataset_config, create_inference_dataset
+from atek.model.model_factory import (
+    create_callback_config,
+    create_inference_callback,
+    create_inference_model,
+    create_model_config,
+)
 from atek.utils.file_utils import read_txt
 
 
 def run_inference(args, model_config, seq_path, model):
     # setup dataset
-    dataset_config = {
-        "model_name": args.model_name,
-        "category_id_remapping_json": model_config.ID_MAP_JSON,
-    }
+    dataset_config = create_dataset_config(args, model_config)
     dataset = create_inference_dataset(seq_path, dataset_config)
 
     # setup callbacks
-    callback_config = {
-        "model_name": args.model_name,
-        "viewer": {
-            "visualize": args.visualize,
-            "web_port": args.web_port,
-            "ws_port": args.ws_port,
-        }
-    }
-    callbacks = create_inference_callback(dataset, callback_config)
+    callback_config = create_callback_config(args, model_config)
+    callbacks = create_inference_callback(callback_config)
 
     # run inference, with optional callbacks
     prediction_list = []
-    for idx in tqdm.tqdm(range(len(dataset))):
-        data = dataset[idx]
+    for data in tqdm.tqdm(dataset):
         prediction = model(data)
 
         # postprocess prediction
-        prediction = callbacks["iter_postprocess"](data, prediction, args, model_config)
+        prediction = callbacks["iter_postprocess"](data, prediction)
 
         # run callbacks for current iteration
         for callback in callbacks["iter_callback"]:
-            callback(data, prediction, args, model_config)
+            callback(data, prediction)
 
         prediction_list.append(prediction)
 
     # run callbacks for whole sequence
     for callback in callbacks["seq_callback"]:
-        callback(dataset, prediction_list, args, model_config)
+        callback(prediction_list)
 
 
 def main(args):
     # setup config and model
-    model_config, model = create_inference_model(args)
+    model_config = create_model_config(args)
+    model = create_inference_model(model_config)
 
     # setup distributed inference
     world_size = comm.get_world_size()
@@ -84,6 +79,11 @@ def get_args():
     )
     parser.add_argument(
         "--output-dir", default=None, help="Directory to save model predictions"
+    )
+    parser.add_argument(
+        "--data-type",
+        default="raw",
+        help="Input data type. wds: webdataset tars, raw: raw ADT data",
     )
     parser.add_argument(
         "--model-name",
@@ -146,11 +146,7 @@ def get_args():
         default=0,
         help="the rank of this machine (unique per machine)",
     )
-    port = (
-        2**15
-        + 2**14
-        + hash(os.getuid() if sys.platform != "win32" else 1) % 2**14
-    )
+    port = 2**15 + 2**14 + hash(os.getuid() if sys.platform != "win32" else 1) % 2**14
     parser.add_argument(
         "--dist-url",
         default="tcp://127.0.0.1:{}".format(port),

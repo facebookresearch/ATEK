@@ -3,7 +3,7 @@
 import copy
 import logging
 import math
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -196,9 +196,11 @@ class FrameDataProcessor:
         This mesh could be used for rendering or camera fov overlapping check.
         """
         self.camera_fov = get_camera_fov_spherical_cone(
-            camera_model=self.final_camera_calib
-            if self.final_camera_calib is not None
-            else self.vrs_camera_calib,
+            camera_model=(
+                self.final_camera_calib
+                if self.final_camera_calib is not None
+                else self.vrs_camera_calib
+            ),
             far_clipping_distance=far_clipping_distance,
             circle_segments=circle_segments,
             cap_segments=cap_segments,
@@ -217,7 +219,10 @@ class FrameDataProcessor:
 
         return copy.deepcopy(self.camera_fov)
 
-    def get_T_world_camera_by_index(self, index: int) -> SE3:
+    def get_T_world_camera_by_index(self, index: int) -> Union[SE3, None]:
+        if "tx_world_device" not in self.frame_df.columns:
+            return None
+
         T_world_device = SE3.from_quat_and_translation(
             self.frame_df.loc[index, "qw_world_device"],
             self.frame_df.loc[
