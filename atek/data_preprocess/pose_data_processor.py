@@ -56,25 +56,26 @@ class PoseDataProcessor:
         """
         if isinstance(timestamps_ns, List):
             timestamps_ns = np.array(timestamps_ns)
+        SHARED_TIMESTAMP_HEADER_NAME = "tracking_timestamp_us"
 
         timestamps_us_df = pd.DataFrame(
             {
-                "tracking_timestamp_us": pd.Series(
+                SHARED_TIMESTAMP_HEADER_NAME: pd.Series(
                     np.round(timestamps_ns / 1000).astype(int)
                 )
             }
         )
-        timestamps_us_df = timestamps_us_df.sort_values("tracking_timestamp_us")
+        timestamps_us_df = timestamps_us_df.sort_values(SHARED_TIMESTAMP_HEADER_NAME)
 
         merged_df = pd.merge_asof(
             timestamps_us_df,
             self.traj_df,
-            on="tracking_timestamp_us",
+            on=SHARED_TIMESTAMP_HEADER_NAME,
             tolerance=int(round(tolerance_ns / 1000)),
             direction="nearest",
         )
 
-        valid_merged_df = merged_df.dropna()
+        valid_merged_df = merged_df.dropna(subset=[SHARED_TIMESTAMP_HEADER_NAME])
 
         invalid_count = len(merged_df) - len(valid_merged_df)
         invalid_percent = (invalid_count / len(merged_df)) * 100

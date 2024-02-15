@@ -117,7 +117,6 @@ class FrameDataProcessor:
         self.T_device_camera = self.final_camera_calib.get_transform_device_camera()
 
         self.update_df_with_poseinfo()
-        self.cleanup_df()
 
         if self.gt_data_processor is not None:
             self.gt_data_processor.set_undistortion_params(
@@ -130,16 +129,6 @@ class FrameDataProcessor:
 
     def __len__(self):
         return len(self.frame_df)
-
-    def cleanup_df(self):
-        valid_df = self.frame_df.dropna()
-        invalid_count = len(self.frame_df) - len(valid_df)
-        invalid_percent = (invalid_count / len(self.frame_df)) * 100
-        logger.info(
-            f"Dropped {invalid_percent} percent ({invalid_count}/{len(self.frame_df)}) frames without required GT information."
-        )
-        self.frame_df = valid_df
-        self.frame_df.reset_index(drop=True, inplace=True)
 
     def get_T_device_camera(self) -> SE3:
         return self.T_device_camera
