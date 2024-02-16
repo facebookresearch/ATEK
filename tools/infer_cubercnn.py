@@ -7,32 +7,23 @@ from detectron2.engine import launch
 from detectron2.utils import comm
 from torch.nn.parallel import DistributedDataParallel
 
-from atek.dataset.dataset_factory import create_dataset_config, create_inference_dataset
-from atek.model.model_factory import (
-    create_callback_config,
-    create_inference_callback,
-    create_inference_model,
-    create_model_config,
-)
-from atek.utils.file_utils import read_txt
+from atek.callback.callback_factory import create_inference_callback
+from atek.dataset.dataset_factory import create_inference_dataset
+from atek.model.model_factory import create_inference_model
 
 
 def run_inference(args, model_config, seq_path, model):
     # setup dataset
-    dataset_config = create_dataset_config(args, model_config)
-    dataset = create_inference_dataset(seq_path, dataset_config)
+    dataset = create_inference_dataset(seq_path, args, model_config)
 
     # setup callbacks
-    callback_config = create_callback_config(args, model_config)
-    callbacks = create_inference_callback(callback_config)
+    callbacks = create_inference_callback(args, model_config)
 
     # run inference, with optional callbacks
     prediction_list = []
-    for data in tqdm.tqdm(dataset):
+    for idx in tqdm.tqdm(range(len(dataset) // 20)):
+        data = dataset[idx]
         prediction = model(data)
-
-        # postprocess prediction
-        prediction = callbacks["iter_postprocess"](data, prediction)
 
         # run callbacks for current iteration
         for callback in callbacks["iter_callback"]:
@@ -47,8 +38,7 @@ def run_inference(args, model_config, seq_path, model):
 
 def main(args):
     # setup config and model
-    model_config = create_model_config(args)
-    model = create_inference_model(model_config)
+    model_config, model = create_inference_model(args)
 
     # setup distributed inference
     world_size = comm.get_world_size()
@@ -60,10 +50,10 @@ def main(args):
             broadcast_buffers=False,
             find_unused_parameters=True,
         )
-    model.eval()
 
     # run inference
-    seq_paths_all = read_txt(args.input_file)
+    with open(args.input_file, "r") as f:
+        seq_paths_all = f.read().splitlines()
     seq_paths_local = seq_paths_all[rank::world_size]
     for seq_path in seq_paths_local:
         run_inference(args, model_config, seq_path, model)
@@ -97,11 +87,6 @@ def get_args():
         help="Path to config file of a trained model",
     )
     parser.add_argument(
-        "--prototype-file",
-        default=None,
-        help="File containing prototypes to keep in predictions",
-    )
-    parser.add_argument(
         "--metadata-file",
         default=None,
         help="File with metadata for all instances",
@@ -111,12 +96,6 @@ def get_args():
         type=float,
         default=0.25,
         help="threshold on score for visualizing",
-    )
-    parser.add_argument(
-        "--bbox3d-csv",
-        default=None,
-        metavar="FILE",
-        help="file containing 3D bounding box dimensions of prototypes",
     )
     parser.add_argument(
         "--visualize",
@@ -152,14 +131,6 @@ def get_args():
         default="tcp://127.0.0.1:{}".format(port),
         help="initialization URL for pytorch distributed backend. See "
         "https://pytorch.org/docs/stable/distributed.html for details.",
-    )
-    parser.add_argument(
-        "opts",
-        help="Modify config options by adding 'KEY VALUE' pairs at the end of the command. "
-        "See config references at "
-        "https://detectron2.readthedocs.io/modules/config.html#config-references",
-        default=None,
-        nargs=argparse.REMAINDER,
     )
 
     return parser.parse_args()

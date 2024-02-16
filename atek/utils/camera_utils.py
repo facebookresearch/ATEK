@@ -1,14 +1,40 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
 import logging
+from typing import Union
 
 import numpy as np
-
+import torch
 import trimesh
 from projectaria_tools.core import calibration
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def get_camera_matrix(
+    camera_params_fufvu0v0: Union[torch.Tensor, np.ndarray]
+) -> Union[torch.Tensor, np.ndarray]:
+    """
+    Generates the camera matrix (nx3x3) for n pinhole camera parameters n x (fx, fy, cx, cy)
+    """
+    assert camera_params_fufvu0v0.ndim == 2
+    assert camera_params_fufvu0v0.shape[-1] == 4
+    num_cameras = camera_params_fufvu0v0.shape[0]
+    # Initialize an array of zeros
+    if isinstance(camera_params_fufvu0v0, torch.Tensor):
+        camera_matrices = torch.zeros((num_cameras, 3, 3))
+    else:
+        camera_matrices = np.zeros((num_cameras, 3, 3))
+
+    # Assign fx, fy, cx, cy
+    camera_matrices[:, 0, 0] = camera_params_fufvu0v0[:, 0]  # fx
+    camera_matrices[:, 1, 1] = camera_params_fufvu0v0[:, 1]  # fy
+    camera_matrices[:, 0, 2] = camera_params_fufvu0v0[:, 2]  # cx
+    camera_matrices[:, 1, 2] = camera_params_fufvu0v0[:, 3]  # cy
+    camera_matrices[:, 2, 2] = 1.0
+
+    return camera_matrices
 
 
 def get_camera_fov_cone_angle(

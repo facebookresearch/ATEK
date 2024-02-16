@@ -39,9 +39,3 @@ In Atek env, setup the jupyter
 ```
 jupyter lab --no-browser --port 9095 --ServerApp.token=''
 ```
-
-### 6. Run atek viewer
-Run atek viewer to visualize GT 2d and 3d bounding box and trajectory of the aligned framesets
-```
-python atek/tools/atek_viewer.py --adt-path /data_folder/Apartment_release_golden_skeleton_seq100_main_data --label
-```

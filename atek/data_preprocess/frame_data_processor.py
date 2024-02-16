@@ -3,7 +3,7 @@
 import copy
 import logging
 import math
-from typing import Optional, Union
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -219,7 +219,7 @@ class FrameDataProcessor:
 
         return copy.deepcopy(self.camera_fov)
 
-    def get_T_world_camera_by_index(self, index: int) -> Union[SE3, None]:
+    def get_T_world_camera_by_index(self, index: int) -> Optional[SE3]:
         if "tx_world_device" not in self.frame_df.columns:
             return None
 

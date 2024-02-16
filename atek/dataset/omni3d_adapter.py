@@ -1,13 +1,18 @@
 import json
 import os
+from dataclasses import asdict
+from functools import partial
 from typing import Callable, Dict, List, Optional
 
+import numpy as np
 import torch
 from detectron2.structures import Boxes, Instances
 from webdataset.filters import pipelinefilter
 from webdataset.shardlists import single_node_only
 
+from atek.dataset.atek_raw_dataset import AtekRawFrameDataset
 from atek.dataset.atek_webdataset import create_atek_webdataset
+from atek.utils.camera_utils import get_camera_matrix
 
 KEY_MAPPING = {
     "f#214-1+image": "images",
@@ -43,26 +48,6 @@ def get_id_map(id_map_json):
         id_map = json.load(f)
         id_map = {int(k): int(v) for k, v in id_map.items()}
     return id_map
-
-
-def get_camera_matrix(camera_params_fufvu0v0: torch.Tensor) -> torch.Tensor:
-    """
-    Generates the camera matrix (nx3x3) for n pinhole camera parameters n x (fx, fy, cx, cy)
-    """
-    assert camera_params_fufvu0v0.ndim == 2
-    assert camera_params_fufvu0v0.shape[-1] == 4
-    num_cameras = camera_params_fufvu0v0.shape[0]
-    # Initialize an array of zeros
-    camera_matrices = torch.zeros((num_cameras, 3, 3))
-
-    # Assign fx, fy, cx, cy
-    camera_matrices[:, 0, 0] = camera_params_fufvu0v0[:, 0]  # fx
-    camera_matrices[:, 1, 1] = camera_params_fufvu0v0[:, 1]  # fy
-    camera_matrices[:, 0, 2] = camera_params_fufvu0v0[:, 2]  # cx
-    camera_matrices[:, 1, 2] = camera_params_fufvu0v0[:, 3]  # cy
-    camera_matrices[:, 2, 2] = 1.0
-
-    return camera_matrices
 
 
 def atek_to_omni3d(
@@ -196,3 +181,52 @@ def create_omni3d_webdataset(
         collation_fn=collate_as_list,
         repeat=repeat,
     )
+
+
+def atek_raw_to_omni3d(rgb_image_frame, target_color_format="BGR"):
+    K = get_camera_matrix(rgb_image_frame.camera_parameters[np.newaxis, ...])[0]
+    image = rgb_image_frame.image
+    if target_color_format == "BGR":
+        image = image[:, :, [2, 1, 0]]
+
+    # image dimension (height, width, channel) to (channel, height, width)
+    image = image.transpose(2, 0, 1)
+
+    frame = {
+        "data_source": rgb_image_frame.data_source,
+        "sequence_name": rgb_image_frame.sequence_name.split("/")[-3],
+        "frame_id": rgb_image_frame.frame_id,
+        "timestamp_ns": rgb_image_frame.timestamp_ns,
+        "T_world_camera": rgb_image_frame.T_world_camera,
+        "image": torch.as_tensor(np.ascontiguousarray(image)),
+        "height": image.shape[1],
+        "width": image.shape[2],
+        "K": K,
+    }
+
+    # GT object annotation info
+    if "Ts_world_object" in asdict(rgb_image_frame).keys():
+        frame["Ts_world_object"] = rgb_image_frame.Ts_world_object
+        frame["object_dimensions"] = rgb_image_frame.object_dimensions
+        frame["category"] = [
+            rgb_image_frame.category_id_to_name[cat_id]
+            for cat_id in rgb_image_frame.object_category_ids
+        ]
+        frame["bb2ds_x0x1y0y1"] = rgb_image_frame.bb2ds
+
+    return [frame]
+
+
+def create_omni3d_raw_dataset(
+    raw_data_path: str,
+    selected_device_number: int = 0,
+    target_color_format: str = "BGR",
+):
+    atek_omni3d_raw_dataset = AtekRawFrameDataset(
+        raw_data_path,
+        selected_device_number=selected_device_number,
+        transform_fn=partial(
+            atek_raw_to_omni3d, target_color_format=target_color_format
+        ),
+    )
+    return atek_omni3d_raw_dataset

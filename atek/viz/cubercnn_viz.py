@@ -1,30 +1,18 @@
-from typing import Dict, List, Union
+from typing import Dict, List
 
 import numpy as np
 import rerun as rr
 from projectaria_tools.core.sophus import SE3
 from projectaria_tools.utils.rerun import ToTransform3D
 
-from atek.utils.callback import BaseCallback
+from atek.utils.transform_utils import quat_wxyz_to_xyzx
 
 TRAJECTORY_COLOR = [30, 100, 30]
 GT_COLOR = [30, 200, 30]
 PRED_COLOR = [200, 30, 30]
 
 
-def quat_wxyz_to_xyzx(wxyz: Union[List[float], np.ndarray]):
-    """
-    Convert quaternion from wxyz to xyzw
-    """
-    if isinstance(wxyz, List):
-        assert isinstance(wxyz[0], float)
-    else:
-        assert len(wxyz.shape) == 1
-    xyzw = [wxyz[3], wxyz[0], wxyz[1], wxyz[2]]
-    return xyzw
-
-
-class AtekCubercnnInferViewer(BaseCallback):
+class AtekCubercnnInferViewer:
     """
     Viewer for ATEK CubeRCNN model inference pipeline, which visualizes model predictions for each
     frame, including RGB image, 3D and 2D bounding boxes. Camera trajectory and pose are also
@@ -39,7 +27,7 @@ class AtekCubercnnInferViewer(BaseCallback):
         rr.init("ATEK CubeRCNN Inference Viewer", spawn=True)
         rr.serve(web_port=config["web_port"], ws_port=config["ws_port"])
 
-    def __call__(self, model_input: List[Dict], model_prediction: List):
+    def __call__(self, model_input: List[Dict], model_prediction: List[List[Dict]]):
         assert len(model_input) == len(model_prediction)
 
         for input, prediction in zip(model_input, model_prediction):
@@ -96,7 +84,7 @@ class AtekCubercnnInferViewer(BaseCallback):
 
             # log 3D bounding boxes
             rr.log(
-                f"world/device/bb3d_infer",
+                f"world/device/bb3d_infer/{self.camera_name}",
                 rr.Boxes3D(
                     sizes=bb3ds_sizes_infer,
                     centers=bb3ds_centers_infer,
