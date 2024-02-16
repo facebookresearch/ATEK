@@ -5,7 +5,6 @@ import rerun as rr
 from projectaria_tools.core.sophus import SE3
 from projectaria_tools.utils.rerun import ToTransform3D
 
-from atek.utils.transform_utils import quat_wxyz_to_xyzx
 
 TRAJECTORY_COLOR = [30, 100, 30]
 GT_COLOR = [30, 200, 30]
@@ -73,7 +72,7 @@ class AtekCubercnnInferViewer:
                 labels_infer.append(pred["category"])
                 bb3ds_centers_infer.append(T_world_obj.translation()[0])
                 wxyz = T_world_obj.rotation().to_quat()[0]
-                bb3ds_quats_xyzw_infer.append(quat_wxyz_to_xyzx(wxyz))
+                bb3ds_quats_xyzw_infer.append([wxyz[3], wxyz[0], wxyz[1], wxyz[2]])
                 bb3ds_sizes_infer.append(np.array(pred["dimensions"]))
 
             # log camera pose
@@ -121,7 +120,7 @@ class AtekCubercnnInferViewer:
                 ]
                 bb3ds_centers_gt = [T.translation()[0] for T in Ts_world_object]
                 wxyz = [T.rotation().to_quat()[0] for T in Ts_world_object]
-                bb3ds_quats_xyzw_gt = [quat_wxyz_to_xyzx(q) for q in wxyz]
+                bb3ds_quats_xyzw_gt = [[q[3], q[0], q[1], q[2]] for q in wxyz]
                 bb2ds_XYXY = [
                     [bb2d[0], bb2d[2], bb2d[1], bb2d[3]]
                     for bb2d in input["bb2ds_x0x1y0y1"]

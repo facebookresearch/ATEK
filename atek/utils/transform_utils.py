@@ -1,21 +1,6 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
-from typing import List, Union
-
-import numpy as np
 import torch
-
-
-def quat_wxyz_to_xyzx(wxyz: Union[List[float], np.ndarray]):
-    """
-    Convert quaternion from wxyz to xyzw
-    """
-    if isinstance(wxyz, List):
-        assert isinstance(wxyz[0], float)
-    else:
-        assert len(wxyz.shape) == 1
-    xyzw = [wxyz[3], wxyz[0], wxyz[1], wxyz[2]]
-    return xyzw
 
 
 def get_cuboid_corners(half_extents: torch.Tensor) -> torch.Tensor:
