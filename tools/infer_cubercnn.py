@@ -122,6 +122,22 @@ def get_args():
         help="threshold on score for visualizing",
     )
     parser.add_argument(
+        "--visualize",
+        default=False,
+        action="store_true",
+        help="whether to visualize inference results",
+    )
+    parser.add_argument(
+        "--web-port",
+        default=8888,
+        help="The port to serve the web viewer on (defaults to 8888).",
+    )
+    parser.add_argument(
+        "--ws-port",
+        default=8877,
+        help="The port to serve the WebSocket server on (defaults to 8877)",
+    )
+    parser.add_argument(
         "--num-gpus", type=int, default=1, help="number of gpus *per machine*"
     )
     parser.add_argument(

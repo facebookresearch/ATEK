@@ -3,6 +3,7 @@ from typing import Callable, Dict, List, Union
 
 from atek.inference.adt_prediction_saver import AdtPredictionSaver
 from atek.inference.cubercnn_postprocessor import CubercnnPredictionConverter
+from atek.viz.visualization_callbacks import AtekInferViewer
 
 
 def create_inference_callback(
@@ -29,6 +30,10 @@ def create_inference_callback(
         )
 
         iteration_callbacks = []
+        if args.visualize:
+            iteration_callbacks.append(
+                AtekInferViewer(args.web_port, args.ws_port, "camera_rgb")
+            )
 
         sequence_callbacks = []
         if args.data_type == "raw" or args.data_type == "wds":
