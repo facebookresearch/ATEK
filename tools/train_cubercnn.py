@@ -12,12 +12,11 @@ import torch
 import torch.distributed as dist
 import yaml
 
-# from atek.dataset.adt_wds import get_loader
 from atek.dataset.atek_webdataset import create_wds_dataloader
 from atek.dataset.omni3d_adapter import create_omni3d_webdataset
 
-from atek.model.cubercnn import build_model_with_priors
 from cubercnn.config import get_cfg_defaults
+from cubercnn.modeling.meta_arch import build_model
 from cubercnn.solver import build_optimizer, freeze_bn, PeriodicCheckpointerOnlyOne
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg
@@ -32,7 +31,6 @@ from detectron2.solver import build_lr_scheduler
 from detectron2.utils.events import EventStorage
 from detectron2.utils.logger import setup_logger
 from torch.nn.parallel import DistributedDataParallel
-from webdataset.shardlists import single_node_only
 
 DEFAULT_TIMEOUT = timedelta(minutes=10)
 
@@ -203,7 +201,6 @@ def do_train(cfg, model, resume=False):
         freeze_bn(model)
 
     world_size = comm.get_world_size()
-    rank = comm.get_rank()
 
     # if the loss diverges for more than the below TOLERANCE
     # as a percent of the iterations, the training will stop.
@@ -275,7 +272,7 @@ def do_train(cfg, model, resume=False):
             # we still want to check gradients.
             if not diverging_model:
                 if cfg.MODEL.STABILIZE > 0:
-                    for name, param in named_params:
+                    for _, param in named_params:
                         if param.grad is not None:
                             diverging_model = (
                                 torch.isnan(param.grad).any()
@@ -438,7 +435,7 @@ def main(args):
     remaining_attempts = cfg.MAX_TRAINING_ATTEMPTS
     while remaining_attempts > 0:
         # build the training model.
-        model = build_model_with_priors(cfg, priors=None)
+        model = build_model(cfg, priors=None)
 
         if remaining_attempts == cfg.MAX_TRAINING_ATTEMPTS:
             # log the first attempt's settings.
@@ -504,7 +501,7 @@ def allreduce_dict(input_dict, average=True):
             # only main process gets accumulated, so only divide by
             # world_size in this case
             values /= world_size
-        reduced_dict = {k: v for k, v in zip(names, values)}
+        reduced_dict = dict(zip(names, values))
     return reduced_dict
 
 
