@@ -2,6 +2,9 @@ import argparse
 import os
 import sys
 
+import tqdm
+
+from atek.dataset.dataset_factory import create_inference_dataset
 from atek.model.model_factory import create_inference_model
 
 from detectron2.engine import launch
@@ -10,8 +13,12 @@ from torch.nn.parallel import DistributedDataParallel
 
 
 def run_inference(seq_path, model, model_config, args):
-    # TODO: add actual inference logic here
-    pass
+    # setup dataset
+    dataset = create_inference_dataset(seq_path, args, model_config)
+
+    # run inference
+    for data in tqdm.tqdm(dataset):
+        _ = model(data)
 
 
 def main(args):
@@ -47,6 +54,29 @@ def get_args():
     )
     parser.add_argument(
         "--input-file", default=None, help="Path to file with test sequences"
+    )
+    parser.add_argument(
+        "--data-type",
+        default="raw",
+        help="Input data type. wds: webdataset tars, raw: raw ADT data",
+    )
+    parser.add_argument(
+        "--rotate_image_cw90deg",
+        type=bool,
+        default=True,
+        help="Rotate images by 90 degrees clockwise",
+    )
+    parser.add_argument(
+        "--height",
+        type=int,
+        default=512,
+        help="Target image height to process the raw data",
+    )
+    parser.add_argument(
+        "--width",
+        type=int,
+        default=512,
+        help="Target image width to process the raw data",
     )
     parser.add_argument(
         "--model-name",

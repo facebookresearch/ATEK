@@ -1,16 +1,18 @@
 import json
 import os
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
+import numpy as np
 import torch
+
+from atek.data_preprocess.data_schema import Frame
+from atek.dataset.atek_raw_dataset import AriaStreamIds, AtekRawFrameDataset
 from atek.dataset.atek_webdataset import create_atek_webdataset
+from atek.utils.camera_utils import linear_cam_matrix_from_intrinsics
 
-from detectron2.data import detection_utils
-from detectron2.structures import Boxes, BoxMode, Instances
-
+from detectron2.structures import Boxes, Instances
 from webdataset.filters import pipelinefilter
 from webdataset.shardlists import single_node_only
-
 
 KEY_MAPPING = {
     "f#214-1+image": "images",
@@ -45,26 +47,6 @@ def get_id_map(id_map_json):
     return id_map
 
 
-def get_camera_matrix(camera_params_fufvu0v0: torch.Tensor) -> torch.Tensor:
-    """
-    Generates the camera matrix (nx3x3) for n pinhole camera parameters n x (fx, fy, cx, cy)
-    """
-    assert camera_params_fufvu0v0.ndim == 2
-    assert camera_params_fufvu0v0.shape[-1] == 4
-    num_cameras = camera_params_fufvu0v0.shape[0]
-    # Initialize an array of zeros
-    camera_matrices = torch.zeros((num_cameras, 3, 3))
-
-    # Assign fx, fy, cx, cy
-    camera_matrices[:, 0, 0] = camera_params_fufvu0v0[:, 0]  # fx
-    camera_matrices[:, 1, 1] = camera_params_fufvu0v0[:, 1]  # fy
-    camera_matrices[:, 0, 2] = camera_params_fufvu0v0[:, 2]  # cx
-    camera_matrices[:, 1, 2] = camera_params_fufvu0v0[:, 3]  # cy
-    camera_matrices[:, 2, 2] = 1.0
-
-    return camera_matrices
-
-
 def atek_to_omni3d(
     data,
     category_id_remapping: Optional[Dict] = None,
@@ -83,7 +65,7 @@ def atek_to_omni3d(
         images = (sample["images"].flip(1) * 255).to(torch.uint8)
 
         # Image information
-        Ks = get_camera_matrix(sample["camera_params"])
+        Ks = linear_cam_matrix_from_intrinsics(sample["camera_params"])
         image_height, image_width = sample["images"].shape[2:]
 
         for idx in range(len(images)):
@@ -187,3 +169,46 @@ def create_omni3d_webdataset(
         collation_fn=collate_as_list,
         repeat=repeat,
     )
+
+
+def atek_raw_to_omni3d(rgb_image_frame: Frame) -> List[Dict]:
+    K = linear_cam_matrix_from_intrinsics(
+        rgb_image_frame.camera_parameters[np.newaxis, ...]
+    )[0]
+    image = rgb_image_frame.image
+    # image color RGB to BGR
+    image = image[:, :, [2, 1, 0]]
+
+    # image dimension (height, width, channel) to (channel, height, width)
+    image = image.transpose(2, 0, 1)
+
+    frame = {
+        "data_source": rgb_image_frame.data_source,
+        "sequence_name": rgb_image_frame.sequence_name.split("/")[-3],
+        "frame_id": rgb_image_frame.frame_id,
+        "timestamp_ns": rgb_image_frame.timestamp_ns,
+        "T_world_camera": rgb_image_frame.T_world_camera,
+        "image": torch.as_tensor(np.ascontiguousarray(image)),
+        "height": image.shape[1],
+        "width": image.shape[2],
+        "K": K,
+    }
+
+    return [frame]
+
+
+def create_omni3d_raw_dataset(
+    raw_data_path: str,
+    selected_device_number: int = 0,
+    rotate_image_cw90deg: bool = True,
+    target_image_resolution: Tuple[int, int] = (512, 512),
+):
+    atek_omni3d_raw_dataset = AtekRawFrameDataset(
+        raw_data_path,
+        selected_device_number=selected_device_number,
+        stream_id=AriaStreamIds.rgb_stream_id,
+        rotate_image_cw90deg=rotate_image_cw90deg,
+        target_image_resolution=target_image_resolution,
+        transform_fn=atek_raw_to_omni3d,
+    )
+    return atek_omni3d_raw_dataset
