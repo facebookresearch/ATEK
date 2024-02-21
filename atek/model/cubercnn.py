@@ -1,7 +1,7 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 import os
 from argparse import Namespace
-from typing import Dict, List
+from typing import Dict
 
 from cubercnn.config import get_cfg_defaults
 from cubercnn.modeling.backbone import build_dla_from_vision_fpn_backbone  # noqa
@@ -40,23 +40,21 @@ def create_cubercnn_config(args: Namespace) -> Dict:
     model_config = {
         "ckpt_dir": os.path.dirname(args.config_file),
         "cfg": cfg,
+        "score_threshold": args.threshold,
+        "category_names": cfg.DATASETS.CATEGORY_NAMES,
     }
 
     return model_config
 
 
-class CubercnnInferModel:
-    def __init__(
-        self,
-        model_config: Dict,
-    ):
-        self.model = build_model(model_config["cfg"], priors=None)
-        _ = DetectionCheckpointer(
-            self.model, save_dir=model_config["ckpt_dir"]
-        ).resume_or_load(model_config["cfg"].MODEL.WEIGHTS, resume=True)
+def create_cubercnn_model(model_config: Dict):
+    """
+    Create CubeRCNN model for inference from config
+    """
+    model = build_model(model_config["cfg"], priors=None)
+    _ = DetectionCheckpointer(model, save_dir=model_config["ckpt_dir"]).resume_or_load(
+        model_config["cfg"].MODEL.WEIGHTS, resume=True
+    )
+    model.eval()
 
-        self.model.eval()
-
-    def __call__(self, model_input: List[Dict]):
-        prediction = self.model(model_input)
-        return prediction
+    return model

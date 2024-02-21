@@ -5,6 +5,7 @@ import sys
 import tqdm
 
 from atek.dataset.dataset_factory import create_inference_dataset
+from atek.inference.callback_factory import create_inference_callback
 from atek.model.model_factory import create_inference_model
 
 from detectron2.engine import launch
@@ -16,9 +17,26 @@ def run_inference(seq_path, model, model_config, args):
     # setup dataset
     dataset = create_inference_dataset(seq_path, args, model_config)
 
-    # run inference
+    # setup callbacks
+    callbacks = create_inference_callback(args, model_config)
+
+    # run inference, with optional callbacks
+    prediction_list = []
     for data in tqdm.tqdm(dataset):
-        _ = model(data)
+        model_output = model(data)
+
+        # post-process model output
+        prediction = callbacks["post_processor"](data, model_output)
+
+        # run callbacks for current iteration
+        for callback in callbacks["iteration_callbacks"]:
+            callback(data, prediction)
+
+        prediction_list.append(prediction)
+
+    # run callbacks for whole sequence
+    for callback in callbacks["sequence_callbacks"]:
+        callback(prediction_list)
 
 
 def main(args):
@@ -56,6 +74,9 @@ def get_args():
         "--input-file", default=None, help="Path to file with test sequences"
     )
     parser.add_argument(
+        "--output-dir", default=None, help="Directory to save model predictions"
+    )
+    parser.add_argument(
         "--data-type",
         default="raw",
         help="Input data type. wds: webdataset tars, raw: raw ADT data",
@@ -88,6 +109,17 @@ def get_args():
         default=None,
         metavar="FILE",
         help="Path to config file of a trained model",
+    )
+    parser.add_argument(
+        "--metadata-file",
+        default=None,
+        help="File with metadata for all instances",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.25,
+        help="threshold on score for visualizing",
     )
     parser.add_argument(
         "--num-gpus", type=int, default=1, help="number of gpus *per machine*"

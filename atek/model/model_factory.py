@@ -1,6 +1,6 @@
 from argparse import Namespace
 
-from atek.model.cubercnn import create_cubercnn_config, CubercnnInferModel
+from atek.model.cubercnn import create_cubercnn_config, create_cubercnn_model
 
 
 def create_inference_model(args: Namespace):
@@ -16,7 +16,7 @@ def create_inference_model(args: Namespace):
     """
     if args.model_name == "cubercnn":
         model_config = create_cubercnn_config(args)
-        model = CubercnnInferModel(model_config)
+        model = create_cubercnn_model(model_config)
     else:
         raise ValueError(f"Unknown model architecture: {args.model_name}")
 
