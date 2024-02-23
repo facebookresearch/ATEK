@@ -25,13 +25,13 @@ mamba init
 Then create a conda environment with the ATEK environment.yaml
 
 ```
-mamba create -f env_atek.yml
+mamba env create -f env_atek.yml
 ```
 
 ### 4. Setup the pybind library
-In conda atek env
+In mamba atek env
 ```
-python setup.py build
+pip install -e ${ATEK_SRC_DIR}
 ```
 
 ### 5. Connect to the jupyter
