@@ -4,6 +4,7 @@ DATALOADER:
   SAMPLER_TRAIN: RepeatFactorTrainingSampler
 DATASETS:
   CATEGORY_NAMES: []
+  OBJECT_DETECITON_MODE: "PER_INSTANCE"
   IGNORE_NAMES: '[''dontcare'', ''ignore'', ''void'']'
   MIN_HEIGHT_THRES: 0.05
   TEST: ("val_tars",)
