@@ -14,7 +14,6 @@ import yaml
 
 from atek.dataset.atek_webdataset import create_wds_dataloader
 from atek.dataset.omni3d_adapter import create_omni3d_webdataset, ObjectDetectionMode
-from atek.model.cubercnn import build_model, ObjectDetectionMode
 
 from cubercnn.config import get_cfg_defaults
 from cubercnn.solver import build_optimizer, freeze_bn, PeriodicCheckpointerOnlyOne
