@@ -14,9 +14,9 @@ import yaml
 
 from atek.dataset.atek_webdataset import create_wds_dataloader
 from atek.dataset.omni3d_adapter import create_omni3d_webdataset
+from atek.model.cubercnn import build_model
 
 from cubercnn.config import get_cfg_defaults
-from cubercnn.modeling.meta_arch import build_model
 from cubercnn.solver import build_optimizer, freeze_bn, PeriodicCheckpointerOnlyOne
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg
