@@ -14,7 +14,7 @@ import yaml
 
 from atek.dataset.atek_webdataset import create_wds_dataloader
 from atek.dataset.omni3d_adapter import create_omni3d_webdataset, ObjectDetectionMode
-from atek.model.cubercnn import build_model
+from atek.model.cubercnn import build_model, ObjectDetectionMode
 
 from cubercnn.config import get_cfg_defaults
 from cubercnn.solver import build_optimizer, freeze_bn, PeriodicCheckpointerOnlyOne
@@ -43,12 +43,14 @@ np.set_printoptions(suppress=True)
 
 
 def add_configs(_C):
+    # TODO: Fix this, too ugly
     _C.MAX_TRAINING_ATTEMPTS = 3
 
     _C.TRAIN_LIST = ""
     _C.TEST_LIST = ""
     _C.ID_MAP_JSON = ""
     _C.CATEGORY_JSON = ""
+    _C.DATASETS.OBJECT_DETECTION_MODE = "PER_CATEGORY"
     _C.SOLVER.VAL_MAX_ITER = 0
 
 
