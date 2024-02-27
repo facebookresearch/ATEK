@@ -59,7 +59,7 @@ def omni3d_key_remap(key: str) -> str:
 def get_id_map(id_map_json):
     with open(id_map_json, "r") as f:
         id_map = json.load(f)
-        id_map = {int(k): int(v) for k, v in id_map.items()}
+        id_map = {k: int(v) for k, v in id_map.items()}
     return id_map
 
 
