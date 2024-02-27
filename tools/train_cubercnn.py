@@ -135,6 +135,8 @@ def do_val(cfg, model, iteration, writers, max_iter=100):
             data = [
                 x for x in orig_data if x["instances"].get("gt_classes").numel() > 0
             ]
+            if len(data) == 0:
+                raise ValueError("data contains 0 valid samples.")
             loss_dict = model(data)
 
             # reduce
@@ -238,6 +240,8 @@ def do_train(cfg, model, resume=False):
             data = [
                 x for x in orig_data if x["instances"].get("gt_classes").numel() > 0
             ]
+            if len(data) == 0:
+                raise ValueError("data contains 0 valid samples.")
 
             loss_dict = model(data)
             losses = sum(loss_dict.values())
