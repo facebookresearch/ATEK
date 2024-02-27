@@ -129,7 +129,12 @@ def do_val(cfg, model, iteration, writers, max_iter=100):
     start_iter = iteration
 
     with torch.no_grad():
-        for data in data_loader:
+        for orig_data in data_loader:
+            # skip empty data
+            # TODO: maybe skip these in WDS creation? Sync with Shangyi on this.
+            data = [
+                x for x in orig_data if x["instances"].get("gt_classes").numel() > 0
+            ]
             loss_dict = model(data)
 
             # reduce
@@ -224,10 +229,16 @@ def do_train(cfg, model, resume=False):
 
     with EventStorage(start_iter) as storage:
         while True:
-            data = next(data_iter)
+            orig_data = next(data_iter)
             storage.iter = iteration
 
             # forward
+            # skip empty data
+            # TODO: maybe skip these in WDS creation? Sync with Shangyi on this.
+            data = [
+                x for x in orig_data if x["instances"].get("gt_classes").numel() > 0
+            ]
+
             loss_dict = model(data)
             losses = sum(loss_dict.values())
 
