@@ -13,7 +13,7 @@ import torch.distributed as dist
 import yaml
 
 from atek.dataset.atek_webdataset import create_wds_dataloader
-from atek.dataset.omni3d_adapter import create_omni3d_webdataset
+from atek.dataset.omni3d_adapter import create_omni3d_webdataset, ObjectDetectionMode
 
 from cubercnn.config import get_cfg_defaults
 from cubercnn.modeling.meta_arch import build_model
@@ -43,12 +43,14 @@ np.set_printoptions(suppress=True)
 
 
 def add_configs(_C):
+    # TODO: Fix this, too ugly
     _C.MAX_TRAINING_ATTEMPTS = 3
 
     _C.TRAIN_LIST = ""
     _C.TEST_LIST = ""
     _C.ID_MAP_JSON = ""
     _C.CATEGORY_JSON = ""
+    _C.DATASETS.OBJECT_DETECTION_MODE = "PER_CATEGORY"
     _C.SOLVER.VAL_MAX_ITER = 0
 
 
@@ -78,6 +80,7 @@ def build_test_loader(cfg):
         batch_size=local_batch_size,
         repeat=True,
         category_id_remapping_json=cfg.ID_MAP_JSON,
+        object_detection_mode=ObjectDetectionMode[cfg.DATASETS.OBJECT_DETECTION_MODE],
     )
     test_dataloader = create_wds_dataloader(
         test_wds, num_workers=cfg.DATALOADER.NUM_WORKERS, pin_memory=True
@@ -108,6 +111,7 @@ def build_train_loader(cfg):
         batch_size=local_batch_size,
         repeat=True,
         category_id_remapping_json=cfg.ID_MAP_JSON,
+        object_detection_mode=ObjectDetectionMode[cfg.DATASETS.OBJECT_DETECTION_MODE],
     )
     train_dataloader = create_wds_dataloader(
         train_wds, num_workers=cfg.DATALOADER.NUM_WORKERS, pin_memory=True

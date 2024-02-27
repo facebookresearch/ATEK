@@ -4,6 +4,7 @@ from typing import Dict
 from atek.dataset.omni3d_adapter import (
     create_omni3d_raw_dataset,
     create_omni3d_webdataset,
+    ObjectDetectionMode,
 )
 
 from torch.utils.data import Dataset
@@ -31,6 +32,9 @@ def create_inference_dataset(
                 batch_size=1,
                 repeat=False,
                 category_id_remapping_json=model_config["cfg"].ID_MAP_JSON,
+                object_detection_mode=ObjectDetectionMode[
+                    model_config["cfg"].DATASETS.OBJECT_DETECTION_MODE
+                ],
             )
         elif args.data_type == "raw":
             dataset = create_omni3d_raw_dataset(
