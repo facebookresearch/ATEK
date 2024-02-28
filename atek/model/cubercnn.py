@@ -28,7 +28,7 @@ def create_cubercnn_config(args: Namespace) -> Dict:
     cfg.ID_MAP_JSON = ""
     cfg.OBJ_PROP_JSON = ""
     cfg.CATEGORY_JSON = ""
-    cfg.DATASETS.OBJECT_DETECITON_MODE = ""
+    cfg.DATASETS.OBJECT_DETECTION_MODE = ""
     cfg.SOLVER.VAL_MAX_ITER = 0
 
     cfg.merge_from_file(args.config_file)
