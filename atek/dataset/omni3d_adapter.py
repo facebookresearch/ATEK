@@ -1,6 +1,7 @@
 import json
 import os
 from dataclasses import asdict
+from enum import Enum
 from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -33,6 +34,17 @@ KEY_MAPPING = {
 }
 
 
+class ObjectDetectionMode(Enum):
+    """
+    An enum class to indicate if detection is per-category, or per instance:
+    - PER_CATEGORY: will use the `category_id` (or `category_name`) field as the output label.
+    - PER_INSTANCE: will use the `instance_id` field as the output label.
+    """
+
+    PER_CATEGORY = 1
+    PER_INSTANCE = 2
+
+
 def omni3d_key_selection(key: str) -> bool:
     return key in KEY_MAPPING.keys()
 
@@ -47,13 +59,14 @@ def omni3d_key_remap(key: str) -> str:
 def get_id_map(id_map_json):
     with open(id_map_json, "r") as f:
         id_map = json.load(f)
-        id_map = {int(k): int(v) for k, v in id_map.items()}
+        id_map = {k: int(v) for k, v in id_map.items()}
     return id_map
 
 
 def atek_to_omni3d(
     data,
     category_id_remapping: Optional[Dict] = None,
+    object_detection_mode: ObjectDetectionMode = ObjectDetectionMode.PER_CATEGORY,
     min_bb2d_area=100,
     min_bb3d_depth=0.3,
     max_bb3d_depth=5,
@@ -111,8 +124,21 @@ def atek_to_omni3d(
                 )
 
                 # Remap the semantic id and filter classes
-                # Use instance ids as category ids for instance-based detection
-                sem_ids = sample["object_instance_ids"][idx]
+                if object_detection_mode == ObjectDetectionMode.PER_CATEGORY:
+                    # Use category names as category ids for category-based detection
+                    sem_ids = [
+                        sample["category_id_to_name"][0][str(cat_id)]
+                        for cat_id in sample["object_category_ids"][0]
+                    ]
+                elif object_detection_mode == ObjectDetectionMode.PER_INSTANCE:
+                    # Use instance ids as category ids for instance-based detection
+                    sem_ids = sample["object_instance_ids"][idx]
+                else:
+                    raise ValueError(
+                        f"Unsupported object detection mode: {object_detection_mode}"
+                    )
+
+                # Remap to Omni3D semantic ids, which should be from 0 to N.
                 if category_id_remapping is not None:
                     sem_ids = [category_id_remapping.get(id, -1) for id in sem_ids]
                 sem_ids = torch.tensor(sem_ids)
@@ -161,6 +187,7 @@ def create_omni3d_webdataset(
     repeat: bool = False,
     nodesplitter: Callable = single_node_only,
     category_id_remapping_json: Optional[str] = None,
+    object_detection_mode: ObjectDetectionMode = ObjectDetectionMode.PER_CATEGORY,
     min_bb2d_area=100,
     min_bb3d_depth=0.3,
     max_bb3d_depth=5,
@@ -177,7 +204,11 @@ def create_omni3d_webdataset(
         select_key_fn=omni3d_key_selection,
         remap_key_fn=omni3d_key_remap,
         data_transform_fn=pipelinefilter(atek_to_omni3d)(
-            category_id_remapping, min_bb2d_area, min_bb3d_depth, max_bb3d_depth
+            category_id_remapping,
+            object_detection_mode,
+            min_bb2d_area,
+            min_bb3d_depth,
+            max_bb3d_depth,
         ),
         collation_fn=collate_as_list,
         repeat=repeat,
