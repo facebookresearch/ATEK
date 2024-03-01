@@ -267,6 +267,7 @@ class DataSelectionSettings:
 def convert_frameset_group_to_wds_dict(
     wds_id: int,
     frameset_group: FramesetGroup,
+    wds_data_prefix_string: str,
     data_selection_settings: DataSelectionSettings,
 ):
     """
@@ -286,10 +287,11 @@ def convert_frameset_group_to_wds_dict(
         wds_id: Unique ID for the WDS sample.
         frameset_group: The FramesetGroup object to serialize.
         data_selection_settings: Settings for selecting data from the FramesetGroup.
+        wds_data_prefix_string: Prefix string to prepend to `__key__`, which should be unique across datasets because WDS has assumptions that filenames across different tars need to be unique
     """
     flatten_fsg_dict = frameset_group.to_flatten_dict()
 
-    wds_dict = {"__key__": f"fsg_{wds_id:06}"}
+    wds_dict = {"__key__": f"{wds_data_prefix_string}_fsg_{wds_id:06}"}
 
     # Default fields which we want to keep always.
     add_frame_info_to_wds(flatten_fsg_dict, wds_dict)
@@ -336,11 +338,23 @@ class AtekWdsWriter:
     def __init__(
         self,
         output_path: str,
+        prefix_string: str,
         data_selection_settings: DataSelectionSettings,
         max_samples_per_shard: int = 32,
         encryption_handler: Optional[Callable[[bytes], bytes]] = None,
     ):
+        """
+        Initialize the AtekWdsWriter object.
+
+        Args:
+            output_path (str): The path to the output directory where the WDS files will be written.
+            prefix_string (str): A prefix string to prepend to the WDS file names.
+            data_selection_settings (DataSelectionSettings): Settings for selecting data from the FramesetGroup.
+            max_samples_per_shard (int, optional): The maximum number of samples to write to each WDS shard. Defaults to 32.
+            encryption_handler (Optional[Callable[[bytes], bytes]], optional): A function to encrypt the WDS data. Defaults to None.
+        """
         self.output_path = output_path
+        self.prefix_string = prefix_string
         self.settings = data_selection_settings
         self.max_samples_per_shard = max_samples_per_shard
         self.encryption_handler = encryption_handler
@@ -350,8 +364,14 @@ class AtekWdsWriter:
         self.next_idx = 0
 
     def add_sample(self, frameset_group: FramesetGroup):
+        """
+        Add a sample to the WDS writer.
+
+        Args:
+            frameset_group (FramesetGroup): The FramesetGroup object to add to the WDS.
+        """
         sample_dict = convert_frameset_group_to_wds_dict(
-            self.next_idx, frameset_group, self.settings
+            self.next_idx, frameset_group, self.prefix_string, self.settings
         )
         if self.encryption_handler is not None:
             sample_dict = encrypt_wds_dict(sample_dict, self.encryption_handler)
@@ -369,5 +389,8 @@ class AtekWdsWriter:
         self.next_idx += 1
 
     def close(self):
+        """
+        Close the WDS writer and flush any remaining data to disk.
+        """
         if self.sink is not None:
             self.sink.close()
