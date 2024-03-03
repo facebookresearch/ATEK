@@ -149,11 +149,7 @@ def get_args():
         default=0,
         help="the rank of this machine (unique per machine)",
     )
-    port = (
-        2**15
-        + 2**14
-        + hash(os.getuid() if sys.platform != "win32" else 1) % 2**14
-    )
+    port = 2**15 + 2**14 + hash(os.getuid() if sys.platform != "win32" else 1) % 2**14
     parser.add_argument(
         "--dist-url",
         default="tcp://127.0.0.1:{}".format(port),

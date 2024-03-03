@@ -196,9 +196,11 @@ class FrameDataProcessor:
         This mesh could be used for rendering or camera fov overlapping check.
         """
         self.camera_fov = get_camera_fov_spherical_cone(
-            camera_model=self.final_camera_calib
-            if self.final_camera_calib is not None
-            else self.vrs_camera_calib,
+            camera_model=(
+                self.final_camera_calib
+                if self.final_camera_calib is not None
+                else self.vrs_camera_calib
+            ),
             far_clipping_distance=far_clipping_distance,
             circle_segments=circle_segments,
             cap_segments=cap_segments,

@@ -144,16 +144,16 @@ class FramesetGroupGenerator:
         """
         info = {}
         if self.frameset_selection_config.time_duration_ns_threshold is not None:
-            info[
-                "frameset_timestamp_ns"
-            ] = self.frameset_aligner.get_frameset_timestamp_by_index(index)
+            info["frameset_timestamp_ns"] = (
+                self.frameset_aligner.get_frameset_timestamp_by_index(index)
+            )
 
         if (self.frameset_selection_config.translation_m_threshold is not None) or (
             self.frameset_selection_config.rotation_deg_threshold is not None
         ):
-            info[
-                "T_world_frameset"
-            ] = self.frameset_aligner.get_T_world_frameset_by_index(index)
+            info["T_world_frameset"] = (
+                self.frameset_aligner.get_T_world_frameset_by_index(index)
+            )
 
         if self.frameset_selection_config.fov_overlapping_ratio_threshold is not None:
             frameset_fov_in_world = (
