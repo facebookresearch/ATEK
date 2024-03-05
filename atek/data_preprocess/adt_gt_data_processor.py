@@ -121,6 +121,7 @@ class AdtGtDataProcessor(BaseGtDataProcessor):
         stream_id: StreamId,
         data_path: AriaDigitalTwinDataPaths,
         category_mapping: Optional[Dict[str, Tuple[str, int]]] = None,
+        instance_field_to_map: Optional[str] = None,
     ):
         """
         Initialize the AdtGtDataProcessor object.
@@ -133,13 +134,15 @@ class AdtGtDataProcessor(BaseGtDataProcessor):
                 "1201-1" for SlamL
                 "1201-2" for SlamR
             data_path (AriaDigitalTwinDataPaths): a ADTDataPath object that points to the ADT data's subtour.
-            category_mapping (Optional[Dict]): A dict that maps from original data to desired taxonomy: {original_category_name: (atek_category_name, atek_category_id)}. If None, category will not be remapped.
+            category_mapping (Optional[Dict]): A dict that maps from original data to desired taxonomy: {$instance_field_to_map: (atek_category_name, atek_category_id)}. If None, category will not be remapped.
+            instance_field_to_map: (Optional[str]): The field in ADT instance that category mapping will map from, choose from: {"prototype", "category"}
         """
         super().__init__(name, stream_id)
         self.data_source = data_source
         self.gt_provider = AriaDigitalTwinDataProvider(data_path)
         self.bb2d_transform_fn = identity_transform
         self.category_mapping = category_mapping
+        self.instance_field_to_map = instance_field_to_map
 
     def set_undistortion_params(
         self,
@@ -237,14 +240,24 @@ class AdtGtDataProcessor(BaseGtDataProcessor):
                 # If no category mapping is provided, we use the original category name.
                 category_name = instance_info.category
                 category_id = instance_info.category_id
-            elif instance_info.category in self.category_mapping:
-                # If category mapping is provided, we perform the mapping.
-                category_name = self.category_mapping[instance_info.category][0]
-                category_id = self.category_mapping[instance_info.category][1]
             else:
-                # category not found in the mapping, assign it to "others"
-                category_name = "other"
-                category_id = ATEK_OTHER_CATETORY_ID
+                # Query the mapping field from instance
+                if self.instance_field_to_map == "prototype":
+                    field_value_to_map = instance_info.prototype_name
+                elif self.instance_field_to_map == "category":
+                    field_value_to_map = instance_info.category
+                else:
+                    raise ValueError(
+                        f'Unsupported instance field to map: {self.instance_field_to_map}, need to be ["category", "prototype"]'
+                    )
+
+                # Perform mapping
+                if field_value_to_map in self.category_mapping:
+                    category_name = self.category_mapping[field_value_to_map][0]
+                    category_id = self.category_mapping[field_value_to_map][1]
+                else:
+                    category_name = "other"
+                    category_id = ATEK_OTHER_CATETORY_ID
 
             insert_and_check(frame.category_id_to_name, category_id, category_name)
             frame.object_instance_ids.append(instance_id)
