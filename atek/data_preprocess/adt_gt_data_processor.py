@@ -1,10 +1,11 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
+import csv
 import logging
 
 from functools import partial
 
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 from atek.data_preprocess.base_gt_data_processor import BaseGtDataProcessor
@@ -23,6 +24,10 @@ from toolz import compose
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+ATEK_OTHER_CATETORY_ID: int = (
+    0  # 0 is reserved for other categories in ATEK object taxonomy
+)
 
 
 def identity_transform(obj):
@@ -115,11 +120,26 @@ class AdtGtDataProcessor(BaseGtDataProcessor):
         data_source: str,
         stream_id: StreamId,
         data_path: AriaDigitalTwinDataPaths,
+        category_mapping: Optional[Dict[str, Tuple[str, int]]] = None,
     ):
+        """
+        Initialize the AdtGtDataProcessor object.
+
+        Args:
+            name (str): The name of the data processor.
+            data_source (str): The source of the data.
+            stream_id (StreamId): The stream ID to process:
+                "214-1" for RGB
+                "1201-1" for SlamL
+                "1201-2" for SlamR
+            data_path (AriaDigitalTwinDataPaths): a ADTDataPath object that points to the ADT data's subtour.
+            category_mapping (Optional[Dict]): A dict that maps from original data to desired taxonomy: {original_category_name: (atek_category_name, atek_category_id)}. If None, category will not be remapped.
+        """
         super().__init__(name, stream_id)
         self.data_source = data_source
         self.gt_provider = AriaDigitalTwinDataProvider(data_path)
         self.bb2d_transform_fn = identity_transform
+        self.category_mapping = category_mapping
 
     def set_undistortion_params(
         self,
@@ -213,8 +233,18 @@ class AdtGtDataProcessor(BaseGtDataProcessor):
         bbox2d_all = bbox2d_with_dt.data()
         for instance_id, bbox2d_data in bbox2d_all.items():
             instance_info = self.gt_provider.get_instance_info_by_id(instance_id)
-            category_name = instance_info.category
-            category_id = instance_info.category_uid
+            if not self.category_mapping:
+                # If no category mapping is provided, we use the original category name.
+                category_name = instance_info.category
+                category_id = instance_info.category_id
+            elif instance_info.category in self.category_mapping:
+                # If category mapping is provided, we perform the mapping.
+                category_name = self.category_mapping[instance_info.category][0]
+                category_id = self.category_mapping[instance_info.category][1]
+            else:
+                # category not found in the mapping, assign it to "others"
+                category_name = "other"
+                category_id = ATEK_OTHER_CATETORY_ID
 
             insert_and_check(frame.category_id_to_name, category_id, category_name)
             frame.object_instance_ids.append(instance_id)
@@ -250,6 +280,3 @@ class AdtGtDataProcessor(BaseGtDataProcessor):
                 f"{len(frame.object_category_ids)}, {len(frame.object_dimensions)}, "
                 f"{len(frame.Ts_world_object)}, {len(frame.Ts_camera_object)}"
             )
-
-    def get_bb3d_at_timestamps_ns(self):
-        return self.rate_hz
