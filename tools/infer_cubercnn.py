@@ -29,13 +29,13 @@ def run_inference(seq_path, model, model_config, args):
         prediction = callbacks["post_processor"](data, model_output)
 
         # run callbacks for current iteration
-        for callback in callbacks["iteration_callbacks"]:
+        for callback in callbacks["per_batch_callbacks"]:
             callback(data, prediction)
 
         prediction_list.append(prediction)
 
     # run callbacks for whole sequence
-    for callback in callbacks["sequence_callbacks"]:
+    for callback in callbacks["per_sequence_callbacks"]:
         callback(prediction_list)
 
 

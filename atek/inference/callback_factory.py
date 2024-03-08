@@ -19,8 +19,8 @@ def create_inference_callback(
 
     Returns:
         callbacks (Dict[str, Union[Callable, List[Callable]]): a dict of callback functions.
-            `post_processor` converts model output to another format. `iteration_callbacks` are
-            called after each iteration, while `sequence_callbacks` are called at the end of each
+            `post_processor` converts model output to another format. `per_batch_callbacks` are
+            called after each iteration, while `per_sequence_callbacks` are called at the end of each
             webdataset tar or raw video sequence.
     """
 
@@ -29,15 +29,15 @@ def create_inference_callback(
             model_config["score_threshold"], model_config["category_names"]
         )
 
-        iteration_callbacks = []
+        per_batch_callbacks = []
         if args.visualize:
-            iteration_callbacks.append(
+            per_batch_callbacks.append(
                 AtekInferViewer(args.web_port, args.ws_port, "camera_rgb")
             )
 
-        sequence_callbacks = []
+        per_sequence_callbacks = []
         if args.data_type == "raw" or args.data_type == "wds":
-            sequence_callbacks.append(
+            per_sequence_callbacks.append(
                 AdtPredictionSaver(
                     args.output_dir,
                     args.metadata_file,
@@ -51,8 +51,8 @@ def create_inference_callback(
 
         callbacks = {
             "post_processor": post_processor,
-            "iteration_callbacks": iteration_callbacks,
-            "sequence_callbacks": sequence_callbacks,
+            "per_batch_callbacks": per_batch_callbacks,
+            "per_sequence_callbacks": per_sequence_callbacks,
         }
     else:
         raise ValueError(
