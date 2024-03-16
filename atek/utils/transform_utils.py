@@ -85,3 +85,21 @@ def batch_transform_points(
     ).permute(0, 2, 1)
 
     return points_in_A
+
+
+def batch_inverse(T: torch.Tensor) -> torch.Tensor:
+    """
+    Inverse SE3 transformation matrix T in Tensor of shape (..., 3, 4).
+
+    Args:
+        T: (..., 3, 4) tensor, transformation matrix
+
+    Returns:
+        inversed_T: (..., 3, 4) tensor, inversed transformation matrix
+    """
+    inversed_T = T.clone()
+    inversed_T[..., :, :3] = T[..., :, :3].transpose(1, 2)
+    inversed_T[..., :, 3] = (
+        -inversed_T[..., :, :3] @ (T[..., :, 3].unsqueeze(2))
+    ).squeeze()
+    return inversed_T
