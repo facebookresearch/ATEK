@@ -60,25 +60,28 @@ def get_cuboid_corners(half_extents: torch.Tensor) -> torch.Tensor:
 
 
 def batch_transform_points(
-    points_in_B: torch.tensor,
-    R_A_B: torch.tensor,
-    t_A_B: torch.tensor = None,
-):
+    points_in_B: torch.tensor, T_A_B: torch.Tensor
+) -> torch.Tensor:
     """
     Return point_in_A = R_A_B @ points_in_B + t_A_B in shape [N x M x 3]
     Args:
-        points_in_B : NxMx3  M points coorsponds to each rotation matrix
-        R_A_B: Nx3x3  N rotations matrices from B to A
-        t_A_B: Nx3  N translation from B to A
+        points_in_B (torch.Tensor): NxMx3 tensor for a batch N of M 3D points in frame B,
+          corresponding to each transformation matrix
+        T_A_B (torch.Tensor): Nx3x4 transformation matrices from B to A
+
+    Returns:
+        points_in_A (torch.Tensor): NxMx3 tensor of a batch N of M 3D points in frame A, after
+            transformation
     """
 
     # Reshape points to (N, 3, M) for batch matrix multiplication
     points_in_B_reshaped = points_in_B.permute(0, 2, 1)
     M = points_in_B_reshaped.shape[-1]
 
-    points_in_A = torch.bmm(R_A_B, points_in_B_reshaped)
+    R_A_B = T_A_B[:, :, :3]
+    t_A_B = T_A_B[:, :, 3]
+    points_in_A = (
+        torch.bmm(R_A_B, points_in_B_reshaped) + t_A_B.unsqueeze(-1).repeat(1, 1, M)
+    ).permute(0, 2, 1)
 
-    if t_A_B is not None:
-        points_in_A += t_A_B.unsqueeze(-1).repeat(1, 1, M)
-
-    return points_in_A.permute(0, 2, 1)
+    return points_in_A
