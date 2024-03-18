@@ -175,7 +175,8 @@ def get_args():
         "--metric-name",
         type=str,
         default="IoU",
-        help="Name of the metric to use for 3D bounding box evaluation, such as IoU, GIoU",
+        choices=["IoU", "GIoU", "ChamferDistance", "HungarianDistance"],
+        help="Name of the metric to use for 3D bounding box evaluation",
     )
     parser.add_argument(
         "--metric-threshold",

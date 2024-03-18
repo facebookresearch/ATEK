@@ -5,7 +5,7 @@ from typing import Union
 import numpy as np
 import pandas as pd
 import torch
-from atek.evaluation import iou_giou
+from atek.evaluation import chamfer_distance, hungarian_distance, iou_giou
 from atek.utils.obb3 import Obb3
 
 
@@ -47,6 +47,8 @@ def compute_per_scene_metrics(
                 "Confidence": flatten_to_list(obb3_pred.score),
                 "IoU": [np.nan] * pred_num,
                 "GIoU": [np.nan] * pred_num,
+                "ChamferDistance": [np.nan] * pred_num,
+                "HungarianDistance": [np.nan] * pred_num,
             }
         ]
     elif obb3_pred is None:
@@ -59,6 +61,8 @@ def compute_per_scene_metrics(
                 "Confidence": [np.nan] * gt_num,
                 "IoU": [np.nan] * gt_num,
                 "GIoU": [np.nan] * gt_num,
+                "ChamferDistance": [np.nan] * gt_num,
+                "HungarianDistance": [np.nan] * gt_num,
             }
         ]
     else:
@@ -80,6 +84,8 @@ def compute_per_scene_metrics(
                     "Confidence": [np.nan] * gt_num,
                     "IoU": [np.nan] * gt_num,
                     "GIoU": [np.nan] * gt_num,
+                    "ChamferDistance": [np.nan] * gt_num,
+                    "HungarianDistance": [np.nan] * gt_num,
                 }
             elif cat_id not in obb3_gt.category_id:
                 # False positive: set all metrics to NaN
@@ -91,6 +97,8 @@ def compute_per_scene_metrics(
                     "Confidence": flatten_to_list(obb3_pred.score[pred_idx]),
                     "IoU": [np.nan] * pred_num,
                     "GIoU": [np.nan] * pred_num,
+                    "ChamferDistance": [np.nan] * pred_num,
+                    "HungarianDistance": [np.nan] * pred_num,
                 }
             else:
                 # compute metrics
@@ -99,6 +107,14 @@ def compute_per_scene_metrics(
                     obb3_pred.T_ref_obj[pred_idx],
                     obb3_gt.size[gt_idx],
                     obb3_gt.T_ref_obj[gt_idx],
+                )
+                chamfer_dist = chamfer_distance(
+                    obb3_pred.bb3_in_ref_frame[pred_idx],
+                    obb3_gt.bb3_in_ref_frame[gt_idx],
+                )
+                hungarian_dist = hungarian_distance(
+                    obb3_pred.bb3_in_ref_frame[pred_idx],
+                    obb3_gt.bb3_in_ref_frame[gt_idx],
                 )
 
                 pred_id_grid, gt_id_grid = torch.meshgrid(
@@ -115,6 +131,8 @@ def compute_per_scene_metrics(
                     "Confidence": flatten_to_list(confidence_grid),
                     "IoU": flatten_to_list(iou),
                     "GIoU": flatten_to_list(giou),
+                    "ChamferDistance": flatten_to_list(chamfer_dist),
+                    "HungarianDistance": flatten_to_list(hungarian_dist),
                 }
             metrics.append(curr_metrics)
 
