@@ -95,11 +95,6 @@ def atek_to_omni3d(
                 "K": Ks[idx].tolist(),  # CubeRCNN requires list input
                 "height": image_height,
                 "width": image_width,
-                "T_world_camera": sample["T_world_camera"][idx],
-                "Ts_world_object": sample["Ts_world_object"][idx],
-                "object_dimensions": sample["object_dimensions"][idx],
-                "bb2ds_x0x1y0y1": sample["bb2ds_x0x1y0y1"][idx],
-                "category": category,
                 # Metadata
                 "frame_id": sample["frame_id"][idx],
                 "timestamp_ns": sample["timestamp_ns"][idx],
@@ -132,7 +127,9 @@ def atek_to_omni3d(
                     ]
                 elif object_detection_mode == ObjectDetectionMode.PER_INSTANCE:
                     # Use instance ids as category ids for instance-based detection
-                    sem_ids = sample["object_instance_ids"][idx]
+                    sem_ids = [
+                        str(inst_id) for inst_id in sample["object_instance_ids"][idx]
+                    ]
                 else:
                     raise ValueError(
                         f"Unsupported object detection mode: {object_detection_mode}"
@@ -174,6 +171,17 @@ def atek_to_omni3d(
                 )
 
                 sample_new["instances"] = instances
+                sample_new.update(
+                    {
+                        "T_world_camera": sample["T_world_camera"][idx],
+                        "Ts_world_object": sample["Ts_world_object"][idx][final_filter],
+                        "object_dimensions": sample["object_dimensions"][idx][
+                            final_filter
+                        ],
+                        "bb2ds_x0x1y0y1": sample["bb2ds_x0x1y0y1"][idx][final_filter],
+                        "category": category,
+                    }
+                )
                 yield sample_new
 
 

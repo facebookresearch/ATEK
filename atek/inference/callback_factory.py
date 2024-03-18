@@ -1,6 +1,7 @@
 from argparse import Namespace
 from typing import Callable, Dict, List, Union
 
+from atek.evaluation.bbox3d_evaluator import Bbox3DEvaluator
 from atek.inference.adt_prediction_saver import AdtPredictionSaver
 from atek.inference.cubercnn_postprocessor import CubercnnPredictionConverter
 from atek.viz.visualization_callbacks import AtekInferViewer
@@ -49,10 +50,16 @@ def create_inference_callback(
                 f"Unknown input data type for creating sequence callbacks: {args.data_type}"
             )
 
+        eval_callbacks = []
+        if args.evaluate:
+            eval_callback = Bbox3DEvaluator(args.metric_name, args.metric_threshold)
+            eval_callbacks.append(eval_callback)
+
         callbacks = {
             "post_processor": post_processor,
             "per_batch_callbacks": per_batch_callbacks,
             "per_sequence_callbacks": per_sequence_callbacks,
+            "eval_callbacks": eval_callbacks,
         }
     else:
         raise ValueError(

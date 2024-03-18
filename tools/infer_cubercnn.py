@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 
@@ -11,32 +12,6 @@ from atek.model.model_factory import create_inference_model
 from detectron2.engine import launch
 from detectron2.utils import comm
 from torch.nn.parallel import DistributedDataParallel
-
-
-def run_inference(seq_path, model, model_config, args):
-    # setup dataset
-    dataset = create_inference_dataset(seq_path, args, model_config)
-
-    # setup callbacks
-    callbacks = create_inference_callback(args, model_config)
-
-    # run inference, with optional callbacks
-    prediction_list = []
-    for data in tqdm.tqdm(dataset):
-        model_output = model(data)
-
-        # post-process model output
-        prediction = callbacks["post_processor"](data, model_output)
-
-        # run callbacks for current iteration
-        for callback in callbacks["per_batch_callbacks"]:
-            callback(data, prediction)
-
-        prediction_list.append(prediction)
-
-    # run callbacks for whole sequence
-    for callback in callbacks["per_sequence_callbacks"]:
-        callback(prediction_list)
 
 
 def main(args):
@@ -54,14 +29,48 @@ def main(args):
             find_unused_parameters=True,
         )
 
-    # run inference
+    # setup callbacks
+    callbacks = create_inference_callback(args, model_config)
+
+    # load sequence paths for inference
     with open(args.input_file, "r") as f:
         seq_paths_all = f.read().splitlines()
 
-    # split input files across all GPUs
+    # run inference
     seq_paths_local = seq_paths_all[rank::world_size]
     for seq_path in seq_paths_local:
-        run_inference(seq_path, model, model_config, args)
+        # setup dataset
+        dataset = create_inference_dataset(seq_path, args, model_config)
+
+        prediction_list = []
+        for data in tqdm.tqdm(dataset):
+            model_output = model(data)
+
+            # post-process model output
+            prediction = callbacks["post_processor"](data, model_output)
+
+            # run callbacks for current iteration
+            for callback in callbacks["per_batch_callbacks"]:
+                callback(data, prediction)
+
+            for eval_callback in callbacks["eval_callbacks"]:
+                eval_callback.update(data, prediction)
+
+            prediction_list.append(prediction)
+
+        # run callbacks for whole sequence
+        for callback in callbacks["per_sequence_callbacks"]:
+            callback(prediction_list)
+
+    eval_results = []
+    for eval_callback in callbacks["eval_callbacks"]:
+        eval_results.append(eval_callback.evaluate())
+
+    print(f"Evaluation results:\n{eval_results}")
+    if args.eval_save_path:
+        assert args.eval_save_path.endswith(".json")
+        with open(args.eval_save_path, "w") as f:
+            json.dump(eval_results, f, indent=2)
 
 
 # TODO: make this more generic and rename the file to infer.py
@@ -136,6 +145,30 @@ def get_args():
         "--ws-port",
         default=8877,
         help="The port to serve the WebSocket server on (defaults to 8877)",
+    )
+    parser.add_argument(
+        "--evaluate",
+        default=False,
+        action="store_true",
+        help="whether to evaluate the model predictions",
+    )
+    parser.add_argument(
+        "--metric-name",
+        type=str,
+        default="IoU",
+        help="Name of the metric to use for 3D bounding box evaluation, such as IoU, GIoU",
+    )
+    parser.add_argument(
+        "--metric-threshold",
+        type=float,
+        default=0.25,
+        help="Threshold of metric for matching predicted and GT bounding boxes",
+    )
+    parser.add_argument(
+        "--eval-save-path",
+        type=str,
+        default=None,
+        help="Path to save evaluation results",
     )
     parser.add_argument(
         "--num-gpus", type=int, default=1, help="number of gpus *per machine*"
