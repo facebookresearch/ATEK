@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import sys
+import time
 
 import tqdm
 
@@ -36,14 +37,19 @@ def main(args):
     with open(args.input_file, "r") as f:
         seq_paths_all = f.read().splitlines()
 
+    # setup profiling
+    num_iters = 0
+    num_samples = 0
+    start_time = time.time()
+
     # run inference
     seq_paths_local = seq_paths_all[rank::world_size]
-    for seq_path in seq_paths_local:
+    for seq_path in tqdm.tqdm(seq_paths_local):
         # setup dataset
         dataset = create_inference_dataset(seq_path, args, model_config)
 
         prediction_list = []
-        for data in tqdm.tqdm(dataset):
+        for data in dataset:
             model_output = model(data)
 
             # post-process model output
@@ -58,6 +64,10 @@ def main(args):
 
             prediction_list.append(prediction)
 
+            # increment iteration and sample counter
+            num_iters += 1
+            num_samples += len(data)
+
         # run callbacks for whole sequence
         for callback in callbacks["per_sequence_callbacks"]:
             callback(prediction_list)
@@ -71,6 +81,15 @@ def main(args):
         assert args.eval_save_path.endswith(".json")
         with open(args.eval_save_path, "w") as f:
             json.dump(eval_results, f, indent=2)
+
+    elapsed_time = time.time() - start_time
+    profile_message = (
+        f"Inference time: {elapsed_time:.3f} secs for {num_iters} iters, "
+        + f"{elapsed_time / num_iters:.2f} sec/iter, "
+        + f"{num_samples} total samples "
+        + f"{elapsed_time / num_samples:.2f} sec/sample"
+    )
+    print(profile_message)
 
 
 # TODO: make this more generic and rename the file to infer.py
