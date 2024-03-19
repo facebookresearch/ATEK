@@ -5,7 +5,7 @@ import torch
 
 from atek.data_preprocess.adt_gt_data_processor import AdtGtDataProcessor
 from atek.data_preprocess.frame_data_processor import FrameDataProcessor
-from atek.data_preprocess.pose_data_processor import PoseDataProcessor
+from atek.data_preprocess.mps_data_processor import MpsDataProcessor
 
 from projectaria_tools.core.stream_id import StreamId
 from projectaria_tools.projects.adt import AriaDigitalTwinDataPathsProvider
@@ -50,8 +50,8 @@ class AtekRawFrameDataset(torch.utils.data.Dataset):
         paths_provider = AriaDigitalTwinDataPathsProvider(data_path)
         data_paths = paths_provider.get_datapaths_by_device_num(selected_device_number)
 
-        pose_data_processor = PoseDataProcessor(
-            name="pose",
+        mps_data_processor = MpsDataProcessor(
+            name="mps",
             trajectory_file=data_paths.aria_trajectory_filepath,
         )
         try:
@@ -68,7 +68,7 @@ class AtekRawFrameDataset(torch.utils.data.Dataset):
             target_linear_camera_params=np.array(
                 [target_image_resolution[0], target_image_resolution[1]]
             ),
-            pose_data_processor=pose_data_processor,
+            mps_data_processor=mps_data_processor,
             gt_data_processor=adt_gt_data_processor,
         )
 

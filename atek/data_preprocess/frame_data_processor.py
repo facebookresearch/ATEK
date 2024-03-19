@@ -10,7 +10,7 @@ import pandas as pd
 
 from atek.data_preprocess.base_gt_data_processor import BaseGtDataProcessor
 from atek.data_preprocess.data_schema import Frame
-from atek.data_preprocess.pose_data_processor import PoseDataProcessor
+from atek.data_preprocess.mps_data_processor import MpsDataProcessor
 from atek.utils.camera_utils import get_camera_fov_spherical_cone
 
 from projectaria_tools.core import calibration, data_provider
@@ -31,7 +31,7 @@ class FrameDataProcessor:
         time_domain: TimeDomain = TimeDomain.DEVICE_TIME,
         target_linear_camera_params: Optional[np.ndarray] = None,
         rotate_image_cw90deg: bool = True,
-        pose_data_processor: Optional[PoseDataProcessor] = None,
+        mps_data_processor: Optional[MpsDataProcessor] = None,
         gt_data_processor: Optional[BaseGtDataProcessor] = None,
     ):
         """
@@ -46,7 +46,7 @@ class FrameDataProcessor:
         self.stream_id = stream_id
         self.video_vrs = video_vrs
         self.data_provider = self.setup_data_provider()
-        self.pose_data_processor = pose_data_processor
+        self.mps_data_processor = mps_data_processor
 
         assert (
             gt_data_processor is None or self.stream_id == gt_data_processor.stream_id
@@ -151,11 +151,11 @@ class FrameDataProcessor:
         return self.frame_df["timestamp_ns"].values
 
     def update_df_with_poseinfo(self):
-        if self.pose_data_processor is not None:
-            pose_df = self.pose_data_processor.get_nearest_poses(
+        if self.mps_data_processor is not None:
+            T_world_device_dataframe = self.mps_data_processor.get_nearest_poses(
                 self.get_timestamps_ns()
             )
-            self.frame_df = pd.concat([self.frame_df, pose_df], axis=1)
+            self.frame_df = pd.concat([self.frame_df, T_world_device_dataframe], axis=1)
 
     def decide_image_subsample_factor(self, target_hz: float):
         # Frame rate sanity check.

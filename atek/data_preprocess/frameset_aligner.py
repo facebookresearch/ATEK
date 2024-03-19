@@ -14,7 +14,7 @@ from atek.data_preprocess.data_utils import (
     unify_object_target,
 )
 from atek.data_preprocess.frame_data_processor import FrameDataProcessor
-from atek.data_preprocess.pose_data_processor import PoseDataProcessor
+from atek.data_preprocess.mps_data_processor import MpsDataProcessor
 from atek.utils import mesh_boolean_utils
 
 from projectaria_tools.core.sophus import SE3
@@ -50,7 +50,7 @@ class FramesetAligner:
         self,
         target_hz: float,
         frame_data_processors: List[FrameDataProcessor],
-        pose_data_processor: PoseDataProcessor = None,
+        mps_data_processor: MpsDataProcessor = None,
         origin_selection: str = "stream_id#214-1",
         timestamp_type: str = "Average",
         require_objects: bool = False,
@@ -58,7 +58,7 @@ class FramesetAligner:
         self.target_hz = target_hz
         self.frame_data_processors = frame_data_processors
 
-        self.pose_data_processor = pose_data_processor
+        self.mps_data_processor = mps_data_processor
 
         self.origin_selection = origin_selection
         self.timestamp_type = timestamp_type
@@ -117,11 +117,13 @@ class FramesetAligner:
         self.frameset_df["frameset_timestamp_ns"] = frameset_timestamp_ns
 
     def update_df_with_pose_info(self):
-        if self.pose_data_processor is not None:
-            pose_df = self.pose_data_processor.get_nearest_poses(
+        if self.mps_data_processor is not None:
+            T_world_device_dataframe = self.mps_data_processor.get_nearest_poses(
                 self.get_timestamps_ns()
             )
-            self.frameset_df = pd.concat([self.frameset_df, pose_df], axis=1)
+            self.frameset_df = pd.concat(
+                [self.frameset_df, T_world_device_dataframe], axis=1
+            )
 
     def align_images(self, tolerance_ns: int = 150000):
         """
@@ -241,7 +243,7 @@ class FramesetAligner:
         Function to query the T_world_frameset by index.
         """
         self.check_index_valid(index)
-        assert self.pose_data_processor is not None
+        assert self.mps_data_processor is not None
 
         T_world_device = SE3.from_quat_and_translation(
             self.frameset_df.loc[index, "qw_world_device"],

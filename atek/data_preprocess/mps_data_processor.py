@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-class PoseDataProcessor:
+class MpsDataProcessor:
     def __init__(
         self,
         name: str,

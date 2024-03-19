@@ -7,5 +7,5 @@ from .frameset_group_generator import (  # noqa
     FramesetGroupGenerator,
     FramesetSelectionConfig,
 )
-from .pose_data_processor import PoseDataProcessor  # noqa
+from .mps_data_processor import MpsDataProcessor  # noqa
 from .webdataset_writer import AtekWdsWriter, DataSelectionSettings  # noqa

@@ -101,7 +101,7 @@ class FramesetGroupGenerator:
             )
         ):
             assert (
-                self.frameset_aligner.pose_data_processor is not None
+                self.frameset_aligner.mps_data_processor is not None
             ), "Require trajectory information for frameset selection."
 
         assert self.frameset_selection_config.stride >= 1
