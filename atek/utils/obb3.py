@@ -52,24 +52,22 @@ class Obb3:
         self.size = size
         self.t_ref_obj = t_ref_obj
         self.R_ref_obj = R_ref_obj
-        self.T_ref_obj = torch.cat(
-            (self.R_ref_obj, self.t_ref_obj.unsqueeze(-1)), dim=-1
-        )
         self.instance_id = instance_id
         self.category_id = category_id
         if score is None:
             score = torch.ones((len(self.size),))
         self.score = score
 
-        # Nx8x3 corners in object coordinate frame
-        self.bb3_in_obj_frame = get_cuboid_corners(self.size / 2)
-        # Nx8x3 corners in reference coordinate frame, reference can be world or camera
-        self.bb3_in_ref_frame = batch_transform_points(
-            self.bb3_in_obj_frame, self.T_ref_obj
-        )
+        @property
+        def T_ref_obj(self):
+            return torch.cat((self.R_ref_obj, self.t_ref_obj.unsqueeze(-1)), dim=-1)
 
-        # Using reference coordinate system to define depth
-        self.depth = self.T_ref_obj[:, 2, 3].clone().detach()
+        # Nx8x3 corners in reference coordinate frame, reference can be world or camera
+        @property
+        def bb3_in_ref_frame(self):
+            return batch_transform_points(
+                get_cuboid_corners(self.size / 2), self.T_ref_obj
+            )
 
 
 def init_obb3(
