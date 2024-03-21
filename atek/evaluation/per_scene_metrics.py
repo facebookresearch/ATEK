@@ -1,18 +1,24 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
-from typing import Union
+from typing import Optional
 
 import numpy as np
 import pandas as pd
 import torch
-from atek.evaluation import chamfer_distance, hungarian_distance, iou_giou
+from atek.evaluation.bbox3d_metrics import diagonal_error, iou_giou
+from atek.evaluation.math_metrics.distance_metrics import (
+    chamfer_distance,
+    euclidean_distance,
+    hungarian_distance,
+)
+from atek.evaluation.math_metrics.rotation_metrics import geodesic_angular_error
 from atek.utils.obb3 import Obb3
 
 
 METRIC_DATA_TYPES = {
-    "CategoryId": int,
-    "PredId": int,
-    "GtId": int,
+    "category_id": int,
+    "pred_id": int,
+    "gt_id": int,
 }
 
 
@@ -21,7 +27,7 @@ def flatten_to_list(torch_tensor):
 
 
 def compute_per_scene_metrics(
-    obb3_pred: Union[Obb3, None], obb3_gt: Union[Obb3, None]
+    obb3_pred: Optional[Obb3] = None, obb3_gt: Optional[Obb3] = None
 ) -> pd.DataFrame:
     """
     Compute per-scene pairwise metrics between predicted and GT Obb3's. For example, if there are
@@ -41,28 +47,34 @@ def compute_per_scene_metrics(
         pred_num = len(obb3_pred.instance_id)
         metrics = [
             {
-                "CategoryId": flatten_to_list(obb3_pred.category_id),
-                "PredId": flatten_to_list(obb3_pred.instance_id),
-                "GtId": [-1] * pred_num,
-                "Confidence": flatten_to_list(obb3_pred.score),
-                "IoU": [np.nan] * pred_num,
-                "GIoU": [np.nan] * pred_num,
-                "ChamferDistance": [np.nan] * pred_num,
-                "HungarianDistance": [np.nan] * pred_num,
+                "category_id": flatten_to_list(obb3_pred.category_id),
+                "pred_id": flatten_to_list(obb3_pred.instance_id),
+                "gt_id": [-1] * pred_num,
+                "confidence": flatten_to_list(obb3_pred.score),
+                "iou": [np.nan] * pred_num,
+                "giou": [np.nan] * pred_num,
+                "box_corner_chamfer_distance": [np.nan] * pred_num,
+                "box_corner_hungarian_distance": [np.nan] * pred_num,
+                "center_euclidean_distance": [np.nan] * pred_num,
+                "rotation_geodesic_error": [np.nan] * pred_num,
+                "box_corner_diagonal_error": [np.nan] * pred_num,
             }
         ]
     elif obb3_pred is None:
         gt_num = len(obb3_gt.instance_id)
         metrics = [
             {
-                "CategoryId": flatten_to_list(obb3_gt.category_id),
-                "PredId": [-1] * gt_num,
-                "GtId": flatten_to_list(obb3_gt.instance_id),
-                "Confidence": [np.nan] * gt_num,
-                "IoU": [np.nan] * gt_num,
-                "GIoU": [np.nan] * gt_num,
-                "ChamferDistance": [np.nan] * gt_num,
-                "HungarianDistance": [np.nan] * gt_num,
+                "category_id": flatten_to_list(obb3_gt.category_id),
+                "pred_id": [-1] * gt_num,
+                "gt_id": flatten_to_list(obb3_gt.instance_id),
+                "confidence": [np.nan] * gt_num,
+                "iou": [np.nan] * gt_num,
+                "giou": [np.nan] * gt_num,
+                "box_corner_chamfer_distance": [np.nan] * gt_num,
+                "box_corner_hungarian_distance": [np.nan] * gt_num,
+                "center_euclidean_distance": [np.nan] * gt_num,
+                "rotation_geodesic_error": [np.nan] * gt_num,
+                "box_corner_diagonal_error": [np.nan] * gt_num,
             }
         ]
     else:
@@ -78,27 +90,33 @@ def compute_per_scene_metrics(
                 # False negative: set all metrics to NaN
                 gt_num = len(gt_idx)
                 curr_metrics = {
-                    "CategoryId": [cat_id] * gt_num,
-                    "PredId": [-1] * gt_num,
-                    "GtId": flatten_to_list(obb3_gt.instance_id[gt_idx]),
-                    "Confidence": [np.nan] * gt_num,
-                    "IoU": [np.nan] * gt_num,
-                    "GIoU": [np.nan] * gt_num,
-                    "ChamferDistance": [np.nan] * gt_num,
-                    "HungarianDistance": [np.nan] * gt_num,
+                    "category_id": [cat_id] * gt_num,
+                    "pred_id": [-1] * gt_num,
+                    "gt_id": flatten_to_list(obb3_gt.instance_id[gt_idx]),
+                    "confidence": [np.nan] * gt_num,
+                    "iou": [np.nan] * gt_num,
+                    "giou": [np.nan] * gt_num,
+                    "box_corner_chamfer_distance": [np.nan] * gt_num,
+                    "box_corner_hungarian_distance": [np.nan] * gt_num,
+                    "center_euclidean_distance": [np.nan] * gt_num,
+                    "rotation_geodesic_error": [np.nan] * gt_num,
+                    "box_corner_diagonal_error": [np.nan] * gt_num,
                 }
             elif cat_id not in obb3_gt.category_id:
                 # False positive: set all metrics to NaN
                 pred_num = len(pred_idx)
                 curr_metrics = {
-                    "CategoryId": [cat_id] * pred_num,
-                    "PredId": flatten_to_list(obb3_pred.instance_id[pred_idx]),
-                    "GtId": [-1] * pred_num,
-                    "Confidence": flatten_to_list(obb3_pred.score[pred_idx]),
-                    "IoU": [np.nan] * pred_num,
-                    "GIoU": [np.nan] * pred_num,
-                    "ChamferDistance": [np.nan] * pred_num,
-                    "HungarianDistance": [np.nan] * pred_num,
+                    "category_id": [cat_id] * pred_num,
+                    "pred_id": flatten_to_list(obb3_pred.instance_id[pred_idx]),
+                    "gt_id": [-1] * pred_num,
+                    "confidence": flatten_to_list(obb3_pred.score[pred_idx]),
+                    "iou": [np.nan] * pred_num,
+                    "giou": [np.nan] * pred_num,
+                    "box_corner_chamfer_distance": [np.nan] * pred_num,
+                    "box_corner_hungarian_distance": [np.nan] * pred_num,
+                    "center_euclidean_distance": [np.nan] * pred_num,
+                    "rotation_geodesic_error": [np.nan] * pred_num,
+                    "box_corner_diagonal_error": [np.nan] * pred_num,
                 }
             else:
                 # compute metrics
@@ -116,6 +134,18 @@ def compute_per_scene_metrics(
                     obb3_pred.bb3_in_ref_frame[pred_idx],
                     obb3_gt.bb3_in_ref_frame[gt_idx],
                 )
+                euclidean_dist = euclidean_distance(
+                    obb3_pred.t_ref_obj[pred_idx],
+                    obb3_gt.t_ref_obj[gt_idx],
+                )
+                geodesic_ang_err = geodesic_angular_error(
+                    obb3_pred.R_ref_obj[pred_idx],
+                    obb3_gt.R_ref_obj[gt_idx],
+                )
+                diag_err = diagonal_error(
+                    obb3_pred.size[pred_idx],
+                    obb3_gt.size[gt_idx],
+                )
 
                 pred_id_grid, gt_id_grid = torch.meshgrid(
                     obb3_pred.instance_id[pred_idx], obb3_gt.instance_id[gt_idx]
@@ -125,14 +155,17 @@ def compute_per_scene_metrics(
                 )
 
                 curr_metrics = {
-                    "CategoryId": [cat_id] * len(pred_id_grid.flatten()),
-                    "PredId": flatten_to_list(pred_id_grid),
-                    "GtId": flatten_to_list(gt_id_grid),
-                    "Confidence": flatten_to_list(confidence_grid),
-                    "IoU": flatten_to_list(iou),
-                    "GIoU": flatten_to_list(giou),
-                    "ChamferDistance": flatten_to_list(chamfer_dist),
-                    "HungarianDistance": flatten_to_list(hungarian_dist),
+                    "category_id": [cat_id] * len(pred_id_grid.flatten()),
+                    "pred_id": flatten_to_list(pred_id_grid),
+                    "gt_id": flatten_to_list(gt_id_grid),
+                    "confidence": flatten_to_list(confidence_grid),
+                    "iou": flatten_to_list(iou),
+                    "giou": flatten_to_list(giou),
+                    "box_corner_chamfer_distance": flatten_to_list(chamfer_dist),
+                    "box_corner_hungarian_distance": flatten_to_list(hungarian_dist),
+                    "center_euclidean_distance": flatten_to_list(euclidean_dist),
+                    "rotation_geodesic_error": flatten_to_list(geodesic_ang_err),
+                    "box_corner_diagonal_error": flatten_to_list(diag_err),
                 }
             metrics.append(curr_metrics)
 

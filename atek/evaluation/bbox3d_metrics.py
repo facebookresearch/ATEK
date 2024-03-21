@@ -339,3 +339,34 @@ def iou_giou(
     pw_giou = torch.Tensor(pw_giou).reshape((M, N))
 
     return pw_vol_in, pw_iou, pw_giou
+
+
+def diagonal_error(
+    pred_scale: torch.Tensor, target_scale: torch.Tensor
+) -> torch.Tensor:
+    """
+    Compute the diagonal error between pred_scale and target_scale.
+
+    Args:
+        pred_scale: Tensor of shape (M, 3) representing the predicted scale.
+        target_scale: Tensor of shape (N, 3) representing the target scale.
+
+    Returns:
+        Tensor of shape (M, N) containing the pairwise diagonal error.
+    """
+    assert pred_scale.ndim == target_scale.ndim == 2
+    assert pred_scale.shape[1:] == target_scale.shape[1:]
+
+    M, N = pred_scale.shape[0], target_scale.shape[0]
+
+    # shape: (M, N, 3)
+    pred_scale_repeat = pred_scale.unsqueeze(1).repeat((1, N, 1))
+    target_scale_repeat = target_scale.unsqueeze(0).repeat((M, 1, 1))
+
+    # shape: (M, N)
+    pred_diag = torch.norm(pred_scale_repeat, p=2, dim=-1)
+    target_diag = torch.norm(target_scale_repeat, p=2, dim=-1)
+
+    diag_error = torch.abs(pred_diag - target_diag)
+
+    return diag_error

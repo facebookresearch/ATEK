@@ -5,11 +5,39 @@ from scipy.optimize import linear_sum_assignment
 from torch.nn import functional as F
 
 
+def euclidean_distance(
+    pred_translation: torch.Tensor, target_translation: torch.Tensor
+) -> torch.Tensor:
+    """
+    Compute the pairwise Euclidean distance between 2 groups of points in $R^3$.
+
+    Args:
+        pred_translation: Tensor of shape (M, 3) representing the predicted translation.
+        target_translation: Tensor of shape (N, 3) representing the target translation.
+
+    Returns:
+        Tensor of shape (M, N) containing the pairwise Euclidean distance.
+    """
+    assert pred_translation.ndim == target_translation.ndim == 2
+    assert pred_translation.shape[1:] == target_translation.shape[1:]
+    M, N = pred_translation.shape[0], target_translation.shape[0]
+
+    # shape: (M, N, 3)
+    pred_translation_repeat = pred_translation.unsqueeze(1).repeat((1, N, 1))
+    target_translation_repeat = target_translation.unsqueeze(0).repeat((M, 1, 1))
+
+    euclidean_dist = torch.norm(
+        pred_translation_repeat - target_translation_repeat, p=2, dim=-1
+    )
+
+    return euclidean_dist
+
+
 def chamfer_distance_single(
     pred: torch.Tensor, target: torch.Tensor, dist_type: F = F.l1_loss
 ) -> torch.Tensor:
     """
-    Compute the chamfer distance between 2 sets of points of shape (..., R, d).
+    Compute the chamfer distance between 2 sets of points in $R^d$.
 
     Args:
         pred: Tensor of shape (..., K, d) representing the predicted values. K and d represent the
@@ -100,7 +128,7 @@ def chamfer_distance(
     pred: torch.Tensor, target: torch.Tensor, dist_type: F = F.l1_loss
 ) -> torch.Tensor:
     """
-    Compute the pairwise Chamfer distance between pred and target.
+    Compute the pairwise Chamfer distance between 2 sets of points in $R^d$.
 
     Args:
         pred: Tensor of shape (M, K, d) representing the predicted values. M, K, and d represent
@@ -126,7 +154,7 @@ def hungarian_distance(
     pred: torch.Tensor, target: torch.Tensor, dist_type: F = F.l1_loss, processes=4
 ) -> torch.Tensor:
     """
-    Compute the pairwise Hungarian distance between pred and target.
+    Compute the pairwise Hungarian distance between 2 sets of points in $R^d$.
 
     Args:
         pred: Tensor of shape (M, K, d) representing the predicted values. M, K, and d represent

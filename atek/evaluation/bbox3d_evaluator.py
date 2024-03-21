@@ -16,13 +16,13 @@ from atek.utils.obb3 import Obb3
 
 def _set_false_positive(fp_df: pd.DataFrame) -> pd.DataFrame:
     false_positive_df = fp_df.copy()
-    false_positive_df.loc[:, "GtId"] = -1
+    false_positive_df.loc[:, "gt_id"] = -1
     for col in false_positive_df.columns:
         if col not in [
-            "CategoryId",
-            "PredId",
-            "GtId",
-            "Confidence",
+            "category_id",
+            "pred_id",
+            "gt_id",
+            "confidence",
         ]:
             false_positive_df.loc[:, col] = np.nan
     return false_positive_df
@@ -30,12 +30,12 @@ def _set_false_positive(fp_df: pd.DataFrame) -> pd.DataFrame:
 
 def _set_false_negative(fn_df: pd.DataFrame) -> pd.DataFrame:
     false_negative_df = fn_df.copy()
-    false_negative_df.loc[:, "PredId"] = -1
+    false_negative_df.loc[:, "pred_id"] = -1
     for col in false_negative_df.columns:
         if col not in [
-            "CategoryId",
-            "PredId",
-            "GtId",
+            "category_id",
+            "pred_id",
+            "gt_id",
         ]:
             false_negative_df.loc[:, col] = np.nan
     return false_negative_df
@@ -140,15 +140,15 @@ class Bbox3DEvaluator:
                 and GT boxes, and unmatched pred/GT boxes (metrics will be np.nan).
         """
         # Find false positives and false negatives
-        false_positives = per_scene_metrics_df.query("GtId == -1")
-        false_negatives = per_scene_metrics_df.query("PredId == -1")
+        false_positives = per_scene_metrics_df.query("gt_id == -1")
+        false_negatives = per_scene_metrics_df.query("pred_id == -1")
 
         # Define condition for matching
         sign = ">=" if self.metric_higher else "<="
         match_condition = f"{self.metric_name} {sign} {self.metric_thresh}"
 
         # Process remaining predictions and GTs
-        filtered_df = per_scene_metrics_df.query("GtId != -1 & PredId != -1")
+        filtered_df = per_scene_metrics_df.query("gt_id != -1 & pred_id != -1")
         true_positives = []
         additional_false_positives = []
         additional_false_negatives = []
@@ -158,15 +158,15 @@ class Bbox3DEvaluator:
 
         if not matched_df.empty:
             if self.metric_higher:
-                row_idx = matched_df.groupby("GtId")[self.metric_name].idxmax()
+                row_idx = matched_df.groupby("gt_id")[self.metric_name].idxmax()
             else:
-                row_idx = matched_df.groupby("GtId")[self.metric_name].idxmin()
+                row_idx = matched_df.groupby("gt_id")[self.metric_name].idxmin()
             true_positives.append(matched_df.loc[row_idx])
 
         # Append additional false positives: preds not meeting match criterion
-        matched_pred_ids = matched_df["PredId"].unique().tolist()  # noqa
+        matched_pred_ids = matched_df["pred_id"].unique().tolist()  # noqa
         curr_false_positives = filtered_df.query(
-            "PredId not in @matched_pred_ids"
+            "pred_id not in @matched_pred_ids"
         ).reset_index(drop=True)
         additional_false_positives.append(
             _set_false_positive(curr_false_positives).drop_duplicates()
@@ -174,9 +174,9 @@ class Bbox3DEvaluator:
 
         # Append additional false negatives: GTs that have no valid matched preds,
         # i.e., preds with not meeting match criterion
-        matched_gt_ids = matched_df["GtId"].unique().tolist()  # noqa
+        matched_gt_ids = matched_df["gt_id"].unique().tolist()  # noqa
         curr_false_negatives = filtered_df.query(
-            "GtId not in @matched_gt_ids"
+            "gt_id not in @matched_gt_ids"
         ).reset_index(drop=True)
         additional_false_negatives.append(
             _set_false_negative(curr_false_negatives).drop_duplicates()
@@ -203,7 +203,7 @@ class Bbox3DEvaluator:
         matched_metrics_df = (
             pd.concat(matched_metrics_df)
             .astype(METRIC_DATA_TYPES)
-            .sort_values(by=["PredId", "GtId"])
+            .sort_values(by=["pred_id", "gt_id"])
             .reset_index(drop=True)
         )
 
@@ -215,18 +215,18 @@ class Bbox3DEvaluator:
         """
         matched_metrics_df_all = pd.concat(self.matched_metrics_df_list)
 
-        gt_count = matched_metrics_df_all.query("GtId != '-1'").shape[0]
+        gt_count = matched_metrics_df_all.query("gt_id != '-1'").shape[0]
         if gt_count == 0:
             return {"mAP": np.nan}
 
-        df = matched_metrics_df_all.query("PredId != '-1'").sort_values(
-            by=["Confidence"], ascending=False
+        df = matched_metrics_df_all.query("pred_id != '-1'").sort_values(
+            by=["confidence"], ascending=False
         )
-        y_true = df["GtId"].to_numpy() != -1
+        y_true = df["gt_id"].to_numpy() != -1
         if len(y_true) == 0:
             return {"mAP": 0}
 
-        y_scores = df["Confidence"].to_numpy()
+        y_scores = df["confidence"].to_numpy()
         mean_ap = compute_average_precision(y_true, y_scores, gt_count)
         results = {"mAP": mean_ap}
 
