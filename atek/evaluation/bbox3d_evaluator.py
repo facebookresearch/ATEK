@@ -72,55 +72,62 @@ class Bbox3DEvaluator:
         pair, accumulate the results
         """
         for input, prediction in zip(model_input, model_prediction):
-            dim_gt = input["object_dimensions"]
-            t_world_obj_gt = input["Ts_world_object"][:, :, 3]
-            R_world_obj_gt = input["Ts_world_object"][:, :, :3]
-            category_id_gt = input["instances"].gt_classes
-            fake_instance_id_gt = torch.Tensor(list(range(len(category_id_gt))))
+            if len(input["object_dimensions"]) == 0:
+                obb3_gt = None
+            else:
+                dim_gt = input["object_dimensions"]
+                t_world_obj_gt = input["Ts_world_object"][:, :, 3]
+                R_world_obj_gt = input["Ts_world_object"][:, :, :3]
+                category_id_gt = input["instances"].gt_classes
+                fake_instance_id_gt = torch.Tensor(list(range(len(category_id_gt))))
 
-            obb3_gt = Obb3(
-                dim_gt,
-                t_world_obj_gt,
-                R_world_obj_gt,
-                fake_instance_id_gt,
-                category_id_gt,
-            )
+                obb3_gt = Obb3(
+                    dim_gt,
+                    t_world_obj_gt,
+                    R_world_obj_gt,
+                    fake_instance_id_gt,
+                    category_id_gt,
+                )
 
-            dim_pred = torch.Tensor([pred["dimensions"] for pred in prediction])
             N_pred = len(prediction)
-            t_world_obj_pred = torch.zeros((N_pred, 3))
-            R_world_obj_pred = torch.zeros((N_pred, 3, 3))
-            T_world_cam_4x4 = torch.eye(4)
-            T_world_cam_4x4[:3, :] = prediction[0]["T_world_cam"]
-            for i, pred in enumerate(prediction):
-                T_cam_obj_pred_4x4 = torch.eye(4)
-                T_cam_obj_pred_4x4[:3, 3] = torch.Tensor(pred["t_cam_obj"])
-                T_cam_obj_pred_4x4[:3, :3] = torch.Tensor(pred["R_cam_obj"])
-                T_world_obj_pred_4x4 = T_world_cam_4x4 @ T_cam_obj_pred_4x4
+            if N_pred == 0:
+                obb3_pred = None
+            else:
+                dim_pred = torch.Tensor([pred["dimensions"] for pred in prediction])
+                t_world_obj_pred = torch.zeros((N_pred, 3))
+                R_world_obj_pred = torch.zeros((N_pred, 3, 3))
+                T_world_cam_4x4 = torch.eye(4)
+                T_world_cam_4x4[:3, :] = input["T_world_camera"]
+                for i, pred in enumerate(prediction):
+                    T_cam_obj_pred_4x4 = torch.eye(4)
+                    T_cam_obj_pred_4x4[:3, 3] = torch.Tensor(pred["t_cam_obj"])
+                    T_cam_obj_pred_4x4[:3, :3] = torch.Tensor(pred["R_cam_obj"])
+                    T_world_obj_pred_4x4 = T_world_cam_4x4 @ T_cam_obj_pred_4x4
 
-                t_world_obj_pred[i, :] = T_world_obj_pred_4x4[:3, 3]
-                R_world_obj_pred[i, :, :] = T_world_obj_pred_4x4[:3, :3]
-            category_id_pred = torch.Tensor(
-                [pred["category_idx"] for pred in prediction]
-            )
-            fake_instance_id_pred = torch.Tensor(list(range(len(category_id_pred))))
-            score_pred = torch.Tensor([pred["score"] for pred in prediction])
-            obb3_pred = Obb3(
-                dim_pred,
-                t_world_obj_pred,
-                R_world_obj_pred,
-                fake_instance_id_pred,
-                category_id_pred,
-                score_pred,
-            )
+                    t_world_obj_pred[i, :] = T_world_obj_pred_4x4[:3, 3]
+                    R_world_obj_pred[i, :, :] = T_world_obj_pred_4x4[:3, :3]
+                category_id_pred = torch.Tensor(
+                    [pred["category_idx"] for pred in prediction]
+                )
+                fake_instance_id_pred = torch.Tensor(list(range(len(category_id_pred))))
+                score_pred = torch.Tensor([pred["score"] for pred in prediction])
+                obb3_pred = Obb3(
+                    dim_pred,
+                    t_world_obj_pred,
+                    R_world_obj_pred,
+                    fake_instance_id_pred,
+                    category_id_pred,
+                    score_pred,
+                )
 
             # Compute per-scene (frame/frameset/frameset group) pairwise metrics (IoU/GIoU/Chamfer distance/etc)
             metrics_df = compute_per_scene_metrics(obb3_pred, obb3_gt)
-
+            if len(metrics_df) == 0:
+                continue
             # Match predicted boxes to GT boxes
             matched_metrics_df = self.match_pred_to_gt(metrics_df)
 
-            matched_metrics_df.insert(0, "TimestampNs", input["timestamp_ns"])
+            matched_metrics_df.insert(0, "timestamp_ns", input["timestamp_ns"])
 
             # Append the matched metrics for the final evaluation aggregation
             self.matched_metrics_df_list.append(matched_metrics_df)
@@ -215,11 +222,11 @@ class Bbox3DEvaluator:
         """
         matched_metrics_df_all = pd.concat(self.matched_metrics_df_list)
 
-        gt_count = matched_metrics_df_all.query("gt_id != '-1'").shape[0]
+        gt_count = matched_metrics_df_all.query("gt_id != -1").shape[0]
         if gt_count == 0:
             return {"mAP": np.nan}
 
-        df = matched_metrics_df_all.query("pred_id != '-1'").sort_values(
+        df = matched_metrics_df_all.query("pred_id != -1").sort_values(
             by=["confidence"], ascending=False
         )
         y_true = df["gt_id"].to_numpy() != -1

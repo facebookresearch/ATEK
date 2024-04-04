@@ -86,10 +86,6 @@ def atek_to_omni3d(
         image_height, image_width = sample["images"].shape[2:]
 
         for idx in range(len(images)):
-            category = [
-                sample["category_id_to_name"][idx][str(cat_id)]
-                for cat_id in sample["object_category_ids"][idx]
-            ]
             sample_new = {
                 "image": images[idx],
                 "K": Ks[idx].tolist(),  # CubeRCNN requires list input
@@ -171,6 +167,17 @@ def atek_to_omni3d(
                 )
 
                 sample_new["instances"] = instances
+                filtered_category_ids = [
+                    str(cat_id)
+                    for cat_id, flag in zip(
+                        sample["object_category_ids"][idx], final_filter
+                    )
+                    if flag
+                ]
+                category = [
+                    sample["category_id_to_name"][idx][cat_id]
+                    for cat_id in filtered_category_ids
+                ]
                 sample_new.update(
                     {
                         "T_world_camera": sample["T_world_camera"][idx],

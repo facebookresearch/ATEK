@@ -43,7 +43,9 @@ def compute_per_scene_metrics(
         metrics_df: DataFrame containing per-scene pairwise metrics
     """
 
-    if obb3_gt is None:
+    if obb3_gt is None and obb3_pred is None:
+        return pd.DataFrame()
+    elif obb3_gt is None:
         pred_num = len(obb3_pred.instance_id)
         metrics = [
             {

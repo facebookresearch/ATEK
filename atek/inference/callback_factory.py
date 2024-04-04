@@ -37,17 +37,13 @@ def create_inference_callback(
             )
 
         per_sequence_callbacks = []
-        if args.data_type == "raw" or args.data_type == "wds":
+        if args.save_prediction:
             per_sequence_callbacks.append(
                 AdtPredictionSaver(
                     args.output_dir,
                     args.metadata_file,
                     model_config["cfg"].ID_MAP_JSON,
                 )
-            )
-        else:
-            raise ValueError(
-                f"Unknown input data type for creating sequence callbacks: {args.data_type}"
             )
 
         eval_callbacks = []

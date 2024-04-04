@@ -150,6 +150,12 @@ def get_args():
         help="threshold on score for visualizing",
     )
     parser.add_argument(
+        "--save-prediction",
+        default=False,
+        action="store_true",
+        help="Whether to save prediction",
+    )
+    parser.add_argument(
         "--visualize",
         default=False,
         action="store_true",
@@ -174,7 +180,7 @@ def get_args():
     parser.add_argument(
         "--metric-name",
         type=str,
-        default="IoU",
+        default="iou",
         choices=[
             "iou",
             "giou",
