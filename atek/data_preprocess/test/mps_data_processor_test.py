@@ -43,3 +43,18 @@ class MpsDataProcessorTest(unittest.TestCase):
             [[1.1, 1.2, 1.3], [37.1, 37.2, 37.3]], dtype=torch.float32
         )
         self.assertTrue(torch.allclose(points[0], points_0_gt, atol=1e-6))
+
+        points_inv_dist = points_df["points_inv_dist_std"].to_list()
+        # for testing only
+        print(points_inv_dist)
+        self.assertEqual(len(points_inv_dist), 2)
+        self.assertEqual(
+            points_inv_dist[0].shape, torch.Size([2])
+        )  # 2 points in frame 0
+        self.assertEqual(
+            points_inv_dist[1].shape, torch.Size([3])
+        )  # 3 points in frame 1
+        points_inv_dist_0_gt = torch.tensor([0.003901, 0.00644], dtype=torch.float32)
+        self.assertTrue(
+            torch.allclose(points_inv_dist[0], points_inv_dist_0_gt, atol=1e-6)
+        )

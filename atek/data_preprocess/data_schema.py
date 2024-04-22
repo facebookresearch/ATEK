@@ -200,8 +200,9 @@ class Frameset:
     # Semi-dense point cloud, points in world coordinate frame. Nx3
     points_world: Optional[torch.Tensor] = None
 
-    # Semi-dense point cloud, points distance std, Nx1
-    points_dist_std: Optional[torch.Tensor] = None
+    # Semi-dense point cloud, inverse points distance std, Nx1
+    points_inv_dist_std: Optional[torch.Tensor] = None
+
     # +++++++++++++++++++++++ MPS DATA END +++++++++++++++++++++++++++++
 
     # ======================= TARGET DATA BEGIN ===============================
@@ -251,7 +252,7 @@ class Frameset:
     def semidense_points_fields():
         return [
             "points_world",
-            "points_dist_std",
+            "points_inv_dist_std",
         ]
 
     @staticmethod

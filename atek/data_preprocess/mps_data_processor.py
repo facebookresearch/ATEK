@@ -36,7 +36,7 @@ class MpsDataProcessor:
         self.rate_hz = 1 / np.mean(deltas_us / 1000_000)
 
         # load in semi-dense point files if available, the results are stored as maps for quick querying by timestamp
-        (self.uid_to_p3, self.uid_to_dist_std) = self._load_semidense_global_points(
+        (self.uid_to_p3, self.uid_to_inv_dist_std) = self._load_semidense_global_points(
             semidense_global_point_file, compression_method=semidense_compression_method
         )
         (self.time_to_uids, self.uid_to_times) = self._load_semidense_observations(
@@ -121,15 +121,15 @@ class MpsDataProcessor:
             timestamp_key_in_df="tracking_timestamp_us",
         )
 
-        df = pd.DataFrame(columns=["points_world", "dist_std"])
+        df = pd.DataFrame(columns=["points_world", "points_inv_dist_std"])
         # loop over all matched timestamps, and stack point_in_world into a Nx3 tensor
         for uid_list in matched_time_to_uids_df["uids"]:
             points_world_per_timestamp = []
-            dist_std_per_timestamp = []
+            inv_dist_std_per_timestamp = []
             for uid in uid_list:
-                if (uid in self.uid_to_p3) and (uid in self.uid_to_dist_std):
+                if (uid in self.uid_to_p3) and (uid in self.uid_to_inv_dist_std):
                     points_world_per_timestamp.append(self.uid_to_p3[uid])
-                    dist_std_per_timestamp.append(self.uid_to_dist_std[uid])
+                    inv_dist_std_per_timestamp.append(self.uid_to_inv_dist_std[uid])
                 else:
                     raise ValueError(
                         f"Point UID {uid} not found in global semidense point file!"
@@ -138,7 +138,7 @@ class MpsDataProcessor:
             df = df.append(
                 {
                     "points_world": torch.stack(points_world_per_timestamp),
-                    "dist_std": torch.tensor(dist_std_per_timestamp),
+                    "points_inv_dist_std": torch.tensor(inv_dist_std_per_timestamp),
                 },
                 ignore_index=True,
             )
@@ -198,22 +198,24 @@ class MpsDataProcessor:
     ):
         print(f"loading global semi-dense points from {path}")
         uid_to_p3 = {}
-        uid_to_dist_std = {}
+        uid_to_inv_dist_std = {}
 
         with open(path, "rb") as f:
             csv_data = pd.read_csv(f, compression=compression_method)
 
             # select points and uids and return mapping
-            uid_pts = csv_data[["uid", "dist_std", "px_world", "py_world", "pz_world"]]
+            uid_pts = csv_data[
+                ["uid", "inv_dist_std", "px_world", "py_world", "pz_world"]
+            ]
 
             for row in uid_pts.values:
                 uid = int(row[0])
-                dist_std = float(row[1])
+                inv_dist_std = float(row[1])
                 p3 = torch.from_numpy(row[2:]).float()
                 uid_to_p3[uid] = p3
-                uid_to_dist_std[uid] = dist_std
+                uid_to_inv_dist_std[uid] = inv_dist_std
 
-        return uid_to_p3, uid_to_dist_std
+        return uid_to_p3, uid_to_inv_dist_std
 
     def _load_semidense_observations(
         self, path: str, compression_method: Optional[str] = None
