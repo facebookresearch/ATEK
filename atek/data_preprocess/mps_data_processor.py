@@ -96,7 +96,7 @@ class MpsDataProcessor:
         timestamps_ns: Union[np.ndarray, List[int]],
         tolerance_ns: int = 150_000,
         only_return_valid: bool = False,
-    ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+    ) -> pd.DataFrame:
         """
         Get points_in_world close to timestamps.
         Args:
@@ -121,8 +121,7 @@ class MpsDataProcessor:
             timestamp_key_in_df="tracking_timestamp_us",
         )
 
-        points_world_all = []
-        dist_std_all = []
+        df = pd.DataFrame(columns=["points_world", "dist_std"])
         # loop over all matched timestamps, and stack point_in_world into a Nx3 tensor
         for uid_list in matched_time_to_uids_df["uids"]:
             points_world_per_timestamp = []
@@ -136,12 +135,16 @@ class MpsDataProcessor:
                         f"Point UID {uid} not found in global semidense point file!"
                     )
             # end for uid
-
-            points_world_all.append(torch.stack(points_world_per_timestamp))
-            dist_std_all.append(torch.tensor(dist_std_per_timestamp))
+            df = df.append(
+                {
+                    "points_world": torch.stack(points_world_per_timestamp),
+                    "dist_std": torch.tensor(dist_std_per_timestamp),
+                },
+                ignore_index=True,
+            )
         # end for uid_list
 
-        return (points_world_all, dist_std_all)
+        return df
 
     def _find_matching_timestamps_in_df(
         self,

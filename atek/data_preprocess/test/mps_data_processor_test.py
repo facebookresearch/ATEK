@@ -31,9 +31,10 @@ class MpsDataProcessorTest(unittest.TestCase):
         )
 
         # test case 1: query exact timestamps
-        (points, _) = mps_data_processor.get_nearest_semidense_points(
+        points_df = mps_data_processor.get_nearest_semidense_points(
             timestamps_ns=[1_000_000_000, 2_000_000_000]
         )
+        points = points_df["points_world"].to_list()
         # check tensor sizes
         self.assertEqual(len(points), 2)
         self.assertEqual(points[0].shape, torch.Size([2, 3]))  # 2 points in frame 0
