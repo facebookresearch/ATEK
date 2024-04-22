@@ -21,7 +21,7 @@ class MpsDataProcessor:
         trajectory_file: str,
         semidense_global_point_file: Optional[str] = None,
         semidense_observation_file: Optional[str] = None,
-        semidense_pointcompression_method: Optional[str] = None,
+        semidense_compression_method: Optional[str] = None,
     ):
         self.name = name
         # load in trajectory file
@@ -37,10 +37,10 @@ class MpsDataProcessor:
 
         # load in semi-dense point files if available, the results are stored as maps for quick querying by timestamp
         (self.uid_to_p3, self.uid_to_dist_std) = self._load_semidense_global_points(
-            semidense_global_point_file, compression=semidense_pointcompression_method
+            semidense_global_point_file, compression_method=semidense_compression_method
         )
         (self.time_to_uids, self.uid_to_times) = self._load_semidense_observations(
-            semidense_observation_file, compression=semidense_pointcompression_method
+            semidense_observation_file, compression_method=semidense_compression_method
         )
 
     def get_timestamps_ns(self):
@@ -105,7 +105,8 @@ class MpsDataProcessor:
                 If the difference between the query timestamp and the semidense point timestamp
                 is less than this value, then it will be considered as the same frame.
         Returns:
-            a list of Tensors of Nx3 to represent observable world points
+            a list of Tensors of Nx3 to represent observable world points,
+            and a list of Tensors of Nx1 to represent the standard deviation of the semidense points.
         """
         # create data frame to re-use timestamp matching function
         time_to_uids_df = pd.DataFrame(
@@ -137,7 +138,7 @@ class MpsDataProcessor:
             # end for uid
 
             points_world_all.append(torch.stack(points_world_per_timestamp))
-            dist_std_all.append(torch.stack(dist_std_per_timestamp))
+            dist_std_all.append(torch.tensor(dist_std_per_timestamp))
         # end for uid_list
 
         return (points_world_all, dist_std_all)
@@ -166,7 +167,7 @@ class MpsDataProcessor:
         # Use merge_asof to find the nearest pose for each timestamp.
         merged_df = pd.merge_asof(
             timestamps_us_df,
-            self.traj_df,
+            data_frame,
             on=timestamp_key_in_df,
             tolerance=int(round(tolerance_ns / 1000)),
             direction="nearest",
@@ -190,14 +191,14 @@ class MpsDataProcessor:
     def _load_semidense_global_points(
         self,
         path: str,
-        compression: Optional[str] = None,
+        compression_method: Optional[str],
     ):
         print(f"loading global semi-dense points from {path}")
         uid_to_p3 = {}
         uid_to_dist_std = {}
 
         with open(path, "rb") as f:
-            csv_data = pd.read_csv(f, compression=compression)
+            csv_data = pd.read_csv(f, compression=compression_method)
 
             # select points and uids and return mapping
             uid_pts = csv_data[["uid", "dist_std", "px_world", "py_world", "pz_world"]]
@@ -205,14 +206,14 @@ class MpsDataProcessor:
             for row in uid_pts.values:
                 uid = int(row[0])
                 dist_std = float(row[1])
-                p3 = torch.from_numpy(row[2:])
+                p3 = torch.from_numpy(row[2:]).float()
                 uid_to_p3[uid] = p3
                 uid_to_dist_std[uid] = dist_std
 
         return uid_to_p3, uid_to_dist_std
 
     def _load_semidense_observations(
-        self, path: str, compression: Optional[str] = None
+        self, path: str, compression_method: Optional[str] = None
     ):
         """
         Load semidense observations from a csv file, returns two-way mapping between timestamp_in_us and point uids.
@@ -229,7 +230,7 @@ class MpsDataProcessor:
         uid_to_times = defaultdict(list)
 
         with open(path, "rb") as f:
-            csv = pd.read_csv(f, compression=compression)
+            csv = pd.read_csv(f, compression=compression_method)
             csv = csv[["uid", "frame_tracking_timestamp_us"]]
             for row in csv.values:
                 uid = int(row[0])
