@@ -2,11 +2,13 @@
 
 import logging
 
-from typing import List, Union
+from collections import defaultdict
+
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
-
 import pandas as pd
+import torch
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -17,8 +19,12 @@ class MpsDataProcessor:
         self,
         name: str,
         trajectory_file: str,
+        semidense_global_point_file: Optional[str] = None,
+        semidense_observation_file: Optional[str] = None,
+        semidense_pointcompression_method: Optional[str] = None,
     ):
         self.name = name
+        # load in trajectory file
         self.trajectory_file = trajectory_file
         self.traj_df = pd.read_csv(self.trajectory_file)
         self.traj_df = self.traj_df.sort_values("tracking_timestamp_us")
@@ -28,6 +34,14 @@ class MpsDataProcessor:
 
         deltas_us = np.diff(self.traj_df["tracking_timestamp_us"])
         self.rate_hz = 1 / np.mean(deltas_us / 1000_000)
+
+        # load in semi-dense point files if available, the results are stored as maps for quick querying by timestamp
+        (self.uid_to_p3, self.uid_to_dist_std) = self._load_semidense_global_points(
+            semidense_global_point_file, compression=semidense_pointcompression_method
+        )
+        (self.time_to_uids, self.uid_to_times) = self._load_semidense_observations(
+            semidense_observation_file, compression=semidense_pointcompression_method
+        )
 
     def get_timestamps_ns(self):
         return self.traj_df["tracking_timestamp_us"].values * 1000
@@ -54,39 +68,15 @@ class MpsDataProcessor:
                 Quaternion(xyzw) from camera to world coordinate frame. 4x1
                 Gravity in world coordinate frame. 3x1
         """
-        if isinstance(timestamps_ns, List):
-            timestamps_ns = np.array(timestamps_ns)
-
-        timestamps_us_df = pd.DataFrame(
-            {
-                "tracking_timestamp_us": pd.Series(
-                    np.round(timestamps_ns / 1000).astype(int)
-                )
-            }
-        )
-        timestamps_us_df = timestamps_us_df.sort_values("tracking_timestamp_us")
-
-        merged_df = pd.merge_asof(
-            timestamps_us_df,
+        matched_df = self._find_matching_timestamps_in_df(
             self.traj_df,
-            on="tracking_timestamp_us",
-            tolerance=int(round(tolerance_ns / 1000)),
-            direction="nearest",
+            timestamps_ns,
+            tolerance_ns,
+            only_return_valid,
+            timestamp_key_in_df="tracking_timestamp_us",
         )
 
-        valid_merged_df = merged_df.dropna()
-
-        invalid_count = len(merged_df) - len(valid_merged_df)
-        invalid_percent = (invalid_count / len(merged_df)) * 100
-        if invalid_percent > 5:
-            logger.warning(
-                f"{invalid_count} ({invalid_percent:.2f}%) of the input timestamps can not find corresponding poses."
-            )
-
-        if only_return_valid:
-            merged_df = valid_merged_df
-
-        return merged_df[
+        return matched_df[
             [
                 "tx_world_device",
                 "ty_world_device",
@@ -100,3 +90,150 @@ class MpsDataProcessor:
                 "gravity_z_world",
             ]
         ]
+
+    def get_nearest_semidense_points(
+        self,
+        timestamps_ns: Union[np.ndarray, List[int]],
+        tolerance_ns: int = 150_000,
+        only_return_valid: bool = False,
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+        """
+        Get points_in_world close to timestamps.
+        Args:
+            timestamp_ns: A list of timestamps in nanoseconds, Kx1
+            tolerance_ns: The tolerance for finding the nearest frame.
+                If the difference between the query timestamp and the semidense point timestamp
+                is less than this value, then it will be considered as the same frame.
+        Returns:
+            a list of Tensors of Nx3 to represent observable world points
+        """
+        # create data frame to re-use timestamp matching function
+        time_to_uids_df = pd.DataFrame(
+            list(self.time_to_uids.items()), columns=["tracking_timestamp_us", "uids"]
+        )
+
+        matched_time_to_uids_df = self._find_matching_timestamps_in_df(
+            time_to_uids_df,
+            timestamps_ns,
+            tolerance_ns,
+            only_return_valid,
+            timestamp_key_in_df="tracking_timestamp_us",
+        )
+
+        points_world_all = []
+        dist_std_all = []
+        # loop over all matched timestamps, and stack point_in_world into a Nx3 tensor
+        for uid_list in matched_time_to_uids_df["uids"]:
+            points_world_per_timestamp = []
+            dist_std_per_timestamp = []
+            for uid in uid_list:
+                if (uid in self.uid_to_p3) and (uid in self.uid_to_dist_std):
+                    points_world_per_timestamp.append(self.uid_to_p3[uid])
+                    dist_std_per_timestamp.append(self.uid_to_dist_std[uid])
+                else:
+                    raise ValueError(
+                        f"Point UID {uid} not found in global semidense point file!"
+                    )
+            # end for uid
+
+            points_world_all.append(torch.stack(points_world_per_timestamp))
+            dist_std_all.append(torch.stack(dist_std_per_timestamp))
+        # end for uid_list
+
+        return (points_world_all, dist_std_all)
+
+    def _find_matching_timestamps_in_df(
+        self,
+        data_frame: pd.DataFrame,
+        timestamps_ns: Union[np.ndarray, List[int]],
+        tolerance_ns: int,
+        only_return_valid: bool = False,
+        timestamp_key_in_df: str = "tracking_timestamp_us",
+    ) -> pd.DataFrame:
+        """
+        Helper function that given a list of timestamps, find the rows containing matching timestamps in the data frame, with some tolerance.
+        Returns:
+            a data frame containing the matching rows.
+        """
+        if isinstance(timestamps_ns, List):
+            timestamps_ns = np.array(timestamps_ns)
+
+        timestamps_us_df = pd.DataFrame(
+            {timestamp_key_in_df: pd.Series(np.round(timestamps_ns / 1000).astype(int))}
+        )
+        timestamps_us_df = timestamps_us_df.sort_values(timestamp_key_in_df)
+
+        # Use merge_asof to find the nearest pose for each timestamp.
+        merged_df = pd.merge_asof(
+            timestamps_us_df,
+            self.traj_df,
+            on=timestamp_key_in_df,
+            tolerance=int(round(tolerance_ns / 1000)),
+            direction="nearest",
+        )
+
+        if not only_return_valid:
+            return merged_df
+        else:
+            # Check percentage of invalid timestamps.
+            valid_merged_df = merged_df.dropna()
+
+            invalid_count = len(merged_df) - len(valid_merged_df)
+            invalid_percent = (invalid_count / len(merged_df)) * 100
+            if invalid_percent > 5:
+                logger.warning(
+                    f"{invalid_count} ({invalid_percent:.2f}%) of the input timestamps can not find corresponding poses."
+                )
+
+            return valid_merged_df
+
+    def _load_semidense_global_points(
+        self,
+        path: str,
+        compression: Optional[str] = None,
+    ):
+        print(f"loading global semi-dense points from {path}")
+        uid_to_p3 = {}
+        uid_to_dist_std = {}
+
+        with open(path, "rb") as f:
+            csv_data = pd.read_csv(f, compression=compression)
+
+            # select points and uids and return mapping
+            uid_pts = csv_data[["uid", "dist_std", "px_world", "py_world", "pz_world"]]
+
+            for row in uid_pts.values:
+                uid = int(row[0])
+                dist_std = float(row[1])
+                p3 = torch.from_numpy(row[2:])
+                uid_to_p3[uid] = p3
+                uid_to_dist_std[uid] = dist_std
+
+        return uid_to_p3, uid_to_dist_std
+
+    def _load_semidense_observations(
+        self, path: str, compression: Optional[str] = None
+    ):
+        """
+        Load semidense observations from a csv file, returns two-way mapping between timestamp_in_us and point uids.
+        Args:
+            path: The path to the csv file.
+        Returns:
+            A tuple of two dictionaries.
+            The first dictionary maps from timestamp to a list of uids.
+            The second dictionary maps from uid to a list of timestamps.
+        """
+
+        logger.info(f"loading semidense observations from {path}")
+        time_to_uids = defaultdict(list)
+        uid_to_times = defaultdict(list)
+
+        with open(path, "rb") as f:
+            csv = pd.read_csv(f, compression=compression)
+            csv = csv[["uid", "frame_tracking_timestamp_us"]]
+            for row in csv.values:
+                uid = int(row[0])
+                time_ns = int(row[1])
+                time_to_uids[time_ns].append(uid)
+                uid_to_times[uid].append(time_ns)
+        return time_to_uids, uid_to_times
