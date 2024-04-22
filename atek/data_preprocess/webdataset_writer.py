@@ -22,7 +22,9 @@ def tensorize_value(x):
     This function will convert the value to a single tensor.
     Return None for empty list.
     """
-    if isinstance(x, list):
+    if isinstance(x, torch.Tensor):
+        return x
+    elif isinstance(x, list):
         if len(x) == 0:
             return None
         return torch.stack([tensorize_value(xi) for xi in x], dim=0)
@@ -156,6 +158,15 @@ def add_frameset_trajectory_data_to_wds(flatten_fsg_dict, wds_dict):
     )
 
 
+def add_frameset_semidense_points_to_wds(flatten_dict, wds_dict):
+    wds_dict["frameset_semidense_points_data.pth"] = get_tensor_dict(
+        flatten_dict,
+        Frameset.flatten_dict_key_pattern(),
+        Frameset.semidense_points_fields(),
+        return_as_list_of_tensor=True,
+    )
+
+
 def add_frameset_object_info_to_wds(flatten_fsg_dict, wds_dict):
     wds_dict["frameset_object_info.json"] = get_info_json(
         flatten_fsg_dict,
@@ -254,6 +265,9 @@ class DataSelectionSettings:
     # Flag to include per-frameset trajectory information.
     require_traj_for_frameset: bool = False
 
+    # Flag to include per-frameset semidense point cloud information
+    require_semidense_points_for_frameset: bool = False
+
     # Flag to include per-frameset 3D object bounding boxes.
     require_obb3d_gt_for_frameset: bool = False
 
@@ -309,6 +323,10 @@ def convert_frameset_group_to_wds_dict(
         add_frameset_trajectory_data_to_wds(flatten_fsg_dict, wds_dict)
     if data_selection_settings.require_traj_for_frameset_group:
         add_frameset_group_trajectory_data_to_wds(flatten_fsg_dict, wds_dict)
+
+    # Semidense point cloud data.
+    if data_selection_settings.require_semidense_points_for_frameset:
+        add_frameset_semidense_points_to_wds(flatten_fsg_dict, wds_dict)
 
     # Object data
     if (

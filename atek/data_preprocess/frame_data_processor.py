@@ -116,7 +116,7 @@ class FrameDataProcessor:
 
         self.T_device_camera = self.final_camera_calib.get_transform_device_camera()
 
-        self.update_df_with_poseinfo()
+        self.update_df_with_mps_info()
         self.cleanup_df()
 
         if self.gt_data_processor is not None:
@@ -150,8 +150,9 @@ class FrameDataProcessor:
     def get_timestamps_ns(self):
         return self.frame_df["timestamp_ns"].values
 
-    def update_df_with_poseinfo(self):
+    def update_df_with_mps_info(self):
         if self.mps_data_processor is not None:
+            # add T_world_device pose info
             T_world_device_dataframe = self.mps_data_processor.get_nearest_poses(
                 self.get_timestamps_ns()
             )

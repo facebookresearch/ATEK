@@ -239,7 +239,7 @@ class AdtGtDataProcessor(BaseGtDataProcessor):
             if not self.category_mapping:
                 # If no category mapping is provided, we use the original category name.
                 category_name = instance_info.category
-                category_id = instance_info.category_id
+                category_id = instance_info.category_uid
             else:
                 # Query the mapping field from instance
                 if self.instance_field_to_map == "prototype":

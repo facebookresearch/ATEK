@@ -69,7 +69,8 @@ class FramesetAligner:
         # Use a data frame to hold various data for fast access and alignment.
         self.frameset_df = self.align_images()
         self.update_df_with_timestamp_info()
-        self.update_df_with_pose_info()
+        self.update_df_with_mps_info()
+        self.cleanup_df()
 
         self.frameset_fov = None
 
@@ -116,14 +117,33 @@ class FramesetAligner:
 
         self.frameset_df["frameset_timestamp_ns"] = frameset_timestamp_ns
 
-    def update_df_with_pose_info(self):
+    def update_df_with_mps_info(self):
         if self.mps_data_processor is not None:
+            # Add trajectory info to DataFrame
             T_world_device_dataframe = self.mps_data_processor.get_nearest_poses(
                 self.get_timestamps_ns()
             )
             self.frameset_df = pd.concat(
                 [self.frameset_df, T_world_device_dataframe], axis=1
             )
+
+            # add semi-dense point cloud info to DataFrame
+            semidense_dataframe = self.mps_data_processor.get_nearest_semidense_points(
+                self.get_timestamps_ns(), tolerance_ns=150_000_000
+            )
+            self.frameset_df = pd.concat(
+                [self.frameset_df, semidense_dataframe], axis=1
+            )
+
+    def cleanup_df(self):
+        valid_df = self.frameset_df.dropna()
+        invalid_count = len(self.frameset_df) - len(valid_df)
+        invalid_percent = (invalid_count / len(self.frameset_df)) * 100
+        logger.info(
+            f"Dropped {invalid_percent} percent ({invalid_count}/{len(self.frameset_df)}) framesets without required GT information."
+        )
+        self.frameset_df = valid_df
+        self.frameset_df.reset_index(drop=True, inplace=True)
 
     def align_images(self, tolerance_ns: int = 150000):
         """
@@ -328,5 +348,10 @@ class FramesetAligner:
                     ).to_matrix3x4()
                     for T_world_object in frameset.Ts_world_object
                 ]
+
+        # Generate semidense point information if available.
+        if "points_world" in self.frameset_df.columns:
+            frameset.points_world = self.frameset_df.iloc[index]["points_world"]
+            frameset.points_dist_std = self.frameset_df.iloc[index]["points_dist_std"]
 
         return frameset

@@ -53,15 +53,9 @@ class Frame:
     # Transformation from camera to world coordinate frame. 3x4 [R|t]
     T_world_camera: np.ndarray = None
 
-    # Semi-dense point cloud, points in world coordinate frame. Nx3
-    points_world: Optional[torch.Tensor] = None
-
-    # Semi-dense point cloud, points distance std, Nx1
-    points_dist_std: Optional[torch.Tensor] = None
-
     # +++++++++++++++++++++++ MPS DATA END +++++++++++++++++++++++++++++
 
-    # ======================= TARGET DATA BEGIN ===============================
+    # ======================= GROUND-TRUTH DATA BEGIN ===============================
     # Mapping for category id to name.
     category_id_to_name: Dict[int, str] = None
 
@@ -192,7 +186,7 @@ class Frameset:
     Ts_frameset_camera: List[np.ndarray] = None
     # ------------------------ INPUT IMAGE DATA END ---------------------------
 
-    # +++++++++++++++++++++++ TRAJECTORY DATA BEGIN +++++++++++++++++++++++++++
+    # +++++++++++++++++++++++ MPS DATA BEGIN +++++++++++++++++++++++++++
 
     # Gravity direction in frameset coordinate frame. 3x1
     gravity_in_frameset: np.ndarray = None
@@ -202,7 +196,13 @@ class Frameset:
 
     # Transformation from frameset to world coordinate frame. 3x4 [R|t]
     T_world_frameset: np.ndarray = None
-    # +++++++++++++++++++++++ TRAJECTORY DATA END +++++++++++++++++++++++++++++
+
+    # Semi-dense point cloud, points in world coordinate frame. Nx3
+    points_world: Optional[torch.Tensor] = None
+
+    # Semi-dense point cloud, points distance std, Nx1
+    points_dist_std: Optional[torch.Tensor] = None
+    # +++++++++++++++++++++++ MPS DATA END +++++++++++++++++++++++++++++
 
     # ======================= TARGET DATA BEGIN ===============================
     # Frameset target is in the context for the frameset. For example, all the objects
@@ -246,6 +246,13 @@ class Frameset:
     @staticmethod
     def trajectory_data_fields():
         return ["gravity_in_frameset", "gravity_in_world", "T_world_frameset"]
+
+    @staticmethod
+    def semidense_points_fields():
+        return [
+            "points_world",
+            "points_dist_std",
+        ]
 
     @staticmethod
     def object_info_fields():
