@@ -2,9 +2,10 @@
 
 import re
 from dataclasses import dataclass, fields
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import numpy as np
+import torch
 
 
 @dataclass
@@ -13,7 +14,7 @@ class Frame:
     A class to store the information of a frame in a video sequence.
     """
 
-    # ------------------------ INPUT IMAGE DATA BEGIN -------------------------
+    # ------------------------ ARIA IMAGE DATA BEGIN -------------------------
     # The index of the frame in the vrs.
     frame_id: int = None
 
@@ -40,9 +41,9 @@ class Frame:
 
     # Image data in rgb order in numpy array. HxWxC
     image: np.ndarray = None
-    # ------------------------ INPUT IMAGE DATA END ---------------------------
+    # ------------------------ ARIA IMAGE DATA END ---------------------------
 
-    # +++++++++++++++++++++++ TRAJECTORY DATA BEGIN +++++++++++++++++++++++++++
+    # +++++++++++++++++++++++ MPS DATA BEGIN +++++++++++++++++++++++++++
     # Gravity direction in camera coordinate frame. 3x1
     gravity_in_camera: np.ndarray = None
 
@@ -51,7 +52,14 @@ class Frame:
 
     # Transformation from camera to world coordinate frame. 3x4 [R|t]
     T_world_camera: np.ndarray = None
-    # +++++++++++++++++++++++ TRAJECTORY DATA END +++++++++++++++++++++++++++++
+
+    # Semi-dense point cloud, points in world coordinate frame. Nx3
+    points_world: Optional[torch.Tensor] = None
+
+    # Semi-dense point cloud, points distance std, Nx1
+    points_dist_std: Optional[torch.Tensor] = None
+
+    # +++++++++++++++++++++++ MPS DATA END +++++++++++++++++++++++++++++
 
     # ======================= TARGET DATA BEGIN ===============================
     # Mapping for category id to name.
