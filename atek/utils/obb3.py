@@ -58,16 +58,14 @@ class Obb3:
             score = torch.ones((len(self.size),))
         self.score = score
 
-        @property
-        def T_ref_obj(self):
-            return torch.cat((self.R_ref_obj, self.t_ref_obj.unsqueeze(-1)), dim=-1)
+    @property
+    def T_ref_obj(self):
+        return torch.cat((self.R_ref_obj, self.t_ref_obj.unsqueeze(-1)), dim=-1)
 
-        # Nx8x3 corners in reference coordinate frame, reference can be world or camera
-        @property
-        def bb3_in_ref_frame(self):
-            return batch_transform_points(
-                get_cuboid_corners(self.size / 2), self.T_ref_obj
-            )
+    # Nx8x3 corners in reference coordinate frame, reference can be world or camera
+    @property
+    def bb3_in_ref_frame(self):
+        return batch_transform_points(get_cuboid_corners(self.size / 2), self.T_ref_obj)
 
 
 def init_obb3(
