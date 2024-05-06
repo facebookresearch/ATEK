@@ -17,3 +17,8 @@ processors:
     sensor_label: "camera-slam-right"
     tolerance_ns: 10_000_000
     time_domain: "DEVICE_TIME"
+  mps_traj:
+    selected: true
+    tolerance_ns: 10_000_000
+  mps_semidense:
+    selected: false
