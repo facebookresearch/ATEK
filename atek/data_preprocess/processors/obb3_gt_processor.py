@@ -1,5 +1,6 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
+import csv
 import logging
 from typing import Dict, Optional, Tuple
 
@@ -39,10 +40,15 @@ class Obb3GtProcessor:
         Initialize the Obb3GtProcessor object.
 
         Args:
-            obb3_file_path (str): The path to the OBB3 file, in ADT format.
-            obb3_traj_file_path (str): The path to the OBB3 trajectory file, in ADT format.
-            instance_json_file_path (str): The path to the instance JSON file, in ADT format
-            category_mapping (Dict): The category mapping dictionary.
+            obb3_file_path (str): The path to the OBB3 file, in ADT format: https://fburl.com/zh0p3egs
+            obb3_traj_file_path (str): The path to the OBB3 trajectory file, in ADT format: https://fburl.com/ut0bddnf
+            instance_json_file_path (str): The path to the instance JSON file, in ADT format: https://fburl.com/u4te445v
+            category_mapping (Dict): The category mapping dictionary in the format of:
+                {
+                    "key_to_map"： [“cat_name”, category_id],
+                    ...
+                },
+                where "key_to_map" is one of {"prototype_name", "category"} in the `instance.json` file, set through conf.category_mapping_field_name
         """
         self.conf = conf
 
@@ -155,3 +161,31 @@ class Obb3GtProcessor:
             bbox3d_dict[instance_id] = single_bbox3d_dict
 
         return bbox3d_dict
+
+
+def load_category_mapping_from_csv(
+    category_mapping_csv_file: str,
+) -> Dict:
+    """
+    Load the category mapping from a CSV file.
+
+    Args:
+        category_mapping_csv_file (str): The path to the category mapping CSV file.
+        The CSV file should contain exactly 3 Columns, representing "old_category_name or prototype_name", "atek_category_name", "atek_category_id".
+
+    Returns:
+        Dict: The category mapping dictionary in the format of:
+            {
+                "old_cat/prototype_name"： [“cat_name”, category_id],
+                ...
+            }
+    """
+    with open(category_mapping_csv_file, "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        assert len(header) == 3, "Expected 3 columns in the category mapping csv file"
+        assert (
+            header[1] == "ATEK Category Name" and header[2] == "ATEK Category Id"
+        ), f"Column names must be  ATEK Category Name and ATEK Category Id, but got {header[1]} and {header[2]} instead."
+        category_mapping = {rows[0]: (rows[1], rows[2]) for rows in reader}
+    return category_mapping
