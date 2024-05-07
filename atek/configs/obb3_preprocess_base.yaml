@@ -22,3 +22,7 @@ processors:
     tolerance_ns: 10_000_000
   mps_semidense:
     selected: false
+  obb3_gt:
+    selected: true
+    tolerance_ns : 10_000_000
+    category_mapping_field_name: prototype_name # {prototype_name, category}
