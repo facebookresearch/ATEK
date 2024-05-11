@@ -51,6 +51,6 @@ class Obb3SampleBuilderTest(unittest.TestCase):
 
         self.assertTrue(queried_sample is not None)
         self.assertTrue(queried_sample.camera_rgb is not None)
-        self.assertTrue(queried_sample.camera_et_left is None)  # No ET data
+        self.assertFalse(hasattr(queried_sample, "camera_et_left"))  # No ET data
         self.assertTrue(queried_sample.mps_traj_data is not None)
         self.assertTrue(queried_sample.gt_data is not None)

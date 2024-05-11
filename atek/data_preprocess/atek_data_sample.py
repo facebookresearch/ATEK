@@ -1,6 +1,8 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from typing import Dict, List, Optional
+
+import numpy as np
 
 import torch
 
@@ -24,17 +26,64 @@ class MultiFrameCameraData:
     origin_camera_label: str = ""  # camera label of the "Device" frame
 
     @staticmethod
-    def all_field_names():
+    def image_field_names():
+        return ["images"]
+
+    @staticmethod
+    def tensor_field_names():
         return [
-            "images",
             "capture_timestamps_ns",
             "frame_ids",
-            "camera_label",
             "T_Device_Camera",
+            "projection_params",
+        ]
+
+    @staticmethod
+    def str_field_names():
+        return [
+            "camera_label",
             "camera_model_name",
-            "camera_params",
             "origin_camera_label",
         ]
+
+    def to_flatten_dict(self):
+        """
+        Transforms to a flattened dictionary, excluding attributes with None values.
+        Attributes are prefixed to ensure uniqueness and to maintain context.
+        """
+        flatten_dict = {}
+        for f in fields(self):
+            field_name = f.name
+            # Skip if field is None or empty string
+            if (getattr(self, field_name) is None) or (getattr(self, field_name) == ""):
+                continue
+
+            # Process images separately
+            if field_name in self.image_field_names():
+                # Transpose dimensions
+                image_frames_in_np = (
+                    getattr(self, field_name).numpy().transpose(0, 2, 3, 1)
+                )
+
+                for id, img in enumerate(image_frames_in_np):
+                    flatten_dict[f"MFCD#{self.camera_label}+images_{id}.jpeg"] = (
+                        img if img.shape[-1] == 3 else img.squeeze()
+                    )
+                continue
+
+            # add file extentions so that WDS writer knows how to handle the data
+            if field_name in self.tensor_field_names():
+                file_extension = ".pth"
+            elif field_name in self.str_field_names():
+                file_extension = ".txt"
+            else:
+                file_extension = ".json"
+
+            flatten_dict[f"MFCD#{self.camera_label}+{field_name}{file_extension}"] = (
+                getattr(self, field_name)
+            )
+
+        return flatten_dict
 
 
 @dataclass
@@ -84,12 +133,36 @@ class MpsTrajData:
     gravity_in_world: torch.Tensor = None  # [3]
 
     @staticmethod
-    def all_field_names():
+    def tensor_field_names():
         return [
             "Ts_World_Device",
             "capture_timestamps_ns",
             "gravity_in_world",
         ]
+
+    def to_flatten_dict(self):
+        """
+        Transforms to a flattened dictionary, excluding attributes with None values.
+        Attributes are prefixed to ensure uniqueness and to maintain context.
+        """
+        flatten_dict = {}
+        for f in fields(self):
+            field_name = f.name
+            # Skip if field is None or empty string
+            if (getattr(self, field_name) is None) or (getattr(self, field_name) == ""):
+                continue
+
+            # add file extentions so that WDS writer knows how to handle the data
+            if field_name in self.tensor_field_names():
+                file_extension = ".pth"
+            else:
+                file_extension = ".json"
+
+            flatten_dict[f"MTD#{field_name}{file_extension}"] = getattr(
+                self, field_name
+            )
+
+        return flatten_dict
 
 
 @dataclass
@@ -100,13 +173,6 @@ class MpsSemidensePointData:
     points_inv_dist_std: List[torch.Tensor] = field(
         default_factory=list
     )  # Tensor has shape of [N] to represent points' inverse distance, List has length of num_frames
-
-    @staticmethod
-    def all_field_names():
-        return [
-            "points_world",
-            "points_inv_dist_std",
-        ]
 
 
 @dataclass
@@ -119,9 +185,9 @@ class AtekDataSample:
     camera_rgb: Optional[MultiFrameCameraData] = None
     camera_slam_left: Optional[MultiFrameCameraData] = None
     camera_slam_right: Optional[MultiFrameCameraData] = None
-    camera_et_left: Optional[MultiFrameCameraData] = None
-    camera_et_right: Optional[MultiFrameCameraData] = None
-    imu_left: Optional[ImuData] = None
+    # camera_et_left: Optional[MultiFrameCameraData] = None
+    # camera_et_right: Optional[MultiFrameCameraData] = None
+    # imu_left: Optional[ImuData] = None
 
     # MPS data
     mps_traj_data: Optional[MpsTrajData] = None
@@ -129,3 +195,19 @@ class AtekDataSample:
 
     # GT data, represented by a dictionary
     gt_data: Dict = field(default_factory=dict)
+
+    def to_flatten_dict(self):
+        flatten_dict = {}
+        for field_name, field_value in self.__dict__.items():
+            # Skip if the field value is None
+            if field_value is None:
+                continue
+            # update with flatten sub-dataclasses
+            if is_dataclass(field_value) and hasattr(field_value, "to_flatten_dict"):
+                flatten_dict.update(field_value.to_flatten_dict())
+            # rename gt_data
+            elif field_name == "gt_data":
+                flatten_dict["GtData.json"] = field_value
+            else:
+                raise ValueError(f"This field {field_name} is not implemented yet!")
+        return flatten_dict
