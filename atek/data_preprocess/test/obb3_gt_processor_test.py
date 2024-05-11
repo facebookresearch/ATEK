@@ -14,6 +14,7 @@ from omegaconf import OmegaConf
 # test data paths
 TEST_DIR_PATH = os.path.join(os.getenv("TEST_FOLDER"))
 CONFIG_PATH = os.getenv("CONFIG_PATH")
+CATEGORY_MAPPING_PATH = os.getenv("CATEGORY_MAPPING_PATH")
 
 
 class Obb3GtProcessorTest(unittest.TestCase):
@@ -25,17 +26,13 @@ class Obb3GtProcessorTest(unittest.TestCase):
         conf.processors.obb3_gt.category_mapping_field_name = "prototype_name"
 
         instance_id = 4709930779068635
-        category_mapping = {
-            "Apartment_BedroomDoor": ["door", 32],
-        }
-
         obb3_gt_processor = Obb3GtProcessor(
             obb3_file_path=os.path.join(TEST_DIR_PATH, "test_3d_bounding_box.csv"),
             obb3_traj_file_path=os.path.join(
                 TEST_DIR_PATH, "test_3d_bounding_box_traj.csv"
             ),
             instance_json_file_path=os.path.join(TEST_DIR_PATH, "test_instances.json"),
-            category_mapping=category_mapping,
+            category_mapping_file_path=CATEGORY_MAPPING_PATH,
             conf=conf.processors.obb3_gt,
         )
 

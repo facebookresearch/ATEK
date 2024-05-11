@@ -76,7 +76,9 @@ class ObjectDetection3dSampleBuilder:
                 obb3_file_path=gt_files["obb3_file"],
                 obb3_traj_file_path=gt_files["obb3_traj_file"],
                 instance_json_file_path=gt_files["instance_json_file"],
-                category_mapping={},
+                category_mapping_file_path=gt_files.get(
+                    "category_mapping_file", None
+                ),  # this file is optional
                 conf=conf.obb3_gt,
             )
 
