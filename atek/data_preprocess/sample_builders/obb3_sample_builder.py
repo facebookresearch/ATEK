@@ -13,7 +13,7 @@ from atek.data_preprocess.atek_data_sample import (
 from atek.data_preprocess.processors.aria_camera_processor import AriaCameraProcessor
 from atek.data_preprocess.processors.mps_traj_processor import MpsTrajProcessor
 from atek.data_preprocess.processors.obb3_gt_processor import Obb3GtProcessor
-from omegaconf.omegaconf import DictConfig, OmegaConf
+from omegaconf.omegaconf import DictConfig
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)

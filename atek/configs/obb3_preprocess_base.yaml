@@ -1,3 +1,7 @@
+subsampling:
+  main_camera_label: "camera-rgb"
+  time_domain: "DEVICE_TIME"
+  sample_target_freq_hz: 10.0
 processors:
   rgb:
     selected: true
