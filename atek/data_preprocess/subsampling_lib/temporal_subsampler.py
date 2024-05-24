@@ -1,6 +1,8 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
-from omegaconf.omegaconf import DictConfig, OmegaConf
+from typing import List
+
+from omegaconf.omegaconf import DictConfig
 from projectaria_tools.core import data_provider
 from projectaria_tools.core.sensor_data import TimeDomain
 
@@ -23,6 +25,7 @@ class CameraTemporalSubsampler:
         """
 
         self.conf = conf
+
         vrs_provider = data_provider.create_vrs_data_provider(vrs_file)
         assert vrs_provider is not None, f"Cannot open {vrs_file}"
 
@@ -32,20 +35,26 @@ class CameraTemporalSubsampler:
             main_stream_id is not None
         ), f"Cannot find stream id for {conf.main_camera_label} in {vrs_file}"
         time_domain = getattr(TimeDomain, conf.time_domain)
-        self.main_camera_timestamps = vrs_provider.get_timestamps_ns(
+        main_camera_timestamps = vrs_provider.get_timestamps_ns(
             main_stream_id, time_domain
         )
 
-        # determine subfactor for the main camera
+        # determine subfactor for the main camera, and uniformly subsample the main camera stream
         freq_in_vrs = vrs_provider.get_nominal_rate_hz(main_stream_id)
-        self.subsampling_factor = self.compute_subsampling_factor(
-            int(freq_in_vrs), int(conf.sample_target_freq_hz)
+        subsampling_factor: int = self._compute_subsampling_factor(
+            int(freq_in_vrs), int(conf.main_camera_target_freq_hz)
         )
-        self.total_num_samples: int = (
-            len(self.main_camera_timestamps) // self.subsampling_factor
-        )
+        self.subsampled_timestamps = main_camera_timestamps[::subsampling_factor]
 
-    def compute_subsampling_factor(self, freq_in_vrs: int, target_freq: int) -> int:
+        # determine the total number of samples, where each sample may contain multiple sub-sampled frames.
+        total_num_cam_frames = len(self.subsampled_timestamps)
+        self.sample_length = conf.sample_length_in_num_frames
+        self.stride = conf.stride_length_in_num_frames
+        self.total_num_samples: int = (
+            total_num_cam_frames - self.sample_length
+        ) // self.stride + 1
+
+    def _compute_subsampling_factor(self, freq_in_vrs: int, target_freq: int) -> int:
         if freq_in_vrs % target_freq != 0:
             raise ValueError(
                 f"Cannot subsample {freq_in_vrs} to {target_freq} Hz, needs to be dividable."
@@ -58,13 +67,15 @@ class CameraTemporalSubsampler:
         """
         return self.total_num_samples
 
-    def get_timestamp_by_sample_index(self, sample_index: int) -> int:
+    def get_timestamps_by_sample_index(self, sample_index: int) -> List[int]:
         """
-        return the timestamp corresponding to the sample, given the sample index (not sensor data index)
+        return the timestamps as a list of int corresponding to the sample, given the sample index (not sensor data index).
         """
-        if sample_index >= self.total_num_samples:
+        if sample_index >= self.total_num_samples or sample_index < 0:
             raise ValueError(
                 f"sample_index {sample_index} is out of range, total number of samples under target freq is {self.total_num_samples}"
             )
 
-        return self.main_camera_timestamps[sample_index * self.subsampling_factor]
+        return self.subsampled_timestamps[
+            sample_index * self.stride : sample_index * self.stride + self.sample_length
+        ]
