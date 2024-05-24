@@ -8,7 +8,7 @@ import torch
 from omegaconf.omegaconf import DictConfig
 from projectaria_tools.core import calibration, data_provider
 from projectaria_tools.core.sensor_data import TimeDomain, TimeQueryOptions  # @manual
-from torchvision import transforms
+from torchvision.transforms import v2
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -56,31 +56,6 @@ class AriaCameraProcessor:
         returns the sensor label of the origin (DeviceFrame) definition in Aria calibration
         """
         return self.data_provider.get_device_calibration().get_origin_label()
-
-    class DistortByCalibrationTVWrapper:
-        """
-        A torch vision transform function wrapper on top of `calirbation.distort_by_calibration()` function,
-        so that this operation can be chained with other tv.transforms.
-        """
-
-        def __init__(self, dstCalib, srcCalib):
-            self.dstCalib = dstCalib
-            self.srcCalib = srcCalib
-
-        def __call__(self, image):
-            # input image is tensor shape of [C, H, W], while distort_by_calibration requires [H, W, C]
-            tensor_result = torch.from_numpy(
-                calibration.distort_by_calibration(
-                    image.permute(1, 2, 0), self.dstCalib, self.srcCalib
-                )
-            )
-            if tensor_result.ndim == 2:
-                # [H, W] -> [1, H, W]
-                tensor_result = tensor_result.unsqueeze(0)
-            else:
-                # [H, W, C] -> [C, H, W]
-                tensor_result = tensor_result.permute(2, 0, 1)
-            return tensor_result
 
     def setup_vrs_data_provider(self):
         """
@@ -146,39 +121,88 @@ class AriaCameraProcessor:
 
         self.final_camera_calib = camera_calib
 
-    def get_image_data_by_timestamp_ns(
-        self, timestamp_ns: int
+    class DistortByCalibrationTVWrapper:
+        """
+        A torch vision transform function wrapper on top of `calibration.distort_by_calibration()` function,
+        so that this operation can be chained with other tv.transforms.
+        """
+
+        def __init__(self, dstCalib, srcCalib):
+            self.dstCalib = dstCalib
+            self.srcCalib = srcCalib
+
+        def __call__(self, image):
+            if image.ndim != 4:
+                raise ValueError(
+                    f"Expecting 4D tensor of [Frame, C, H, W], got {image.ndim}D tensor instead."
+                )
+            num_frames = image.size(0)
+
+            result_list = []
+            for i in range(num_frames):
+                # input image is tensor shape of [Frame, C, H, W], while distort_by_calibration requires [H, W, C]
+                single_image = image[i].permute(1, 2, 0)
+                tensor_result = torch.from_numpy(
+                    calibration.distort_by_calibration(
+                        single_image, self.dstCalib, self.srcCalib
+                    )
+                )
+                if tensor_result.ndim == 2:
+                    # [H, W] -> [1, H, W]
+                    tensor_result = tensor_result.unsqueeze(0)
+                else:
+                    # [H, W, C] -> [C, H, W]
+                    tensor_result = tensor_result.permute(2, 0, 1)
+
+                result_list.append(tensor_result)
+
+            return torch.stack(result_list, dim=0)
+
+    def get_image_data_by_timestamps_ns(
+        self, timestamps_ns: List[int]
     ) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         """
-        Obtain a single frame image by timestamp. Image should be processed.
-        returns: if successful, returns (image_data: Tensor [numChannel, height, width], capture_timestamp: Tensor[1,], frame_id_in_stream: Tensor[1,])
+        Obtain images by timestamps. Image should be processed.
+        returns: if successful, returns (image_data: Tensor [numFrames, numChannel, height, width], capture_timestamp: Tensor[numFrames], frame_id_in_stream: Tensor[numFrames])
                 else returns None
         """
-        index = self.data_provider.get_index_by_time_ns(
-            stream_id=self.stream_id,
-            time_ns=timestamp_ns,
-            time_domain=self.time_domain,
-            time_query_options=TimeQueryOptions.CLOSEST,
-        )
-        image_data_and_record = self.data_provider.get_image_data_by_index(
-            self.stream_id, index
-        )
-        frame_id = image_data_and_record[1].frame_number
-        capture_timestamp = image_data_and_record[1].capture_timestamp_ns
+        image_list = []
+        capture_timestamp_list = []
+        frame_id_list = []
+        for single_timestamp in timestamps_ns:
+            index = self.data_provider.get_index_by_time_ns(
+                stream_id=self.stream_id,
+                time_ns=single_timestamp,
+                time_domain=self.time_domain,
+                time_query_options=TimeQueryOptions.CLOSEST,
+            )
+            image_data_and_record = self.data_provider.get_image_data_by_index(
+                self.stream_id, index
+            )
+            frame_id = image_data_and_record[1].frame_number
+            capture_timestamp = image_data_and_record[1].capture_timestamp_ns
 
-        # Check if fetched frame is within tolerance
-        if abs(capture_timestamp - timestamp_ns) > self.conf.tolerance_ns:
+            # Check if fetched frame is within tolerance
+            if abs(capture_timestamp - single_timestamp) > self.conf.tolerance_ns:
+                continue
+            image = torch.from_numpy(image_data_and_record[0].to_numpy_array())
+            if len(image.shape) == 2:
+                # single channel image: [h,w] -> [c, h, w]
+                image = torch.unsqueeze(image, dim=0)
+            else:
+                # rgb image: [h, w, c] -> [c, h ,w]
+                image = image.permute(2, 0, 1)
+            image_list.append(image)
+            capture_timestamp_list.append(capture_timestamp)
+            frame_id_list.append(frame_id)
+        # End for single_timestamp
+
+        # Check if at least one frame is successfully fetched
+        if len(image_list) == 0:
             return None
 
-        image = torch.from_numpy(image_data_and_record[0].to_numpy_array())
-        if len(image.shape) == 2:
-            # single channel image: [h,w] -> [c, h, w]
-            image = torch.unsqueeze(image, dim=0)
-        else:
-            # rgb image: [h, w, c] -> [c, h ,w]
-            image = image.permute(2, 0, 1)
-
         # Image transformations are handled by torchvision's transform functions.
+        batched_image_tensor = torch.stack(image_list, dim=0)
         image_transform_list = []
         # undistort if specified
         if self.undistort_to_linear_camera:
@@ -193,21 +217,19 @@ class AriaCameraProcessor:
             self.target_camera_resolution is not None
             and len(self.target_camera_resolution) == 2
         ):
-            image_transform_list.append(
-                transforms.Resize(self.target_camera_resolution)
-            )
+            image_transform_list.append(v2.Resize(self.target_camera_resolution))
 
         if self.rotate_image_cw90deg:
-            # image is [c, h, w]
-            image_transform_list.append(lambda img: torch.rot90(img, k=3, dims=[1, 2]))
+            # image is [frames, c, h, w]
+            image_transform_list.append(lambda img: torch.rot90(img, k=3, dims=[2, 3]))
 
-        image_transform = transforms.Compose(image_transform_list)
-
-        transformed_image = image_transform(image)
+        if len(image_transform_list) > 0:
+            image_transform = v2.Compose(image_transform_list)
+            batched_image_tensor = image_transform(batched_image_tensor)
 
         # properly clean output to desired dtype and shapes
         return (
-            torch.unsqueeze(transformed_image, dim=0),
-            torch.tensor([capture_timestamp], dtype=torch.int64),
-            torch.tensor([frame_id], dtype=torch.int64),
+            batched_image_tensor,
+            torch.tensor(capture_timestamp_list, dtype=torch.int64),
+            torch.tensor(frame_id_list, dtype=torch.int64),
         )

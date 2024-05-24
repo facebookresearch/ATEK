@@ -92,8 +92,8 @@ class ObjectDetection3dSampleBuilder:
                 # ========================================
                 # Aria camera sensor data
                 # ========================================
-                maybe_image_data = processor.get_image_data_by_timestamp_ns(
-                    timestamp_ns
+                maybe_image_data = processor.get_image_data_by_timestamps_ns(
+                    timestamps_ns=[timestamp_ns]
                 )
                 # Skip if no image data is available
                 if maybe_image_data is None:

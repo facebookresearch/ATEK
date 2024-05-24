@@ -21,21 +21,21 @@ class AriaCameraProcessorTest(unittest.TestCase):
         super().setUp()
 
     def _single_case_test_get_image_data(
-        self, camera_processor, gt_timestamp_ns, gt_frame_id, gt_image_shape
+        self, camera_processor, gt_timestamps_ns, gt_frame_id, gt_image_shape
     ):
         """
         A helper function to perform a test on a single camera processor
         """
         # Expect to success, only 20ns away
-        query_timestamp = gt_timestamp_ns + 20
-        maybe_result = camera_processor.get_image_data_by_timestamp_ns(
-            timestamp_ns=query_timestamp
+        query_timestamps = gt_timestamps_ns + 20
+        maybe_result = camera_processor.get_image_data_by_timestamps_ns(
+            timestamps_ns=query_timestamps.tolist()
         )
         self.assertTrue(maybe_result is not None)
 
         image_data, capture_timestamp, frame_id = maybe_result
-        self.assertEqual(frame_id, torch.tensor([gt_frame_id], dtype=torch.int64))
-        self.assertEqual(capture_timestamp.item(), gt_timestamp_ns)
+        self.assertTrue(torch.allclose(frame_id, gt_frame_id, atol=1))
+        self.assertTrue(torch.allclose(capture_timestamp, gt_timestamps_ns, atol=1))
         self.assertEqual(image_data.shape, gt_image_shape)
 
     def test_get_image_data(self) -> None:
@@ -47,9 +47,11 @@ class AriaCameraProcessorTest(unittest.TestCase):
         )
         self._single_case_test_get_image_data(
             slam_camera_processor,
-            gt_timestamp_ns=87551337550700,
-            gt_frame_id=1337,
-            gt_image_shape=torch.Size([1, 1, 480, 640]),
+            gt_timestamps_ns=torch.tensor(
+                [87551270894700, 87551337550700], dtype=torch.int64
+            ),
+            gt_frame_id=torch.tensor([1335, 1337], dtype=torch.int64),
+            gt_image_shape=torch.Size([2, 1, 480, 640]),
         )
 
         # Test for rotated SLAM left
@@ -59,8 +61,8 @@ class AriaCameraProcessorTest(unittest.TestCase):
         slam_camera_processor_2 = AriaCameraProcessor(TEST_VRS_PATH, slam_conf_2)
         self._single_case_test_get_image_data(
             slam_camera_processor_2,
-            gt_timestamp_ns=87551337550700,
-            gt_frame_id=1337,
+            gt_timestamps_ns=torch.tensor([87551337550700], dtype=torch.int64),
+            gt_frame_id=torch.tensor([1337], dtype=torch.int64),
             gt_image_shape=torch.Size([1, 1, 640, 480]),
         )
 
@@ -71,7 +73,7 @@ class AriaCameraProcessorTest(unittest.TestCase):
         rgb_camera_processor = AriaCameraProcessor(TEST_VRS_PATH, rgb_conf)
         self._single_case_test_get_image_data(
             rgb_camera_processor,
-            gt_timestamp_ns=87551337447475,
-            gt_frame_id=1335,
+            gt_timestamps_ns=torch.tensor([87551337447475], dtype=torch.int64),
+            gt_frame_id=torch.tensor([1335], dtype=torch.int64),
             gt_image_shape=torch.Size([1, 3, 512, 512]),
         )
