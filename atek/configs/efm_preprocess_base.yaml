@@ -29,10 +29,10 @@ processors:
   mps_semidense:
     selected: true
     tolerance_ns: 10_000_000
-  obb3_gt:
+  efm_gt:
     selected: true
     tolerance_ns : 10_000_000
-    category_mapping_field_name: prototype_name # {prototype_name, category}
+    category_mapping_field_name: category # {prototype_name, category}
 wds_writer:
   prefix_string: ""
   max_samples_per_shard: 32

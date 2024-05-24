@@ -166,7 +166,7 @@ class MpsTrajData:
 
 
 @dataclass
-class MpsSemidensePointData:
+class MpsSemiDensePointData:
     points_world: List[torch.Tensor] = field(
         default_factory=list
     )  # Tensor has shape of [N, 3] to represent observable points, List has length of num_frames
@@ -191,7 +191,7 @@ class AtekDataSample:
 
     # MPS data
     mps_traj_data: Optional[MpsTrajData] = None
-    # TODO: add this: mps_semidense_point_data: Optional[MpsSemidensePointData] = None
+    mps_semidense_point_data: Optional[MpsSemiDensePointData] = None
 
     # GT data, represented by a dictionary
     gt_data: Dict = field(default_factory=dict)
