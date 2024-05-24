@@ -68,9 +68,19 @@ class AriaCameraProcessor:
             self.srcCalib = srcCalib
 
         def __call__(self, image):
-            return calibration.distort_by_calibration(
-                image, self.dstCalib, self.srcCalib
+            # input image is tensor shape of [C, H, W], while distort_by_calibration requires [H, W, C]
+            tensor_result = torch.from_numpy(
+                calibration.distort_by_calibration(
+                    image.permute(1, 2, 0), self.dstCalib, self.srcCalib
+                )
             )
+            if tensor_result.ndim == 2:
+                # [H, W] -> [1, H, W]
+                tensor_result = tensor_result.unsqueeze(0)
+            else:
+                # [H, W, C] -> [C, H, W]
+                tensor_result = tensor_result.permute(2, 0, 1)
+            return tensor_result
 
     def setup_vrs_data_provider(self):
         """
