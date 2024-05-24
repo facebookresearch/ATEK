@@ -30,8 +30,8 @@ class MpsTrajProcessorTest(unittest.TestCase):
 
         # Test for query for closed loop traj data
         query_timestamp = 100_001_000  # actual timestamp is 100_000_000
-        T_world_device, capture_timestamp, gravity_in_world = (
-            mps_traj_processor.get_closed_loop_pose_by_timestamp_ns(query_timestamp)
+        Ts_world_device, capture_timestamps, gravity_in_world = (
+            mps_traj_processor.get_closed_loop_pose_by_timestamps_ns([query_timestamp])
         )
         gt_translation = torch.tensor(
             [-7.7852104154284, 0.536540244562757, 1.2436284253971863],
@@ -40,9 +40,18 @@ class MpsTrajProcessorTest(unittest.TestCase):
         gt_gravity = torch.tensor([0, 0, -9.81], dtype=torch.float32)
 
         self.assertTrue(
-            torch.allclose(T_world_device[:, :, 3], gt_translation, atol=1e-6)
+            torch.allclose(
+                Ts_world_device[0, :, 3].squeeze(), gt_translation, atol=1e-6
+            )
         )
-        self.assertEqual(capture_timestamp.item(), 100_000_000)
+        self.assertTrue(
+            torch.allclose(
+                capture_timestamps,
+                torch.tensor([100_000_000], dtype=torch.int64),
+                atol=10,
+            )
+        )
+
         self.assertTrue(torch.allclose(gravity_in_world, gt_gravity))
 
 

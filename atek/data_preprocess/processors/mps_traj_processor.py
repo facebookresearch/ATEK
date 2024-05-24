@@ -1,7 +1,7 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
 import logging
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -30,30 +30,46 @@ class MpsTrajProcessor:
         mps_data_paths.slam.closed_loop_trajectory = mps_closedloop_traj_file
         self.mps_data_provider = mps.MpsDataProvider(mps_data_paths)
 
-    def get_closed_loop_pose_by_timestamp_ns(
-        self, timestamp_ns: int
+    def get_closed_loop_pose_by_timestamps_ns(
+        self, timestamps_ns: List[int]
     ) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         """
         Obtain a single MPS trajectory data by timestamp.
-        returns: if successful, returns (T_world_device: Tensor [1, 3, 4], R|t, capture_timestamp: Tensor[1,], gravity_in_world: Tensor[3,])
+        returns: if successful, returns (T_world_device: Tensor [Frames, 3, 4], R|t, capture_timestamp: Tensor[Frames,], gravity_in_world: Tensor[3,])
                 else returns None
         """
-        pose = self.mps_data_provider.get_closed_loop_pose(
-            device_timestamp_ns=timestamp_ns,
-            time_query_options=TimeQueryOptions.CLOSEST,
+        pose_list = []
+        capture_timestamp_list = []
+        gravity_in_world = None
+        for single_timestamp in timestamps_ns:
+            pose = self.mps_data_provider.get_closed_loop_pose(
+                device_timestamp_ns=single_timestamp,
+                time_query_options=TimeQueryOptions.CLOSEST,
+            )
+
+            # Check if fetched data is within tolerance. Note that pose tracking timestamp is in us
+            capture_timestamp = int(
+                pose.tracking_timestamp.total_seconds() * 1_000_000_000
+            )
+            if abs(capture_timestamp - single_timestamp) > self.conf.tolerance_ns:
+                continue
+
+            # Pose tensor [3,4]
+            pose_list.append(
+                torch.from_numpy(
+                    pose.transform_world_device.to_matrix3x4().astype(np.float32)
+                )
+            )
+            capture_timestamp_list.append(capture_timestamp)
+
+            # Gravity only needs to be assigned once
+            if gravity_in_world is None:
+                gravity_in_world = torch.from_numpy(
+                    pose.gravity_world.astype(np.float32)
+                )
+
+        return (
+            torch.stack(pose_list, dim=0),
+            torch.tensor(capture_timestamp_list, dtype=torch.int64),
+            gravity_in_world,
         )
-
-        # Check if fetched data is within tolerance. Note that pose tracking timestamp is in us
-        capture_timestamp = int(pose.tracking_timestamp.total_seconds() * 1_000_000_000)
-        if abs(capture_timestamp - timestamp_ns) > self.conf.tolerance_ns:
-            return None
-
-        # properly clean output to desired dtype and shapes
-        torch_T_world_device = torch.from_numpy(
-            pose.transform_world_device.to_matrix3x4().astype(np.float32)
-        )
-        torch_T_world_device = torch.unsqueeze(torch_T_world_device, dim=0)
-        torch_capture_timestamp = torch.tensor([capture_timestamp], dtype=torch.int64)
-        torch_gravity_in_world = torch.from_numpy(pose.gravity_world.astype(np.float32))
-
-        return torch_T_world_device, torch_capture_timestamp, torch_gravity_in_world

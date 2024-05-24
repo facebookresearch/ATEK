@@ -133,8 +133,8 @@ class ObjectDetection3dSampleBuilder:
             # MPS traj data
             # ========================================
             elif isinstance(processor, MpsTrajProcessor):
-                maybe_mps_traj_data = processor.get_closed_loop_pose_by_timestamp_ns(
-                    timestamp_ns
+                maybe_mps_traj_data = processor.get_closed_loop_pose_by_timestamps_ns(
+                    [timestamp_ns]
                 )
                 if maybe_mps_traj_data is None:
                     logger.warning(
@@ -143,13 +143,12 @@ class ObjectDetection3dSampleBuilder:
                     return None
 
                 # Fill MPS traj data into sample
-                sample_traj_data = MpsTrajData()
-                # [3,4] -> [n_frames, 3, 4]
-                sample_traj_data.Ts_World_Device = maybe_mps_traj_data[0]
-                sample_traj_data.capture_timestamps_ns = maybe_mps_traj_data[1]
-                sample_traj_data.gravity_in_world = maybe_mps_traj_data[2]
+                sample.mps_traj_data = MpsTrajData(
+                    Ts_World_Device=maybe_mps_traj_data[0],
+                    capture_timestamps_ns=maybe_mps_traj_data[1],
+                    gravity_in_world=maybe_mps_traj_data[2],
+                )
 
-                sample.mps_traj_data = sample_traj_data
             # ========================================
             # GT data
             # ========================================
