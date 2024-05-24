@@ -37,20 +37,34 @@ class CameraTemporalSubsampler:
         )
 
         # determine subfactor for the main camera
-        freq_in_vrs = vrs_provider.get_nominalRateHz(main_stream_id)
+        freq_in_vrs = vrs_provider.get_nominal_rate_hz(main_stream_id)
         self.subsampling_factor = self.compute_subsampling_factor(
             int(freq_in_vrs), int(conf.sample_target_freq_hz)
         )
+        self.total_num_samples: int = (
+            len(self.main_camera_timestamps) // self.subsampling_factor
+        )
 
-    def compute_subsampling_factor(self, freq_in_vrs: int, target_freq: int):
+    def compute_subsampling_factor(self, freq_in_vrs: int, target_freq: int) -> int:
         if freq_in_vrs % target_freq != 0:
             raise ValueError(
                 f"Cannot subsample {freq_in_vrs} to {target_freq} Hz, needs to be dividable."
             )
         return freq_in_vrs // target_freq
 
+    def get_total_num_samples(self) -> int:
+        """
+        return the total number of samples in `target_freq_hz`.
+        """
+        return self.total_num_samples
+
     def get_timestamp_by_sample_index(self, sample_index: int) -> int:
         """
         return the timestamp corresponding to the sample, given the sample index (not sensor data index)
         """
+        if sample_index >= self.total_num_samples:
+            raise ValueError(
+                f"sample_index {sample_index} is out of range, total number of samples under target freq is {self.total_num_samples}"
+            )
+
         return self.main_camera_timestamps[sample_index * self.subsampling_factor]
