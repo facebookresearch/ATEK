@@ -8,7 +8,7 @@ import torch
 from omegaconf.omegaconf import DictConfig
 from projectaria_tools.core import calibration, data_provider
 from projectaria_tools.core.sensor_data import TimeDomain, TimeQueryOptions  # @manual
-from torchvision.transforms import v2
+from torchvision.transforms import InterpolationMode, v2
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -158,6 +158,39 @@ class AriaCameraProcessor:
 
             return torch.stack(result_list, dim=0)
 
+    def get_image_transform_list(
+        self, rescale_interpolation: InterpolationMode = InterpolationMode.BILINEAR
+    ) -> List:
+        """
+        Returns a list of torchvision transform functions to be applied to the raw image data,
+        in the order of: undistortion -> rescale -> rotateCW90, where any step is optional.
+        """
+        image_transform_list = []
+        # undistort if specified
+        if self.undistort_to_linear_camera:
+            image_transform_list.append(
+                self.DistortByCalibrationTVWrapper(
+                    dstCalib=self.undistorted_linear_camera_calib,
+                    srcCalib=self.original_camera_calib,
+                )
+            )
+
+        if (
+            self.target_camera_resolution is not None
+            and len(self.target_camera_resolution) == 2
+        ):
+            image_transform_list.append(
+                v2.Resize(
+                    self.target_camera_resolution, interpolation=rescale_interpolation
+                )
+            )
+
+        if self.rotate_image_cw90deg:
+            # image is [frames, c, h, w]
+            image_transform_list.append(lambda img: torch.rot90(img, k=3, dims=[2, 3]))
+
+        return image_transform_list
+
     def get_image_data_by_timestamps_ns(
         self, timestamps_ns: List[int]
     ) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
@@ -203,25 +236,8 @@ class AriaCameraProcessor:
 
         # Image transformations are handled by torchvision's transform functions.
         batched_image_tensor = torch.stack(image_list, dim=0)
-        image_transform_list = []
-        # undistort if specified
-        if self.undistort_to_linear_camera:
-            image_transform_list.append(
-                self.DistortByCalibrationTVWrapper(
-                    dstCalib=self.undistorted_linear_camera_calib,
-                    srcCalib=self.original_camera_calib,
-                )
-            )
 
-        if (
-            self.target_camera_resolution is not None
-            and len(self.target_camera_resolution) == 2
-        ):
-            image_transform_list.append(v2.Resize(self.target_camera_resolution))
-
-        if self.rotate_image_cw90deg:
-            # image is [frames, c, h, w]
-            image_transform_list.append(lambda img: torch.rot90(img, k=3, dims=[2, 3]))
+        image_transform_list = self.get_image_transform_list()
 
         if len(image_transform_list) > 0:
             image_transform = v2.Compose(image_transform_list)

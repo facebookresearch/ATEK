@@ -12,12 +12,15 @@ from atek.data_preprocess.atek_data_sample import (
     MultiFrameCameraData,
 )
 from atek.data_preprocess.processors.aria_camera_processor import AriaCameraProcessor
+from atek.data_preprocess.processors.depth_image_processor import DepthImageProcessor
 from atek.data_preprocess.processors.efm_gt_processor import EfmGtProcessor
 from atek.data_preprocess.processors.mps_semidense_processor import (
     MpsSemiDenseProcessor,
 )
 from atek.data_preprocess.processors.mps_traj_processor import MpsTrajProcessor
 from omegaconf.omegaconf import DictConfig
+from torchvision.transforms import InterpolationMode
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -32,8 +35,9 @@ class EfmSampleBuilder:
         self,
         conf: DictConfig,
         vrs_file: str,
-        mps_files: Optional[Dict[str, str]] = None,
-        gt_files: Optional[Dict[str, str]] = None,
+        mps_files: Dict[str, str],
+        gt_files: Dict[str, str],
+        depth_vrs_file: str,
     ) -> None:
         """
         vrs_file: the main Aria vrs file
@@ -43,7 +47,7 @@ class EfmSampleBuilder:
         self.vrs_file = vrs_file
 
         self.processors = self._add_processors_from_conf(
-            conf, vrs_file, mps_files if mps_files is not None else {}, gt_files
+            conf, vrs_file, mps_files, gt_files, depth_vrs_file
         )
 
     def _add_processors_from_conf(
@@ -52,6 +56,7 @@ class EfmSampleBuilder:
         vrs_file: str,
         mps_files: Dict[str, str],
         gt_files: Dict[str, str],
+        depth_vrs_file: str,
     ):
         """
         This function creates a dict of processors from the config file.
@@ -69,6 +74,7 @@ class EfmSampleBuilder:
                     vrs_file, camera_conf
                 )
 
+        # MPS processors
         if "mps_traj" in conf and conf.mps_traj.selected:
             processors["mps_traj"] = MpsTrajProcessor(
                 mps_closedloop_traj_file=mps_files["mps_closedloop_traj_file"],
@@ -82,6 +88,25 @@ class EfmSampleBuilder:
                     "mps_semidense_observations_file"
                 ],
                 conf=conf.mps_semidense,
+            )
+        # Depth processor
+        if "rgb_depth" in conf and conf.rgb_depth.selected:
+            assert (
+                depth_vrs_file is not None
+            ), "need to specify depth vrs file to use depth processor"
+
+            # Obtain image transformations from rgb AriaCameraProcessor, where interpolation needs to be exactly set to NEAREST
+            assert (
+                "camera_rgb" in processors
+            ), "rgb_depth depends on camera_rgb processor to obtain camera calibration"
+            depth_image_transform_list = processors[
+                "camera_rgb"
+            ].get_image_transform_list(rescale_interpolation=InterpolationMode.NEAREST)
+
+            processors["rgb_depth"] = DepthImageProcessor(
+                depth_vrs=depth_vrs_file,
+                image_transform_list=depth_image_transform_list,
+                conf=conf.rgb_depth,
             )
 
         if "efm_gt" in conf and conf.efm_gt.selected:
@@ -182,6 +207,26 @@ class EfmSampleBuilder:
                 sample.mps_semidense_point_data = MpsSemiDensePointData(
                     points_in_world=maybe_mps_semidense_data[0],
                     points_inv_dist_std=maybe_mps_semidense_data[1],
+                )
+
+            # =======================================
+            # RGB Depth data
+            # =======================================
+            elif isinstance(processor, DepthImageProcessor):
+                maybe_depth_data = processor.get_depth_data_by_timestamps_ns(
+                    timestamps_ns
+                )
+                if maybe_depth_data is None:
+                    logger.warning(
+                        f"Querying Depth data for {timestamps_ns} has returned None, skipping this sample."
+                    )
+                    return None
+
+                # Fill depth data into sample
+                sample.camera_rgb_depth = MultiFrameCameraData(
+                    images=maybe_depth_data[0],
+                    capture_timestamps_ns=maybe_depth_data[1],
+                    frame_ids=maybe_depth_data[2],
                 )
 
             # ========================================

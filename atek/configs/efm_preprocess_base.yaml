@@ -29,6 +29,12 @@ processors:
   mps_semidense:
     selected: true
     tolerance_ns: 10_000_000
+  rgb_depth:
+    selected: true
+    sensor_stream_id: "345-1" # 345-1 for ADT data, 214-8 for ASE data
+    tolerance_ns: 10_000_000
+    time_domain: "DEVICE_TIME"
+    convert_zdepth_to_dist: false
   efm_gt:
     selected: true
     tolerance_ns : 10_000_000

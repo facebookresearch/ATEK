@@ -1,0 +1,73 @@
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
+import os
+import unittest
+
+import torch
+
+from atek.data_preprocess.processors.aria_camera_processor import AriaCameraProcessor
+from atek.data_preprocess.processors.depth_image_processor import DepthImageProcessor
+from omegaconf import OmegaConf
+from torchvision.transforms import InterpolationMode
+
+
+# test data paths
+TEST_FOLDER = os.getenv("TEST_FOLDER")
+CONFIG_PATH = os.getenv("CONFIG_PATH")
+
+
+class DepthImageProcessorTest(unittest.TestCase):
+    def setUp(self) -> None:
+        super().setUp()
+
+    def _single_case_test_get_depth_data(
+        self, camera_processor, gt_timestamps_ns, gt_frame_id, gt_image_shape
+    ):
+        """
+        A helper function to perform a test on a single camera processor
+        """
+        # Expect to success, only 20ns away
+        query_timestamps = gt_timestamps_ns + 20
+        maybe_result = camera_processor.get_depth_data_by_timestamps_ns(
+            timestamps_ns=query_timestamps.tolist()
+        )
+        self.assertTrue(maybe_result is not None)
+
+        image_data, capture_timestamp, frame_id = maybe_result
+        self.assertTrue(torch.allclose(frame_id, gt_frame_id, atol=1))
+        self.assertTrue(torch.allclose(capture_timestamp, gt_timestamps_ns, atol=1))
+        self.assertEqual(image_data.shape, gt_image_shape)
+
+    def test_get_depth_image_data(self) -> None:
+        conf = OmegaConf.load(CONFIG_PATH)
+
+        # Obtain image transformations from AriaCameraProcessor
+        rgb_conf = conf.processors.rgb
+        rgb_conf = OmegaConf.merge(rgb_conf, {"undistort_to_linear_camera": True})
+        rgb_conf = OmegaConf.merge(rgb_conf, {"target_camera_resolution": [704, 704]})
+        rgb_conf = OmegaConf.merge(rgb_conf, {"rotate_image_cw90deg": True})
+        rgb_camera_processor = AriaCameraProcessor(
+            video_vrs=os.path.join(TEST_FOLDER, "test_ADT_unit_test_sequence.vrs"),
+            conf=rgb_conf,
+        )
+        depth_image_transform_list = rgb_camera_processor.get_image_transform_list(
+            rescale_interpolation=InterpolationMode.NEAREST
+        )
+
+        # Construct DepthImageProcessor
+        depth_conf = conf.processors.rgb_depth
+        depth_conf = OmegaConf.merge(depth_conf, {"sensor_stream_id": "345-1"})
+        rgb_depth_processor = DepthImageProcessor(
+            depth_vrs=os.path.join(TEST_FOLDER, "test_ADT_depth_rgb_only.vrs"),
+            image_transform_list=depth_image_transform_list,
+            conf=depth_conf,
+        )
+
+        self._single_case_test_get_depth_data(
+            rgb_depth_processor,
+            gt_timestamps_ns=torch.tensor(
+                [87551204237999, 87551237566000], dtype=torch.int64
+            ),
+            gt_frame_id=torch.tensor([1, 2], dtype=torch.int64),
+            gt_image_shape=torch.Size([2, 1, 704, 704]),
+        )

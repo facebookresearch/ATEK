@@ -193,6 +193,9 @@ class AtekDataSample:
     mps_traj_data: Optional[MpsTrajData] = None
     mps_semidense_point_data: Optional[MpsSemiDensePointData] = None
 
+    # Depth data
+    camera_rgb_depth: Optional[MultiFrameCameraData] = None
+
     # GT data, represented by a dictionary
     gt_data: Dict = field(default_factory=dict)
 
