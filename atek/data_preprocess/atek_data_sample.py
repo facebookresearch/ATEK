@@ -175,9 +175,13 @@ class MpsSemiDensePointData:
     points_world: List[torch.Tensor] = field(
         default_factory=list
     )  # Tensor has shape of [N, 3] to represent observable points, List has length of num_frames
+    points_dist_std: List[torch.Tensor] = field(
+        default_factory=list
+    )  # Tensor has shape of [N] to represent points' distance, List has length of num_frames
     points_inv_dist_std: List[torch.Tensor] = field(
         default_factory=list
     )  # Tensor has shape of [N] to represent points' inverse distance, List has length of num_frames
+    capture_timestamps_ns: torch.Tensor = None  # [num_frames]
 
     def to_flatten_dict(self):
         """
@@ -196,7 +200,13 @@ class MpsSemiDensePointData:
         stacked_points_inv_dist, len_points_inv_dist = concat_list_of_tensors(
             self.points_inv_dist_std
         )
+        stacked_points_dist, len_points_dist = concat_list_of_tensors(
+            self.points_dist_std
+        )
 
+        assert torch.allclose(
+            len_points_world, len_points_dist, atol=1
+        ), f"The lengths of points_world and points_dist should be the same! Instead got\n {len_points_world} vs \n {len_points_dist}"
         assert torch.allclose(
             len_points_world, len_points_inv_dist, atol=1
         ), f"The lengths of points_world and points_inv_dist should be the same! Instead got\n {len_points_world} vs \n {len_points_inv_dist}"
@@ -204,7 +214,9 @@ class MpsSemiDensePointData:
         # add to flatten dict
         flatten_dict[f"MSDPD#points_world_lengths.pth"] = len_points_world
         flatten_dict[f"MSDPD#stacked_points_world.pth"] = stacked_points_world
+        flatten_dict[f"MSDPD#stacked_points_dist_std.pth"] = stacked_points_dist
         flatten_dict[f"MSDPD#stacked_points_inv_dist_std.pth"] = stacked_points_inv_dist
+        flatten_dict[f"MSDPD#capture_timestamps_ns.pth"] = self.capture_timestamps_ns
 
         return flatten_dict
 

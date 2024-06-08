@@ -80,7 +80,9 @@ class MpsSemiDenseProcessorTest(unittest.TestCase):
             timestamps_ns=[1_000_000_000, 2_000_000_000]
         )
         self.assertTrue(maybe_result is not None)
-        points, points_inv_dist = maybe_result
+        points = maybe_result.points_world
+        points_dist = maybe_result.points_dist_std
+        points_inv_dist = maybe_result.points_inv_dist_std
 
         # check tensor sizes
         self.assertEqual(len(points), 2)
@@ -91,6 +93,18 @@ class MpsSemiDenseProcessorTest(unittest.TestCase):
         )
         self.assertTrue(torch.allclose(points[0], points_0_gt, atol=1e-6))
 
+        # check dist std
+        self.assertEqual(len(points_dist), 2)
+        self.assertEqual(points_dist[0].shape, torch.Size([2]))  # 2 points in frame 0
+        self.assertEqual(points_dist[1].shape, torch.Size([3]))  # 3 points in frame 1
+        points_dist_0_gt = torch.tensor([0.002598, 0.035042], dtype=torch.float32)
+        self.assertTrue(torch.allclose(points_dist[0], points_dist_0_gt, atol=1e-6))
+        points_dist_1_gt = torch.tensor(
+            [0.017871, 0.002598, 0.013965], dtype=torch.float32
+        )
+        self.assertTrue(torch.allclose(points_dist[1], points_dist_1_gt, atol=1e-6))
+
+        # check inv dist std
         self.assertEqual(len(points_inv_dist), 2)
         self.assertEqual(
             points_inv_dist[0].shape, torch.Size([2])
@@ -101,4 +115,16 @@ class MpsSemiDenseProcessorTest(unittest.TestCase):
         points_inv_dist_0_gt = torch.tensor([0.003901, 0.00644], dtype=torch.float32)
         self.assertTrue(
             torch.allclose(points_inv_dist[0], points_inv_dist_0_gt, atol=1e-6)
+        )
+        points_inv_dist_1_gt = torch.tensor(
+            [0.001829, 0.003901, 0.004357], dtype=torch.float32
+        )
+        self.assertTrue(
+            torch.allclose(points_inv_dist[1], points_inv_dist_1_gt, atol=1e-6)
+        )
+
+        # check tracking timestamps
+        gt_timestamps = torch.tensor([1_000_000_000, 2_000_000_000], dtype=torch.int64)
+        self.assertTrue(
+            torch.allclose(maybe_result.capture_timestamps_ns, gt_timestamps)
         )

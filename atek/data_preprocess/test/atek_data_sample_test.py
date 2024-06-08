@@ -47,6 +47,8 @@ class TestMpsSemiDensePointData(unittest.TestCase):
                 torch.tensor([[7, 8, 9]]),
             ],
             points_inv_dist_std=[torch.tensor([0.1, 0.2]), torch.tensor([0.3])],
+            points_dist_std=[torch.tensor([0.5, 0.4]), torch.tensor([0.3])],
+            capture_timestamps_ns=torch.tensor([1, 2]),
         )
 
         # Call the method
@@ -57,6 +59,8 @@ class TestMpsSemiDensePointData(unittest.TestCase):
             "MSDPD#points_world_lengths.pth",
             "MSDPD#stacked_points_world.pth",
             "MSDPD#stacked_points_inv_dist_std.pth",
+            "MSDPD#stacked_points_dist_std.pth",
+            "MSDPD#capture_timestamps_ns.pth",
         ]
         self.assertCountEqual(flatten_dict.keys(), expected_keys)
 

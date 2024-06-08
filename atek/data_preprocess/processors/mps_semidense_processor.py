@@ -12,11 +12,9 @@ import numpy as np
 import pandas as pd
 
 import torch
+from atek.data_preprocess.atek_data_sample import MpsSemiDensePointData
 
 from omegaconf.omegaconf import DictConfig
-
-from projectaria_tools.core import mps
-from projectaria_tools.core.sensor_data import TimeQueryOptions  # @manual
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -36,8 +34,8 @@ class MpsSemiDenseProcessor:
 
         # Load in semidense points data. Not using MPSDataProvider because it is not sufficient.
         time_0 = time.time()
-        self.uid_to_p3, self.uid_to_inv_dist_std = self._load_semidense_global_points(
-            mps_semidense_points_file
+        self.uid_to_p3, self.uid_to_dist_std, self.uid_to_inv_dist_std = (
+            self._load_semidense_global_points(mps_semidense_points_file)
         )
         time_1 = time.time()
         self.time_to_uids, self.uid_to_times = self._load_semidense_observations(
@@ -52,7 +50,7 @@ class MpsSemiDenseProcessor:
     def get_semidense_points_by_timestamps_ns(
         self,
         timestamps_ns: List[int],
-    ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+    ) -> Optional[MpsSemiDensePointData]:
         """
         Obtain a semidense points data by timestamp, where `points_world` are in meters, and `points_inv_dist_std` are in meter^-1.
         returns: if successful, returns (points_world: List[torch.Tensor (N,3)], points_inv_dist_std: List[torch.Tensor (N)]), where len(List) = number of frames, which is 1
@@ -71,25 +69,53 @@ class MpsSemiDenseProcessor:
         )
 
         points_world_all = []
+        dist_std_all = []
         inv_dist_std_all = []
         # loop over all matched timestamps, and stack point_in_world into a Nx3 tensor
         for uid_list in matched_time_to_uids_df["uids"]:
-            points_world = []
-            inv_dist_std = []
-            for uid in uid_list:
-                if (uid in self.uid_to_p3) and (uid in self.uid_to_inv_dist_std):
-                    points_world.append(self.uid_to_p3[uid])
-                    inv_dist_std.append(self.uid_to_inv_dist_std[uid])
-                else:
-                    raise ValueError(
-                        f"Point UID {uid} not found in global semidense point file!"
-                    )
-            # end for uid
-            points_world_all.append(torch.stack(points_world, dim=0))
-            inv_dist_std_all.append(torch.tensor(inv_dist_std))
+            # uid_list can also be a single nan value, indicating empty observations at this timestamp. hence needs to handle this separately
+            if isinstance(uid_list, List):
+                points_world = []
+                dist_std = []
+                inv_dist_std = []
+                for uid in uid_list:
+                    if (
+                        (uid in self.uid_to_p3)
+                        and (uid in self.uid_to_dist_std)
+                        and (uid in self.uid_to_inv_dist_std)
+                    ):
+                        points_world.append(self.uid_to_p3[uid])
+                        dist_std.append(self.uid_to_dist_std[uid])
+                        inv_dist_std.append(self.uid_to_inv_dist_std[uid])
+                    else:
+                        raise ValueError(
+                            f"Point UID {uid} not found in global semidense point file!"
+                        )
+                # Sort points by inv_distance, ascending
+                combined = list(zip(inv_dist_std, points_world, dist_std))
+                combined = sorted(combined, key=lambda x: x[0])
+                inv_dist_std, points_world, dist_std = map(list, zip(*combined))
+
+                # end for uid
+                points_world_all.append(torch.stack(points_world, dim=0))
+                dist_std_all.append(torch.tensor(dist_std))
+                inv_dist_std_all.append(torch.tensor(inv_dist_std))
+            else:
+                points_world_all.append(torch.full((1, 3), float("nan")))
+                dist_std_all.append(torch.tensor([float("nan")]))
+                inv_dist_std_all.append(torch.tensor([float("nan")]))
         # end for uid_list
 
-        return points_world_all, inv_dist_std_all
+        capture_timestamps_ns = torch.tensor(
+            matched_time_to_uids_df[TIMESTAMP_KEY_IN_DF].values * 1e3, dtype=torch.int64
+        )
+
+        return MpsSemiDensePointData(
+            points_world=points_world_all,
+            points_dist_std=dist_std_all,
+            points_inv_dist_std=inv_dist_std_all,
+            capture_timestamps_ns=capture_timestamps_ns,
+        )
 
     def _load_semidense_global_points(
         self,
@@ -106,6 +132,7 @@ class MpsSemiDenseProcessor:
             raise ValueError(f"Unsupported compression method for {path}")
 
         uid_to_p3 = {}
+        uid_to_dist_std = {}
         uid_to_inv_dist_std = {}
 
         with open(path, "rb") as f:
@@ -113,17 +140,19 @@ class MpsSemiDenseProcessor:
 
             # select points and uids and return mapping
             uid_pts = csv_data[
-                ["uid", "inv_dist_std", "px_world", "py_world", "pz_world"]
+                ["uid", "dist_std", "inv_dist_std", "px_world", "py_world", "pz_world"]
             ]
 
             for row in uid_pts.values:
                 uid = int(row[0])
-                inv_dist_std = float(row[1])
-                p3 = torch.from_numpy(row[2:]).float()
+                dist_std = float(row[1])
+                inv_dist_std = float(row[2])
+                p3 = torch.from_numpy(row[3:]).float()
                 uid_to_p3[uid] = p3
+                uid_to_dist_std[uid] = dist_std
                 uid_to_inv_dist_std[uid] = inv_dist_std
 
-        return uid_to_p3, uid_to_inv_dist_std
+        return uid_to_p3, uid_to_dist_std, uid_to_inv_dist_std
 
     def _load_semidense_observations(
         self,

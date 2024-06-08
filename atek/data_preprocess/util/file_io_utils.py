@@ -6,7 +6,9 @@ from typing import Dict, List, Optional, Tuple
 import torch
 
 
-def concat_list_of_tensors(tensor_list: List[torch.Tensor]) -> torch.Tensor:
+def concat_list_of_tensors(
+    tensor_list: List[torch.Tensor],
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Concatenate a list of tensors of (_, 3) into a single tensor of (N, 3), and returns both the stacked tensor and the first dims of the tensors in the list as a
     tensor of (len_of_list).
@@ -14,7 +16,11 @@ def concat_list_of_tensors(tensor_list: List[torch.Tensor]) -> torch.Tensor:
     lengths_of_tensor = torch.tensor(
         [x.size(0) for x in tensor_list], dtype=torch.int64
     )
-    return torch.cat(tensor_list, dim=0), lengths_of_tensor
+
+    if len(tensor_list) > 0:
+        return torch.cat(tensor_list, dim=0), lengths_of_tensor
+    else:
+        return torch.tensor([]), torch.tensor([])
 
 
 def unpack_list_of_tensors(

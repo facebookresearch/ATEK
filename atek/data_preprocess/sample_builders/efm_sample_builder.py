@@ -202,10 +202,7 @@ class EfmSampleBuilder:
                     return None
 
                 # Fill MPS SemiDense data into sample
-                sample.mps_semidense_point_data = MpsSemiDensePointData(
-                    points_world=maybe_mps_semidense_data[0],
-                    points_inv_dist_std=maybe_mps_semidense_data[1],
-                )
+                sample.mps_semidense_point_data = maybe_mps_semidense_data
 
             # =======================================
             # RGB Depth data

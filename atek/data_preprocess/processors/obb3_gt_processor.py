@@ -141,7 +141,7 @@ class Obb3GtProcessor:
 
         # pack 3d bbox data into a dict
         bbox3d_dict = {}
-        for instance_id, bbox3d_data in bbox3d_with_dt.data().items():
+        for instance_id, single_data in bbox3d_with_dt.data().items():
             single_bbox3d_dict = {}
             # fill in instance id and category information
             single_bbox3d_dict["instance_id"] = instance_id
@@ -150,7 +150,6 @@ class Obb3GtProcessor:
             )
 
             # fill in 3d aabb information, need to put the object coorindate to box center
-            single_data = bbox3d_with_dt.data()[instance_id]
             aabb_non_centered = single_data.aabb
             T_world_object_non_centered = single_data.transform_scene_object
             (object_dimensions, T_world_object) = self._center_object_bb3d(
