@@ -55,7 +55,6 @@ def process_wds_sample(sample: Dict):
                 sample_as_dict[key_wo_extension] = tensor_value
             # Dictionary
             elif extension_name == "json":
-                # sample_as_dict[key_wo_extension] = json.loads(v.decode("utf-8"))
                 sample_as_dict[key_wo_extension] = v
             # string values
             elif extension_name == "txt":
@@ -81,13 +80,43 @@ def process_wds_sample(sample: Dict):
     return sample_as_dict
 
 
+def select_and_remap_dict_keys(
+    sample_dict: Dict[str, Any], key_mapping: Dict[str, str]
+) -> Dict[str, Any]:
+    """
+    Data transform function to modify the sample by selecting and remapping keys according to key_mapping
+    """
+    remapped_sample = {}
+    for k, v in sample_dict.items():
+        if k in ["__key__", "__url__"]:
+            remapped_sample[k] = v
+        elif k in key_mapping:
+            new_key = key_mapping[k]
+            remapped_sample[new_key] = v
+    return remapped_sample
+
+
 def load_atek_wds_dataset(
     urls: List[str],
+    dict_key_mapping: Optional[Dict[str, str]] = None,
+    data_transform_fn: Optional[Callable] = None,
 ) -> wds.WebDataset:
+
+    # first, load WDS samples back as dicts
     wds_dataset = (
         wds.WebDataset(urls)
         .decode(wds.imagehandler("torchrgb8"))
         .map(process_wds_sample)
     )
+
+    # second, remap dict keys
+    if dict_key_mapping is not None:
+        wds_dataset = wds_dataset.map(
+            partial(select_and_remap_dict_keys, key_mapping=dict_key_mapping)
+        )
+
+    # third, apply data transforms
+    if data_transform_fn is not None:
+        wds_dataset = wds_dataset.compose(data_transform_fn)
 
     return wds_dataset
