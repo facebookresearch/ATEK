@@ -2,12 +2,15 @@
 
 import io
 import json
-from typing import Dict, List
+from functools import partial
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
 import torch
 import webdataset as wds
+
+from atek.data_preprocess.util.file_io_utils import unpack_list_of_tensors
 from torchvision.io import read_image
 
 
@@ -64,6 +67,16 @@ def process_wds_sample(sample: Dict):
     for image_root_name, image_frames in to_be_stacked_images.items():
         # Convert each frame to the desired shape
         sample_as_dict[image_root_name] = torch.stack(image_frames, dim=0)
+
+    # unpack semidense points from a stacked tensor back to List of tensors
+    sample_as_dict["msdpd#points_world"] = unpack_list_of_tensors(
+        stacked_tensor=sample_as_dict["msdpd#stacked_points_world"],
+        lengths_of_tensors=sample_as_dict["msdpd#points_world_lengths"],
+    )
+    sample_as_dict["msdpd#points_inv_dist_std"] = unpack_list_of_tensors(
+        stacked_tensor=sample_as_dict["msdpd#stacked_points_inv_dist_std"],
+        lengths_of_tensors=sample_as_dict["msdpd#points_world_lengths"],
+    )
 
     return sample_as_dict
 
