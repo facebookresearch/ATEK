@@ -16,12 +16,15 @@ class MultiFrameCameraData:
     images: torch.Tensor = None  # [num_frames, num_channels, width, height]
     capture_timestamps_ns: torch.Tensor = None  # [num_frames]
     frame_ids: torch.Tensor = None  # [num_frames]
+    exposure_durations_s: torch.Tensor = None  # [num_frames]
+    gains: torch.Tensor = None  # [num_frames]
 
     # calibration params that are the same for all frames
     camera_label: str = ""
     T_Device_Camera: torch.Tensor = None  # [num_frames, 3, 4], R|t
     camera_model_name: str = ""
     projection_params: torch.Tensor = None  # intrinsics
+    camera_valid_radius: torch.Tensor = None  # [1]
     origin_camera_label: str = ""  # camera label of the "Device" frame
 
     @staticmethod
@@ -33,8 +36,11 @@ class MultiFrameCameraData:
         return [
             "capture_timestamps_ns",
             "frame_ids",
+            "exposure_durations_s",
+            "gains",
             "T_Device_Camera",
             "projection_params",
+            "camera_valid_radius",
         ]
 
     @staticmethod

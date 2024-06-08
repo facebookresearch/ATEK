@@ -92,21 +92,15 @@ class ObjectDetection3dSampleBuilder:
                 # ========================================
                 # Aria camera sensor data
                 # ========================================
-                maybe_image_data = processor.get_image_data_by_timestamps_ns(
+                sample_camera_data = processor.get_image_data_by_timestamps_ns(
                     timestamps_ns=[timestamp_ns]
                 )
                 # Skip if no image data is available
-                if maybe_image_data is None:
+                if sample_camera_data is None:
                     logger.warning(
                         f"Querying camera for {timestamp_ns} on processor {processor_label} has returned None, skipping this sample."
                     )
                     return None
-
-                # Fill image data into sample
-                sample_camera_data = MultiFrameCameraData()
-                sample_camera_data.images = maybe_image_data[0]
-                sample_camera_data.capture_timestamps_ns = maybe_image_data[1]
-                sample_camera_data.frame_ids = maybe_image_data[2]
 
                 # Fill calibration data
                 sample_camera_data.camera_label = processor_label

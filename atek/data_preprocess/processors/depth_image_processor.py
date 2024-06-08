@@ -5,6 +5,8 @@ from typing import Callable, List, Optional, Tuple
 
 import torch
 
+from atek.data_preprocess.atek_data_sample import MultiFrameCameraData
+
 from omegaconf.omegaconf import DictConfig
 from projectaria_tools.core import calibration, data_provider
 from projectaria_tools.core.sensor_data import TimeDomain, TimeQueryOptions  # @manual
@@ -52,7 +54,7 @@ class DepthImageProcessor:
 
     def get_depth_data_by_timestamps_ns(
         self, timestamps_ns: List[int]
-    ) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+    ) -> Optional[MultiFrameCameraData]:
         """
         Obtain images by timestamps. Image should be processed.
         returns: if successful, returns (image_data: Tensor [numFrames, numChannel, height, width], capture_timestamp: Tensor[numFrames], frame_id_in_stream: Tensor[numFrames])
@@ -98,8 +100,11 @@ class DepthImageProcessor:
         batched_depth_tensor = self.image_transform(batched_depth_tensor)
 
         # properly clean output to desired dtype and shapes
-        return (
-            batched_depth_tensor,
-            torch.tensor(capture_timestamp_list, dtype=torch.int64),
-            torch.tensor(frame_id_list, dtype=torch.int64),
+        result = MultiFrameCameraData(
+            images=batched_depth_tensor,
+            capture_timestamps_ns=torch.tensor(
+                capture_timestamp_list, dtype=torch.int64
+            ),
+            frame_ids=torch.tensor(frame_id_list, dtype=torch.int64),
         )
+        return result

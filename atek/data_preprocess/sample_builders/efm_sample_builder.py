@@ -133,21 +133,15 @@ class EfmSampleBuilder:
                 # ========================================
                 # Aria camera sensor data
                 # ========================================
-                maybe_image_data = processor.get_image_data_by_timestamps_ns(
+                sample_camera_data = processor.get_image_data_by_timestamps_ns(
                     timestamps_ns=timestamps_ns
                 )
                 # Skip if no image data is available
-                if maybe_image_data is None:
+                if sample_camera_data is None:
                     logger.warning(
                         f"Querying camera for {timestamps_ns} on processor {processor_label} has returned None, skipping this sample."
                     )
                     return None
-
-                # Fill image data into sample
-                sample_camera_data = MultiFrameCameraData()
-                sample_camera_data.images = maybe_image_data[0]
-                sample_camera_data.capture_timestamps_ns = maybe_image_data[1]
-                sample_camera_data.frame_ids = maybe_image_data[2]
 
                 # Fill calibration data
                 sample_camera_data.camera_label = processor_label
@@ -161,6 +155,9 @@ class EfmSampleBuilder:
                 )
                 sample_camera_data.projection_params = torch.from_numpy(
                     final_camera_calib.projection_params()
+                )
+                sample_camera_data.camera_valid_radius = torch.tensor(
+                    [final_camera_calib.get_valid_radius()], dtype=torch.float32
                 )
 
                 setattr(
@@ -224,11 +221,7 @@ class EfmSampleBuilder:
                     return None
 
                 # Fill depth data into sample
-                sample.camera_rgb_depth = MultiFrameCameraData(
-                    images=maybe_depth_data[0],
-                    capture_timestamps_ns=maybe_depth_data[1],
-                    frame_ids=maybe_depth_data[2],
-                )
+                sample.camera_rgb_depth = maybe_depth_data
 
             # ========================================
             # GT data

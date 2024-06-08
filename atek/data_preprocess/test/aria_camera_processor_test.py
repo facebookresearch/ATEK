@@ -33,10 +33,11 @@ class AriaCameraProcessorTest(unittest.TestCase):
         )
         self.assertTrue(maybe_result is not None)
 
-        image_data, capture_timestamp, frame_id = maybe_result
-        self.assertTrue(torch.allclose(frame_id, gt_frame_id, atol=1))
-        self.assertTrue(torch.allclose(capture_timestamp, gt_timestamps_ns, atol=1))
-        self.assertEqual(image_data.shape, gt_image_shape)
+        self.assertTrue(torch.allclose(maybe_result.frame_ids, gt_frame_id, atol=1))
+        self.assertTrue(
+            torch.allclose(maybe_result.capture_timestamps_ns, gt_timestamps_ns, atol=1)
+        )
+        self.assertEqual(maybe_result.images.shape, gt_image_shape)
 
     def test_get_image_data(self) -> None:
         conf = OmegaConf.load(CONFIG_PATH)

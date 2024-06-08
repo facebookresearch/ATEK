@@ -4,6 +4,8 @@ import logging
 from typing import Callable, List, Optional, Tuple
 
 import torch
+
+from atek.data_preprocess.atek_data_sample import MultiFrameCameraData
 from atek.data_preprocess.util.camera_calib_utils import (
     rescale_pixel_coords,
     rotate_pixel_coords_cw90,
@@ -192,9 +194,14 @@ class AriaCameraProcessor:
             self.target_camera_resolution is not None
             and len(self.target_camera_resolution) == 2
         ):
+            # resolution is specified as [w, h]. Need to pass [h,w] here
             image_transform_list.append(
                 v2.Resize(
-                    self.target_camera_resolution, interpolation=rescale_interpolation
+                    [
+                        self.target_camera_resolution[1],
+                        self.target_camera_resolution[0],
+                    ],
+                    interpolation=rescale_interpolation,
                 )
             )
 
@@ -250,7 +257,7 @@ class AriaCameraProcessor:
 
     def get_image_data_by_timestamps_ns(
         self, timestamps_ns: List[int]
-    ) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+    ) -> Optional[MultiFrameCameraData]:
         """
         Obtain images by timestamps. Image should be processed.
         returns: if successful, returns (image_data: Tensor [numFrames, numChannel, height, width], capture_timestamp: Tensor[numFrames], frame_id_in_stream: Tensor[numFrames])
@@ -259,6 +266,8 @@ class AriaCameraProcessor:
         image_list = []
         capture_timestamp_list = []
         frame_id_list = []
+        exposure_list = []
+        gain_list = []
         for single_timestamp in timestamps_ns:
             index = self.data_provider.get_index_by_time_ns(
                 stream_id=self.stream_id,
@@ -275,7 +284,10 @@ class AriaCameraProcessor:
             # Check if fetched frame is within tolerance
             if abs(capture_timestamp - single_timestamp) > self.conf.tolerance_ns:
                 continue
+
+            # reshape image to proper tensor shape
             image = torch.from_numpy(image_data_and_record[0].to_numpy_array())
+
             if len(image.shape) == 2:
                 # single channel image: [h,w] -> [c, h, w]
                 image = torch.unsqueeze(image, dim=0)
@@ -283,6 +295,11 @@ class AriaCameraProcessor:
                 # rgb image: [h, w, c] -> [c, h ,w]
                 image = image.permute(2, 0, 1)
             image_list.append(image)
+
+            # insert other values from the image data
+            image_record = image_data_and_record[1]
+            exposure_list.append(image_record.exposure_duration)
+            gain_list.append(image_record.gain)
             capture_timestamp_list.append(capture_timestamp)
             frame_id_list.append(frame_id)
         # End for single_timestamp
@@ -298,8 +315,14 @@ class AriaCameraProcessor:
         batched_image_tensor = image_transform(batched_image_tensor)
 
         # properly clean output to desired dtype and shapes
-        return (
-            batched_image_tensor,
-            torch.tensor(capture_timestamp_list, dtype=torch.int64),
-            torch.tensor(frame_id_list, dtype=torch.int64),
+        result = MultiFrameCameraData(
+            images=batched_image_tensor,
+            capture_timestamps_ns=torch.tensor(
+                capture_timestamp_list, dtype=torch.int64
+            ),
+            frame_ids=torch.tensor(frame_id_list, dtype=torch.int64),
+            exposure_durations_s=torch.tensor(exposure_list, dtype=torch.float32),
+            gains=torch.tensor(gain_list, dtype=torch.float32),
         )
+
+        return result
