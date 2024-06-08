@@ -50,7 +50,7 @@ class DepthImageProcessorTest(unittest.TestCase):
             video_vrs=os.path.join(TEST_FOLDER, "test_ADT_unit_test_sequence.vrs"),
             conf=rgb_conf,
         )
-        depth_image_transform_list = rgb_camera_processor.get_image_transform_list(
+        depth_image_transform = rgb_camera_processor.get_image_transform(
             rescale_interpolation=InterpolationMode.NEAREST
         )
 
@@ -59,7 +59,7 @@ class DepthImageProcessorTest(unittest.TestCase):
         depth_conf = OmegaConf.merge(depth_conf, {"sensor_stream_id": "345-1"})
         rgb_depth_processor = DepthImageProcessor(
             depth_vrs=os.path.join(TEST_FOLDER, "test_ADT_depth_rgb_only.vrs"),
-            image_transform_list=depth_image_transform_list,
+            image_transform=depth_image_transform,
             conf=depth_conf,
         )
 

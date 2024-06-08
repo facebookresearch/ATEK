@@ -1,9 +1,14 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
 import logging
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import torch
+from atek.data_preprocess.util.camera_calib_utils import (
+    rescale_pixel_coords,
+    rotate_pixel_coords_cw90,
+    undistort_pixel_coords,
+)
 
 from omegaconf.omegaconf import DictConfig
 from projectaria_tools.core import calibration, data_provider
@@ -12,6 +17,11 @@ from torchvision.transforms import InterpolationMode, v2
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def identity_transform(obj):
+    """Helper identity transform function"""
+    return obj
 
 
 class AriaCameraProcessor:
@@ -107,12 +117,12 @@ class AriaCameraProcessor:
             self.target_camera_resolution is not None
             and len(self.target_camera_resolution) == 2
         ):
-            scale = (
+            self.scale = (
                 float(self.target_camera_resolution[0])
                 / camera_calib.get_image_size()[0]
             )
             camera_calib = camera_calib.rescale(
-                new_resolution=self.target_camera_resolution, scale=scale
+                new_resolution=self.target_camera_resolution, scale=self.scale
             )
 
         # Rotate camera model if specified
@@ -158,9 +168,9 @@ class AriaCameraProcessor:
 
             return torch.stack(result_list, dim=0)
 
-    def get_image_transform_list(
+    def get_image_transform(
         self, rescale_interpolation: InterpolationMode = InterpolationMode.BILINEAR
-    ) -> List:
+    ) -> Callable:
         """
         Returns a list of torchvision transform functions to be applied to the raw image data,
         in the order of: undistortion -> rescale -> rotateCW90, where any step is optional.
@@ -189,7 +199,51 @@ class AriaCameraProcessor:
             # image is [frames, c, h, w]
             image_transform_list.append(lambda img: torch.rot90(img, k=3, dims=[2, 3]))
 
-        return image_transform_list
+        if len(image_transform_list) == 0:
+            return identity_transform
+        else:
+            return v2.Compose(image_transform_list)
+
+    def get_pixel_transform(self) -> Callable:
+        """
+        Returns a list of torchvision transform functions to be applied to the raw image data,
+        in the order of: undistortion -> rescale -> rotateCW90, where any step is optional.
+        The transform should be applied to pixel coordinates of Tensor [N, 2]
+        """
+        pixel_transform_list = []
+        # undistort if specified
+        if self.undistort_to_linear_camera:
+            pixel_transform_list.append(
+                lambda pixels: undistort_pixel_coords(
+                    pixels,
+                    src_calib=self.original_camera_calib,
+                    dst_calib=self.undistorted_linear_camera_calib,
+                )
+            )
+
+        # rescale resolution if specified
+        if (
+            self.target_camera_resolution is not None
+            and len(self.target_camera_resolution) == 2
+        ):
+
+            pixel_transform_list.append(
+                lambda pixels: rescale_pixel_coords(pixels, scale=self.scale)
+            )
+
+        # rotate if specified
+        if self.rotate_image_cw90deg:
+            # image is [frames, c, h, w]
+            pixel_transform_list.append(
+                lambda pixels: rotate_pixel_coords_cw90(
+                    pixels, image_dim_after_rot=self.final_camera_calib.get_image_size()
+                )
+            )
+
+        if len(pixel_transform_list) == 0:
+            return identity_transform
+        else:
+            return v2.Compose(pixel_transform_list)
 
     def get_image_data_by_timestamps_ns(
         self, timestamps_ns: List[int]
@@ -237,11 +291,8 @@ class AriaCameraProcessor:
         # Image transformations are handled by torchvision's transform functions.
         batched_image_tensor = torch.stack(image_list, dim=0)
 
-        image_transform_list = self.get_image_transform_list()
-
-        if len(image_transform_list) > 0:
-            image_transform = v2.Compose(image_transform_list)
-            batched_image_tensor = image_transform(batched_image_tensor)
+        image_transform = self.get_image_transform()
+        batched_image_tensor = image_transform(batched_image_tensor)
 
         # properly clean output to desired dtype and shapes
         return (

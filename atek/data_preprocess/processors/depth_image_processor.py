@@ -1,7 +1,7 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
 import logging
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import torch
 
@@ -19,12 +19,12 @@ class DepthImageProcessor:
     def __init__(
         self,
         depth_vrs: str,
-        image_transform_list: List,
+        image_transform: Callable,
         conf: DictConfig,
     ):
         # Parse in conf
         self.conf = conf
-        self.image_transform_list = image_transform_list
+        self.image_transform = image_transform
 
         # setting up vrs data provider
         self.depth_vrs = depth_vrs
@@ -95,10 +95,7 @@ class DepthImageProcessor:
 
         # Image transformations are handled by torchvision's transform functions.
         batched_depth_tensor = torch.stack(image_list, dim=0)
-
-        if len(self.image_transform_list) > 0:
-            image_transform = v2.Compose(self.image_transform_list)
-            batched_depth_tensor = image_transform(batched_depth_tensor)
+        batched_depth_tensor = self.image_transform(batched_depth_tensor)
 
         # properly clean output to desired dtype and shapes
         return (
