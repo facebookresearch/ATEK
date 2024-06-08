@@ -10,7 +10,7 @@ processors:
     sensor_label: "camera-rgb"
     time_domain: "DEVICE_TIME"
     tolerance_ns: 10_000_000
-    undistort_to_linear_cam: false  # if set, undistort to a linear camera model
+    undistort_to_linear_camera: false  # if set, undistort to a linear camera model
     target_camera_resolution: [480, 480] # if set, rescale to [image_width, image_height]
     rotate_image_cw90deg: true  # if set, rotate image by 90 degrees clockwise
   slam_left:

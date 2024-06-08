@@ -15,8 +15,8 @@ def undistort_pixel_coords(
     A function to batch undistort pixel coords (tensor [N, 2]) from src_calib to dst_calib.
     """
     new_pixel_list = []
-    for i in range(pixels.shape[1]):
-        unprojected_ray = src_calib.unproject_no_checks(pixels[:, i].numpy())
+    for i in range(pixels.shape[0]):
+        unprojected_ray = src_calib.unproject_no_checks(pixels[i, :].numpy())
         new_pixel_list.append(
             torch.tensor(dst_calib.project_no_checks(unprojected_ray))
         )
