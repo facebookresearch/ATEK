@@ -2,7 +2,7 @@
 
 import csv
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -27,7 +27,8 @@ ATEK_OTHER_CATETORY_ID: int = (
 
 class Obb3GtProcessor:
     """
-    A Ground truth (GT) processor class for Object bounding box 3D (OBB3) data, used for 3D object detection ML task
+    Processes ground truth data for 3D object bounding boxes (OBB3), specifically designed for use in machine learning models focused on 3D object detection tasks.
+    This class interfaces with Aria Digital Twin data providers to fetch and process 3D bounding box data, transforming raw data into a structured format suitable for training ML models.
     """
 
     def __init__(
@@ -39,18 +40,34 @@ class Obb3GtProcessor:
         conf: DictConfig,
     ) -> None:
         """
+        Initializes the Obb3GtProcessor with paths to data files and configuration.
+        Args:
+            obb3_file_path (str): Path to the OBB3 file containing bounding box data.
+            obb3_traj_file_path (str): Path to the trajectory data for bounding boxes.
+            instance_json_file_path (str): Path to the JSON file containing instance metadata.
+            category_mapping_file_path (Optional[str]): Path to the CSV file mapping category names to IDs, in the format of:
+                {
+                    $KEY_TO_MAP： [“cat_name”, category_id],
+                    ...
+                },
+                where "KEY_TO_MAP" is one of strings of {"prototype_name", "category"}, set through conf.category_mapping_field_name
+            conf (DictConfig): Configuration object specifying operational parameters such as data field mappings and tolerances, example yaml:
+                ```
+                selected: true  # whether to use this processor
+                tolerance_ns : 10_000_000 # tolerance in ns for timestamp
+                category_mapping_field_name: prototype_name # {prototype_name (for ADT), category (for ASE)}
+                ```
+        Raises:
+            FileNotFoundError: If any of the specified files do not exist at the provided paths.
+            ValueError: If configuration parameters are invalid or not compatible.
+
         Initialize the Obb3GtProcessor object.
 
         Args:
             obb3_file_path (str): The path to the OBB3 file, in ADT format: https://fburl.com/zh0p3egs
             obb3_traj_file_path (str): The path to the OBB3 trajectory file, in ADT format: https://fburl.com/ut0bddnf
             instance_json_file_path (str): The path to the instance JSON file, in ADT format: https://fburl.com/u4te445v
-            category_mapping (Dict): The category mapping dictionary in the format of:
-                {
-                    "key_to_map"： [“cat_name”, category_id],
-                    ...
-                },
-                where "key_to_map" is one of {"prototype_name", "category"} in the `instance.json` file, set through conf.category_mapping_field_name
+            category_mapping (Dict): The category mapping dictionary
         """
         self.conf = conf
 
@@ -72,6 +89,13 @@ class Obb3GtProcessor:
         self, aabb: np.ndarray, T_world_bb3d: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
+        Centers the 3D bounding box based on axis-aligned bounding box (AABB) coordinates and world transformation matrix.
+        Args:
+            aabb (np.ndarray): Array containing the min and max points [xmin, xmax, ymin, ymax, zmin, zmax].
+            T_world_bb3d (np.ndarray): Transformation matrix from world coordinates to bounding box coordinates.
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: A tuple containing the object dimensions and the new world transformation matrix centered at the object.
+
         Helper function to transform the object coordinate to the object center
         and generate the new T_world_object with new object coordinate
         aabb: [xmin, xmax, ymin, ymax, zmin, zmax]
@@ -87,9 +111,7 @@ class Obb3GtProcessor:
         return object_dimension, T_world_object_centered
 
     def _obtain_obj_category_info(self, instance_id: int) -> Tuple[str, int]:
-        """
-        Helper function to obtain the object category name and category id
-        """
+        """ """
         instance_info = self.adt_gt_provider.get_instance_info_by_id(instance_id)
 
         if not self.category_mapping:
@@ -118,7 +140,29 @@ class Obb3GtProcessor:
 
     def get_gt_by_timestamp_ns(self, timestamp_ns: int) -> Optional[Dict]:
         """
-        get obb3 GT by timestamp in nanoseconds
+        Retrieves the ground truth data for a given timestamp, formatted as a dictionary.
+        Args:
+            timestamp_ns (int): The timestamp in nanoseconds for which to retrieve the ground truth data.
+
+        Returns:
+            Optional[Dict]: A dictionary containing the ground truth data if available and valid; otherwise, None.
+
+            If not None, the returned dictionary will have the following structure:
+                {
+                    "instance_id": {
+                        "instance_id": str,
+                        "category_name": str,
+                        "category_id": int,
+                        "object_dimensions": torch.Tensor (shape: [3], float32),
+                        "T_World_Object": torch.Tensor (shape: [3, 4], float32)
+                    },
+                    ...
+                }
+
+            Each key in the dictionary is a unique instance ID corresponding to an object.
+
+        Notes:
+            Returns None if the data at the specified timestamp is not valid or does not meet the configured tolerances.
         """
         bbox3d_with_dt = (
             self.adt_gt_provider.get_object_3d_boundingboxes_by_timestamp_ns(

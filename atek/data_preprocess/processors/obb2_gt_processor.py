@@ -40,10 +40,27 @@ class Obb2GtProcessor:
         conf: DictConfig,
     ) -> None:
         """
-        Initialize the Obb2GtProcessor object.
+        Initializes the Obb2GtProcessor object with necessary file paths and configurations.
 
         Args:
-            obb2_file_path (str): The path to the OBB2 file, in ADT format: https://fburl.com/zh0p3egs
+            obb2_file_path (str): The file path to the OBB2 data file in ADT format.
+            instance_json_file_path (str): The file path to the JSON file containing instance data in ADT format
+            category_mapping_file_path (Optional[str]): Path to the CSV file mapping category names to IDs, in the format of:
+                {
+                    $KEY_TO_MAP： [“cat_name”, category_id],
+                    ...
+                },
+                where "KEY_TO_MAP" is one of strings of {"prototype_name", "category"}, set through conf.category_mapping_field_name
+            camera_label_to_stream_ids (Dict[str, str]): A dictionary mapping camera labels to stream IDs.
+            camera_label_to_pixel_transforms (Optional[Dict[str, Callable]]): A dictionary mapping camera labels to pixel transformation functions, if available.
+            camera_label_to_calib (Optional[Dict[str, CameraCalibration]]): A dictionary mapping camera labels to camera calibration data, if available.
+
+            conf (DictConfig): A configuration object containing settings for the processor, example yaml:
+                ```
+                category_mapping_field_name: "prototype_name" # {prototype_name (for ADT), category (for ASE)}
+                bbox2d_num_samples_on_edge: 10                 # Number of samples on each edge of 2D bbox in distortion
+                tolerance_ns: 1000000                          # Tolerance in nanoseconds for timestamp validation
+                ```
         """
         self.conf = conf
 
@@ -66,7 +83,11 @@ class Obb2GtProcessor:
 
     def _obtain_obj_category_info(self, instance_id: int) -> Tuple[str, int]:
         """
-        Helper function to obtain the object category name and category id
+        Retrieves the category name and ID for a given instance ID.
+        Args:
+            instance_id (int): The instance ID for which to retrieve category information.
+        Returns:
+            Tuple[str, int]: A tuple containing the category name and category ID.
         """
         instance_info = self.adt_gt_provider.get_instance_info_by_id(instance_id)
 
@@ -98,7 +119,12 @@ class Obb2GtProcessor:
         self, bbox2d_range: np.array, num_points_on_edge: int
     ) -> torch.Tensor:
         """
-        Sample points on the 2d bounding box, return pixel coords as tensor [N, 2]
+        Samples points on the edges of a 2D bounding box.
+        Args:
+            bbox2d_range (np.array): An array containing the bounding box coordinates [xmin, xmax, ymin, ymax].
+            num_points_on_edge (int): The number of points to sample along each edge of the bounding box.
+        Returns:
+            torch.Tensor: A tensor containing the sampled pixel coordinates.
         """
         # Create sampled pixel coordinates along each edge of the 2d bbox
         xmin, xmax, ymin, ymax = bbox2d_range
@@ -149,7 +175,33 @@ class Obb2GtProcessor:
 
     def get_gt_by_timestamp_ns(self, timestamp_ns: int) -> Optional[Dict]:
         """
-        get obb2 GT by timestamp in nanoseconds
+        Retrieves the ground truth data for 2D bounding boxes by timestamp in nanoseconds.
+
+        Args:
+            timestamp_ns (int): The timestamp in nanoseconds for which to retrieve the ground truth data.
+
+        Returns:
+            Optional[Dict]: A dictionary containing the ground truth data for 2D bounding boxes if available and valid; otherwise, None.
+
+            If not None, the returned dictionary will have the following structure:
+                {
+                    "camera_label": {
+                        "instance_id": {
+                            "instance_id": str,
+                            "category_name": str,
+                            "category_id": int,
+                            "visibility_ratio": float,
+                            "box_range": List[float] (shape: [4])  # [xmin, xmax, ymin, ymax]
+                        },
+                        ...
+                    },
+                    ...
+                }
+
+            Each key in the outer dictionary corresponds to a camera label, while each inner dictionary contains instance information for that camera.
+
+        Notes:
+            Returns None if the data at the specified timestamp is not valid or does not meet the configured tolerances.
         """
         bbox2d_dict = {}
         for cam_label, stream_id in self.camera_label_to_stream_ids.items():

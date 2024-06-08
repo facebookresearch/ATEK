@@ -20,8 +20,20 @@ class EfmGtProcessor(Obb3GtProcessor):
 
     def get_gt_by_timestamp_list_ns(self, timestamps_ns: List[int]) -> Optional[Dict]:
         """
-        get a GT Dict by timestamps in nanoseconds, returns a nested Dict of
-        {query_timestamp: single_timestamp_GT_Dict}
+        get a GT Dict by timestamps in nanoseconds, returns a nested Dict of the following structure:
+            {
+                timestamp: {
+                    "instance_id": {
+                        "instance_id": str,
+                        "category_name": str,
+                        "category_id": int,
+                        "object_dimensions": torch.Tensor (shape: [3], float32),
+                        "T_World_Object": torch.Tensor (shape: [3, 4], float32)
+                    },
+                    ...
+                }
+                ...
+            }
         """
         if len(timestamps_ns) == 0:
             return None
