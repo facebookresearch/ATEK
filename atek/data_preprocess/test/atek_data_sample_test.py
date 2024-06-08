@@ -7,6 +7,7 @@ import torch
 
 from atek.data_preprocess.atek_data_sample import (
     AtekDataSample,
+    MpsSemiDensePointData,
     MpsTrajData,
     MultiFrameCameraData,
 )
@@ -35,6 +36,46 @@ class MultiFrameCameraDataTest(unittest.TestCase):
             "MFCD#test-camera+projection_params.pth",
         ]
         self.assertCountEqual(data_dict.keys(), expected_keys)
+
+
+class TestMpsSemiDensePointData(unittest.TestCase):
+    def test_to_flatten_dict(self):
+        # Create an instance of MpsSemiDensePointData with sample data
+        point_data = MpsSemiDensePointData(
+            points_world=[
+                torch.tensor([[1, 2, 3], [4, 5, 6]]),
+                torch.tensor([[7, 8, 9]]),
+            ],
+            points_inv_dist_std=[torch.tensor([0.1, 0.2]), torch.tensor([0.3])],
+        )
+
+        # Call the method
+        flatten_dict = point_data.to_flatten_dict()
+
+        # Check the keys in the flatten_dict
+        expected_keys = [
+            "MSDPD#points_world_lengths.pth",
+            "MSDPD#stacked_points_world.pth",
+            "MSDPD#stacked_points_inv_dist_std.pth",
+        ]
+        self.assertCountEqual(flatten_dict.keys(), expected_keys)
+
+        # Check value
+        self.assertTrue(
+            torch.allclose(
+                flatten_dict["MSDPD#points_world_lengths.pth"],
+                torch.tensor([2, 1], dtype=torch.int64),
+                atol=0,
+            )
+        )
+
+        # Check shape
+        self.assertEqual(
+            flatten_dict["MSDPD#stacked_points_world.pth"].shape, torch.Size([3, 3])
+        )
+        self.assertEqual(
+            flatten_dict["MSDPD#stacked_points_inv_dist_std.pth"].shape, torch.Size([3])
+        )
 
 
 class AtekDataSampleTest(unittest.TestCase):

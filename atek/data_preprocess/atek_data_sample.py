@@ -2,9 +2,8 @@
 from dataclasses import dataclass, field, fields, is_dataclass
 from typing import Dict, List, Optional
 
-import numpy as np
-
 import torch
+from atek.data_preprocess.util.file_io_utils import concat_list_of_tensors
 
 
 @dataclass
@@ -173,6 +172,35 @@ class MpsSemiDensePointData:
     points_inv_dist_std: List[torch.Tensor] = field(
         default_factory=list
     )  # Tensor has shape of [N] to represent points' inverse distance, List has length of num_frames
+
+    def to_flatten_dict(self):
+        """
+        Transforms to a flattened dictionary, excluding attributes with None values.
+        Attributes are prefixed to ensure uniqueness and to maintain context.
+        Semidense point data needs to be flattended from List[Tensor (N, 3)] to a Tensor (M, 3) in order to be writable to WDS.
+        Therefore we store a `stacked_points_world` (Tensor [M, 3]) along with `points_world_lengths` (Tensor [num_frames]),
+        in order to unpack the stacked tensor later. Same for `points_inv_dist_std`.
+        """
+        flatten_dict = {}
+
+        # obtain the "lengths" of each tensor in list.
+        stacked_points_world, len_points_world = concat_list_of_tensors(
+            self.points_world
+        )
+        stacked_points_inv_dist, len_points_inv_dist = concat_list_of_tensors(
+            self.points_inv_dist_std
+        )
+
+        assert torch.allclose(
+            len_points_world, len_points_inv_dist, atol=1
+        ), f"The lengths of points_world and points_inv_dist should be the same! Instead got\n {len_points_world} vs \n {len_points_inv_dist}"
+
+        # add to flatten dict
+        flatten_dict[f"MSDPD#points_world_lengths.pth"] = len_points_world
+        flatten_dict[f"MSDPD#stacked_points_world.pth"] = stacked_points_world
+        flatten_dict[f"MSDPD#stacked_points_inv_dist_std.pth"] = stacked_points_inv_dist
+
+        return flatten_dict
 
 
 @dataclass
