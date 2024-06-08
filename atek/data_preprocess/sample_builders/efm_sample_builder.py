@@ -89,18 +89,19 @@ class EfmSampleBuilder:
                 ],
                 conf=conf.mps_semidense,
             )
+
         # Depth processor
-        if "rgb_depth" in conf and conf.rgb_depth.selected:
+        if "rgb-depth" in conf and conf.rgb_depth.selected:
             assert (
                 depth_vrs_file is not None
             ), "need to specify depth vrs file to use depth processor"
 
             # Obtain image transformations from rgb AriaCameraProcessor, where interpolation needs to be exactly set to NEAREST
             assert (
-                "camera_rgb" in processors
+                "camera-rgb" in processors
             ), "rgb_depth depends on camera_rgb processor to obtain camera calibration"
             depth_image_transform_list = processors[
-                "camera_rgb"
+                "camera-rgb"
             ].get_image_transform_list(rescale_interpolation=InterpolationMode.NEAREST)
 
             processors["rgb_depth"] = DepthImageProcessor(
@@ -117,7 +118,7 @@ class EfmSampleBuilder:
                 category_mapping_file_path=gt_files.get(
                     "category_mapping_file", None
                 ),  # this file is optional
-                conf=conf.obb3_gt,
+                conf=conf.efm_gt,
             )
 
         return processors
@@ -195,7 +196,7 @@ class EfmSampleBuilder:
             # =======================================
             elif isinstance(processor, MpsSemiDenseProcessor):
                 maybe_mps_semidense_data = (
-                    processor.get_semidense_data_by_timestamps_ns(timestamps_ns)
+                    processor.get_semidense_points_by_timestamps_ns(timestamps_ns)
                 )
                 if maybe_mps_semidense_data is None:
                     logger.warning(
@@ -205,7 +206,7 @@ class EfmSampleBuilder:
 
                 # Fill MPS SemiDense data into sample
                 sample.mps_semidense_point_data = MpsSemiDensePointData(
-                    points_in_world=maybe_mps_semidense_data[0],
+                    points_world=maybe_mps_semidense_data[0],
                     points_inv_dist_std=maybe_mps_semidense_data[1],
                 )
 

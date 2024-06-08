@@ -68,6 +68,10 @@ class MpsTrajProcessor:
                     pose.gravity_world.astype(np.float32)
                 )
 
+        # Skip if empty data
+        if len(pose_list) == 0:
+            return None
+
         return (
             torch.stack(pose_list, dim=0),
             torch.tensor(capture_timestamp_list, dtype=torch.int64),

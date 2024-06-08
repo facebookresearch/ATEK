@@ -4,6 +4,7 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
 import logging
+import time
 from collections import defaultdict
 from typing import List, Optional, Tuple, Union
 
@@ -34,11 +35,18 @@ class MpsSemiDenseProcessor:
         self.conf = conf
 
         # Load in semidense points data. Not using MPSDataProvider because it is not sufficient.
+        time_0 = time.time()
         self.uid_to_p3, self.uid_to_inv_dist_std = self._load_semidense_global_points(
             mps_semidense_points_file
         )
+        time_1 = time.time()
         self.time_to_uids, self.uid_to_times = self._load_semidense_observations(
             mps_semidense_observations_file
+        )
+        time_2 = time.time()
+
+        logger.info(
+            f"loading semidense points takes {time_1-time_0} seconds, observations takes {time_2-time_1} seconds"
         )
 
     def get_semidense_points_by_timestamps_ns(
@@ -87,7 +95,7 @@ class MpsSemiDenseProcessor:
         self,
         path: str,
     ):
-        print(f"loading global semi-dense points from {path}")
+        logger.info(f"loading global semi-dense points from {path}")
 
         # Determine compression method
         if path.endswith(".csv"):
