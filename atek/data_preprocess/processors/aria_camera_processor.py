@@ -61,6 +61,9 @@ class AriaCameraProcessor:
     def get_final_camera_calib(self):
         return self.final_camera_calib
 
+    def get_stream_id(self):
+        return self.stream_id
+
     def get_origin_label(self):
         """
         returns the sensor label of the origin (DeviceFrame) definition in Aria calibration

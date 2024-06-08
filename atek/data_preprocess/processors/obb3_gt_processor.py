@@ -109,7 +109,7 @@ class Obb3GtProcessor:
             # Perform mapping
             if key_to_map in self.category_mapping:
                 category_name = self.category_mapping[key_to_map][0]
-                category_id = self.category_mapping[key_to_map][1]
+                category_id = int(self.category_mapping[key_to_map][1])
             else:
                 category_name = "other"
                 category_id = ATEK_OTHER_CATETORY_ID
