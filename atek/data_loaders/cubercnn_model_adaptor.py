@@ -37,6 +37,7 @@ class CubeRCNNModelAdaptor:
         }
         return dict_key_mapping
 
+    # TODO: break this function into smaller pieces
     def atek_to_cubercnn(self, data):
         """
         A helper data transform function to convert a ATEK webdataset data sample built by CubeRCNNSampleBuilder, to CubeRCNN unbatched
@@ -44,30 +45,30 @@ class CubeRCNNModelAdaptor:
         the webdataset properly.
         """
         for atek_wds_sample in data:
-            sample = atek_wds_sample
-            # for testing only
-            print(f"atek_wds_sample keys: {sample.keys()}")
+            sample = {}
 
             # check frame number should be 1
             assert (
-                sample["image"].shape[0] == 1
+                atek_wds_sample["image"].shape[0] == 1
             ), "cubercnn sample currently only support 1 frame"
             # Image rgb->bgr
-            sample["image"] = sample["image"][:, [2, 1, 0], :, :]
+            sample["image"] = (
+                atek_wds_sample["image"][0, [2, 1, 0], :, :].clone().detach()
+            )
 
             # Formulating camera K-matrix information from projection params
-            camera_model = sample["camera_model"]
+            camera_model = atek_wds_sample["camera_model"]
             assert (
                 camera_model == "CameraModelType.LINEAR"
             ), f"CubeRCNN model only take camera model of Linear, this data has {camera_model} instead."
             k_matrix = torch.zeros((3, 3), dtype=torch.float32)
-            k_matrix[0, 0] = sample["camera_params"][0]  # fx
-            k_matrix[1, 1] = sample["camera_params"][1]  # fy
-            k_matrix[0, 2] = sample["camera_params"][2]  # cx
-            k_matrix[1, 2] = sample["camera_params"][3]  # cy
+            k_matrix[0, 0] = atek_wds_sample["camera_params"][0]  # fx
+            k_matrix[1, 1] = atek_wds_sample["camera_params"][1]  # fy
+            k_matrix[0, 2] = atek_wds_sample["camera_params"][2]  # cx
+            k_matrix[1, 2] = atek_wds_sample["camera_params"][3]  # cy
             k_matrix[2, 2] = 1.0
             # images are [1, C, H, W]
-            image_height, image_width = sample["image"].shape[2:]
+            image_height, image_width = atek_wds_sample["image"].shape[2:]
             sample.update(
                 {
                     "K": k_matrix.tolist(),  # CubeRCNN requires list input
@@ -77,15 +78,16 @@ class CubeRCNNModelAdaptor:
             )
 
             # Compute T_world_camera
-            T_world_device = SE3.from_matrix3x4(sample["ts_world_device"][0])
-            T_device_rgbCam = SE3.from_matrix3x4(sample["t_device_rgbcam"])
+            T_world_device = SE3.from_matrix3x4(atek_wds_sample["ts_world_device"][0])
+            T_device_rgbCam = SE3.from_matrix3x4(atek_wds_sample["t_device_rgbcam"])
             T_world_rgbCam = T_world_device @ T_device_rgbCam
             sample["T_world_camera"] = T_world_rgbCam.to_matrix3x4()
 
             # retrieve gt data from the 2 dicts
-            bbox2d_dict = sample["gtdata"]["obb2_gt"]["camera-rgb"]
-            bbox3d_dict = sample["gtdata"]["obb3_gt"]
+            bbox2d_dict = atek_wds_sample["gtdata"]["obb2_gt"]["camera-rgb"]
+            bbox3d_dict = atek_wds_sample["gtdata"]["obb3_gt"]
             shared_instances = set(bbox2d_dict.keys()) & set(bbox3d_dict.keys())
+
             bb3d_dimensions = torch.tensor(
                 [bbox3d_dict[inst]["object_dimensions"] for inst in shared_instances],
                 dtype=torch.float32,
@@ -126,11 +128,9 @@ class CubeRCNNModelAdaptor:
                 Ts_cam_object_list.append(
                     torch.tensor(T_cam_object.to_matrix3x4(), dtype=torch.float32)
                 )
-                bb3d_depths_list.append(
-                    torch.tensor(T_cam_object.translation()[:, 2], dtype=torch.float32)
-                )
+                bb3d_depths_list.append(T_cam_object.translation()[:, 2].item())
             # Convert lists to tensors
-            bb3d_depths = torch.stack(bb3d_depths_list, dim=0).squeeze()
+            bb3d_depths = torch.tensor(bb3d_depths_list, dtype=torch.float32)
             Ts_world_object = torch.stack(Ts_world_object_list, dim=0)
             Ts_cam_object = torch.stack(Ts_cam_object_list, dim=0)
 
