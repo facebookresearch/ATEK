@@ -46,6 +46,7 @@ class Obb3SampleBuilderTest(unittest.TestCase):
                 "obb3_traj_file": os.path.join(
                     TEST_DIR_PATH, "test_3d_bounding_box_traj.csv"
                 ),
+                "obb2_file": os.path.join(TEST_DIR_PATH, "test_2d_bounding_box.csv"),
                 "instance_json_file": os.path.join(
                     TEST_DIR_PATH, "test_instances.json"
                 ),
@@ -99,5 +100,3 @@ class CubeRCNNSampleBuilderTest(unittest.TestCase):
         self.assertFalse(hasattr(queried_sample, "camera_et_left"))  # No ET data
         self.assertTrue(queried_sample.mps_traj_data is not None)
         self.assertCountEqual(queried_sample.gt_data.keys(), ["obb2_gt", "obb3_gt"])
-        for instance_id, instance_dict in queried_sample.gt_data["obb3_gt"].items():
-            self.assertCountEqual(instance_dict.keys(), Obb3GtProcessor.GT_DICT_KEYS)

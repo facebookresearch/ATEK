@@ -22,15 +22,22 @@ class EfmGtProcessor(Obb3GtProcessor):
         """
         get a GT Dict by timestamps in nanoseconds, returns a nested Dict of the following structure:
             {
-                timestamp: {
-                    "instance_id": {
-                        "instance_id": str,
-                        "category_name": str,
-                        "category_id": int,
-                        "object_dimensions": torch.Tensor (shape: [3], float32),
-                        "T_World_Object": torch.Tensor (shape: [3, 4], float32)
+                timestamp_1: {
+                    "bbox3d_all_instances": {
+                        "instance_id_1": {
+                            "instance_id": str,
+                            "category_name": str,
+                            "category_id": int,
+                            "object_dimensions": torch.Tensor (shape: [3], float32),
+                            "T_World_Object": torch.Tensor (shape: [3, 4], float32)
+                        },
+                        ...
                     },
-                    ...
+                    "instances_visible_to_cameras": {
+                        "camera_1": ["instance_id_1", "instance_id_2", ...],
+                        "camera_2": ["instance_id_1", "instance_id_2", ...],
+                        ...
+                    }
                 }
                 ...
             }

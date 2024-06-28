@@ -12,6 +12,7 @@ from atek.data_preprocess.util.file_io_utils import load_category_mapping_from_c
 from omegaconf.omegaconf import DictConfig
 
 from projectaria_tools.core.sophus import SE3
+from projectaria_tools.core.stream_id import StreamId
 from projectaria_tools.projects.adt import (
     AriaDigitalTwinDataPaths,
     AriaDigitalTwinDataProvider,
@@ -35,8 +36,10 @@ class Obb3GtProcessor:
         self,
         obb3_file_path: str,
         obb3_traj_file_path: str,
+        obb2_file_path: str,  # TODO: maybe make this optional?
         instance_json_file_path: str,
         category_mapping_file_path: Optional[str],
+        camera_label_to_stream_ids: Dict[str, StreamId],
         conf: DictConfig,
     ) -> None:
         """
@@ -44,6 +47,7 @@ class Obb3GtProcessor:
         Args:
             obb3_file_path (str): Path to the OBB3 file containing bounding box data.
             obb3_traj_file_path (str): Path to the trajectory data for bounding boxes.
+            obb2_file_path (str): Path to the OBB2 file containing bounding box data. This file is required for object visibility information.
             instance_json_file_path (str): Path to the JSON file containing instance metadata.
             category_mapping_file_path (Optional[str]): Path to the CSV file mapping category names to IDs, in the format of:
                 {
@@ -60,20 +64,13 @@ class Obb3GtProcessor:
         Raises:
             FileNotFoundError: If any of the specified files do not exist at the provided paths.
             ValueError: If configuration parameters are invalid or not compatible.
-
-        Initialize the Obb3GtProcessor object.
-
-        Args:
-            obb3_file_path (str): The path to the OBB3 file, in ADT format: https://fburl.com/zh0p3egs
-            obb3_traj_file_path (str): The path to the OBB3 trajectory file, in ADT format: https://fburl.com/ut0bddnf
-            instance_json_file_path (str): The path to the instance JSON file, in ADT format: https://fburl.com/u4te445v
-            category_mapping (Dict): The category mapping dictionary
         """
         self.conf = conf
 
         # Create a ADT data provider object, which will be used to load 3D BBOX GT data
         data_paths = AriaDigitalTwinDataPaths()
         data_paths.object_boundingbox_3d_filepath = obb3_file_path
+        data_paths.boundingboxes_2d_filepath = obb2_file_path
         data_paths.object_trajectories_filepath = obb3_traj_file_path
         data_paths.instances_filepath = instance_json_file_path
 
@@ -84,6 +81,8 @@ class Obb3GtProcessor:
             if category_mapping_file_path is None
             else load_category_mapping_from_csv(category_mapping_file_path)
         )
+
+        self.camera_label_to_stream_ids = camera_label_to_stream_ids
 
     def _center_object_bb3d(
         self, aabb: np.ndarray, T_world_bb3d: np.ndarray
@@ -149,17 +148,22 @@ class Obb3GtProcessor:
 
             If not None, the returned dictionary will have the following structure:
                 {
-                    "instance_id": {
-                        "instance_id": str,
-                        "category_name": str,
-                        "category_id": int,
-                        "object_dimensions": torch.Tensor (shape: [3], float32),
-                        "T_World_Object": torch.Tensor (shape: [3, 4], float32)
+                    "bbox3d_all_instances": {
+                        "instance_id_1": {
+                            "instance_id": str,
+                            "category_name": str,
+                            "category_id": int,
+                            "object_dimensions": torch.Tensor (shape: [3], float32),
+                            "T_World_Object": torch.Tensor (shape: [3, 4], float32)
+                        },
+                        ...
                     },
-                    ...
+                    "instances_visible_to_cameras": {
+                        "camera_1": ["instance_id_1", "instance_id_2", ...],
+                        "camera_2": ["instance_id_1", "instance_id_2", ...],
+                        ...
+                    }
                 }
-
-            Each key in the dictionary is a unique instance ID corresponding to an object.
 
         Notes:
             Returns None if the data at the specified timestamp is not valid or does not meet the configured tolerances.
@@ -170,21 +174,20 @@ class Obb3GtProcessor:
             )
         )
         # no valid data, return empty dict
-        if not bbox3d_with_dt.is_valid():
-            logger.warn(f"Cannot obtain valid 3d bbox data at {timestamp_ns}")
-            return None
-
-        # queried data out of tolerance, return empty dict
-        if bbox3d_with_dt.dt_ns() > self.conf.tolerance_ns:
+        if (
+            not bbox3d_with_dt.is_valid()
+        ) or bbox3d_with_dt.dt_ns() > self.conf.tolerance_ns:
             logger.warn(
-                f"Can not get good 3d bounding boxes at {timestamp_ns} because "
-                f"the nearest bb2d with delta time {bbox3d_with_dt.dt_ns()}ns "
-                f"bigger than the threshold we have {self.conf.tolerance_ns}ns "
+                f"Cannot obtain valid 3d bbox data at {timestamp_ns}, or the nearest valid bb3d is too far away."
             )
             return None
 
-        # pack 3d bbox data into a dict
-        bbox3d_dict = {}
+        bbox3d_dict = {
+            "bbox3d_all_instances": {},
+            "instances_visible_to_cameras": {},
+        }
+
+        # First, insert all instances of 3d bbox data into a dict
         for instance_id, single_data in bbox3d_with_dt.data().items():
             single_bbox3d_dict = {}
             # fill in instance id and category information
@@ -207,6 +210,40 @@ class Obb3GtProcessor:
                 T_world_object.to_matrix3x4().astype(np.float32)
             )
 
-            bbox3d_dict[instance_id] = single_bbox3d_dict
+            bbox3d_dict["bbox3d_all_instances"][instance_id] = single_bbox3d_dict
+
+        # dict should contain valid data
+        if len(bbox3d_dict["bbox3d_all_instances"]) == 0:
+            logger.debug(f"No valid 3d bbox data at {timestamp_ns}")
+            return None
+
+        # Second, we record which instances are visible in each camera, by checking bbox2d data
+        for camera_label, stream_id in self.camera_label_to_stream_ids.items():
+            bbox2d_with_dt = (
+                self.adt_gt_provider.get_object_2d_boundingboxes_by_timestamp_ns(
+                    timestamp_ns,
+                    stream_id,
+                )
+            )
+
+            # no valid data, assign to empty list
+            if (
+                not bbox2d_with_dt.is_valid()
+            ) or bbox2d_with_dt.dt_ns() > self.conf.tolerance_ns:
+                logger.warn(
+                    f"Cannot obtain valid 2d bbox data at {timestamp_ns} for "
+                    f"camera {camera_label}, this camera's obb3 dict will be empty"
+                )
+                bbox3d_dict["instances_visible_to_cameras"][camera_label] = []
+            else:
+                # insert visible instances
+                bbox3d_dict["instances_visible_to_cameras"][camera_label] = list(
+                    bbox2d_with_dt.data().keys()
+                )
+
+        # one of the cameras should have visible data
+        if all(not x for x in bbox3d_dict["instances_visible_to_cameras"]):
+            logger.debug(f"No observable bbox from any of the cameras, returning None")
+            return None
 
         return bbox3d_dict

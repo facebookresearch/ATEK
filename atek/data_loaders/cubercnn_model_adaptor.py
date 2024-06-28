@@ -85,7 +85,7 @@ class CubeRCNNModelAdaptor:
 
             # retrieve gt data from the 2 dicts
             bbox2d_dict = atek_wds_sample["gtdata"]["obb2_gt"]["camera-rgb"]
-            bbox3d_dict = atek_wds_sample["gtdata"]["obb3_gt"]
+            bbox3d_dict = atek_wds_sample["gtdata"]["obb3_gt"]["bbox3d_all_instances"]
             shared_instances = set(bbox2d_dict.keys()) & set(bbox3d_dict.keys())
 
             bb3d_dimensions = torch.tensor(

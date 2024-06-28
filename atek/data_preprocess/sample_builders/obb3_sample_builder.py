@@ -59,10 +59,14 @@ class ObjectDetection3dSampleBuilder:
             conf.slam_left,
             conf.slam_right,
         ]
+
+        selected_camera_label_to_stream_ids = {}
         for camera_conf in camera_conf_list:
             if camera_conf.selected:
-                processors[camera_conf.sensor_label] = AriaCameraProcessor(
-                    vrs_file, camera_conf
+                cam_processor = AriaCameraProcessor(vrs_file, camera_conf)
+                processors[camera_conf.sensor_label] = cam_processor
+                selected_camera_label_to_stream_ids[camera_conf.sensor_label] = (
+                    cam_processor.get_stream_id()
                 )
 
         if "mps_traj" in conf and conf.mps_traj.selected:
@@ -75,10 +79,12 @@ class ObjectDetection3dSampleBuilder:
             processors["obb3_gt"] = Obb3GtProcessor(
                 obb3_file_path=gt_files["obb3_file"],
                 obb3_traj_file_path=gt_files["obb3_traj_file"],
+                obb2_file_path=gt_files["obb2_file"],
                 instance_json_file_path=gt_files["instance_json_file"],
                 category_mapping_file_path=gt_files.get(
                     "category_mapping_file", None
                 ),  # this file is optional
+                camera_label_to_stream_ids=selected_camera_label_to_stream_ids,
                 conf=conf.obb3_gt,
             )
 

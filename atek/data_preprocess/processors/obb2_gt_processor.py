@@ -240,4 +240,13 @@ class Obb2GtProcessor:
                 )
                 bbox2d_dict[cam_label][instance_id] = single_bbox2d_dict
 
-        return bbox2d_dict
+        # At least one camera should have valid data, or will return None
+        valid_data_flag = False
+        for per_cam_data in bbox2d_dict.values():
+            if len(per_cam_data) > 0:
+                valid_data_flag = True
+
+        if not valid_data_flag:
+            return None
+        else:
+            return bbox2d_dict

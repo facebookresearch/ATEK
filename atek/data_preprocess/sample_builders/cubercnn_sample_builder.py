@@ -22,7 +22,14 @@ logger.setLevel(logging.INFO)
 
 class CubeRCNNSampleBuilder:
     """
-    A sample builder for CubeRCNN model for object detection 3D task
+    A sample builder for the CubeRCNN model, designed for 3D object detection tasks.
+
+    Attributes:
+        conf (DictConfig): Configuration object containing settings for the processor.
+        vrs_file (str): Path to the main Aria VRS file.
+        mps_files (Dict[str, str]): Dictionary containing paths to MPS-related files.
+        gt_files (Dict[str, str]): Dictionary containing paths to ground truth files.
+        processors (dict): Dictionary of data processors keyed by their type or label.
     """
 
     def __init__(
@@ -33,14 +40,18 @@ class CubeRCNNSampleBuilder:
         gt_files: Dict[str, str],
     ) -> None:
         """
-        vrs_file: the main Aria vrs file.
-        mps_files: A dict that contains:
-            "mps_closedloop_traj_file": closed loop trajectory file.
-        gt_files: A dict that contains the following GT files:
-            "obb3_file": object bounding box 3d file.
-            "obb3_traj_file": object bounding box 3d trajectory file. (TODO: maybe rename this?)
-            "obb2_file": object bounding box 2d file.
-            "instance_json_file": object instance json file that contains object instance information.
+        Initializes the CubeRCNNSampleBuilder with necessary configuration and file paths.
+
+        Args:
+            conf (DictConfig): Configuration object containing settings for various processors.
+            vrs_file (str): Path to the main Aria VRS file used for video and sensor data.
+            mps_files (Dict[str, str]): Dictionary mapping keys to file paths for MPS data, including:
+                "mps_closedloop_traj_file": Path to the closed-loop trajectory file.
+            gt_files (Dict[str, str]): Dictionary mapping keys to file paths for ground truth data, including:
+                "obb3_file": Path to the 3D object bounding box file.
+                "obb3_traj_file": Path to the 3D object bounding box trajectory file.
+                "obb2_file": Path to the 2D object bounding box file.
+                "instance_json_file": Path to the JSON file containing object instance information.
         """
         self.conf = conf
 
@@ -98,9 +109,11 @@ class CubeRCNNSampleBuilder:
                 obb3_file_path=gt_files["obb3_file"],
                 obb3_traj_file_path=gt_files["obb3_traj_file"],
                 instance_json_file_path=gt_files["instance_json_file"],
+                obb2_file_path=gt_files["obb2_file"],
                 category_mapping_file_path=gt_files.get(
                     "category_mapping_file", None
                 ),  # this file is optional
+                camera_label_to_stream_ids=selected_camera_label_to_stream_ids,
                 conf=conf.cubercnn_gt,
             )
 
