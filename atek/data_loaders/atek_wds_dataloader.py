@@ -29,13 +29,15 @@ def process_wds_sample(sample: Dict):
             sample_as_dict[k] = v
         else:
             key_wo_extension, extension_name = k.rsplit(".", 1)
-            # Images are named as `${root_name}_{frame_id}.jpeg` in WDS.
             # Need to restack each image back into tensor of shape `[num_frame, C, H, W]`
             if extension_name == "jpeg":
+                # Images are named as `${root_name}_{image_index}.jpeg` in WDS.
+                # Break the name into root_name and image_index
                 image_root_name = k.split("_")[0]
+                image_index = int(k.split("_")[1].split(".")[0])
 
                 if image_root_name not in to_be_stacked_images:
-                    to_be_stacked_images[image_root_name] = []
+                    to_be_stacked_images[image_root_name] = {}
 
                 # WDS-saved image are loaded as [3, H, W], where single-channel images are simply duplicated for 2 more channels.
                 # convert to tensor of shape [F, C, H, W]
@@ -45,7 +47,7 @@ def process_wds_sample(sample: Dict):
                     image = v
 
                 # append current image to the correct "stack"
-                to_be_stacked_images[image_root_name].append(image)
+                to_be_stacked_images[image_root_name][image_index] = image
 
             # Tensors
             elif extension_name == "pth":
@@ -62,10 +64,19 @@ def process_wds_sample(sample: Dict):
             else:
                 raise ValueError(f"Unsupported file type in wds {k}")
 
-    # restack images to tensor of [num_frames, C, H, W]
-    for image_root_name, image_frames in to_be_stacked_images.items():
+    # restack images to tensor of [num_frames, C, H, W], but need to re-arrange image order first!
+    for image_root_name, img_dict in to_be_stacked_images.items():
+        # may have missing frames
+        sorted_image_indices = sorted(img_dict.keys())
+        image_list_with_correct_order = []
+
+        for index in sorted_image_indices:
+            image_list_with_correct_order.append(img_dict[index])
+
         # Convert each frame to the desired shape
-        sample_as_dict[image_root_name] = torch.stack(image_frames, dim=0)
+        sample_as_dict[image_root_name] = torch.stack(
+            image_list_with_correct_order, dim=0
+        )
 
     # unpack semidense points from a stacked tensor back to List of tensors
     for key in ["points_world", "points_inv_dist_std", "points_dist_std"]:
