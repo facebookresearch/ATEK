@@ -156,12 +156,11 @@ class AriaCameraProcessor:
             result_list = []
             for i in range(num_frames):
                 # input image is tensor shape of [Frame, C, H, W], while distort_by_calibration requires [H, W, C]
-                single_image = image[i].permute(1, 2, 0)
-                tensor_result = torch.from_numpy(
-                    calibration.distort_by_calibration(
-                        single_image, self.dstCalib, self.srcCalib
-                    )
+                single_image = image[i].permute(1, 2, 0).numpy().copy()
+                numpy_result = calibration.distort_by_calibration(
+                    single_image, self.dstCalib, self.srcCalib
                 )
+                tensor_result = torch.from_numpy(numpy_result)
                 if tensor_result.ndim == 2:
                     # [H, W] -> [1, H, W]
                     tensor_result = tensor_result.unsqueeze(0)
