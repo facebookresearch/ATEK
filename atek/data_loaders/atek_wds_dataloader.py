@@ -107,13 +107,16 @@ def select_and_remap_dict_keys(
 
 def load_atek_wds_dataset(
     urls: List[str],
+    nodesplitter: Callable = wds.shardlists.single_node_only,
     dict_key_mapping: Optional[Dict[str, str]] = None,
     data_transform_fn: Optional[Callable] = None,
+    batch_size: Optional[int] = None,
+    collation_fn: Optional[Callable] = None,
+    repeat_flag: bool = False,
 ) -> wds.WebDataset:
-
     # first, load WDS samples back as dicts
     wds_dataset = (
-        wds.WebDataset(urls)
+        wds.WebDataset(urls, nodesplitter=nodesplitter)
         .decode(wds.imagehandler("torchrgb8"))
         .map(process_wds_sample)
     )
@@ -127,5 +130,13 @@ def load_atek_wds_dataset(
     # third, apply data transforms
     if data_transform_fn is not None:
         wds_dataset = wds_dataset.compose(data_transform_fn)
+
+    # fourth, batch samples
+    if batch_size is not None:
+        wds_dataset = wds_dataset.batched(batch_size, collation_fn=collation_fn)
+
+    # fifth, repeat dataset
+    if repeat_flag:
+        wds_dataset = wds_dataset.repeat()
 
     return wds_dataset

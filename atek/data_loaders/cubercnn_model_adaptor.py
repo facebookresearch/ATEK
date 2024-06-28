@@ -179,11 +179,19 @@ class CubeRCNNModelAdaptor:
             yield sample
 
 
-def load_atek_wds_dataset_as_cubercnn(urls: List):
+def cubercnn_collation_fn(batch):
+    # Simply collate as a list
+    return list(batch)
+
+
+def load_atek_wds_dataset_as_cubercnn(urls: List, batch_size: int, repeat_flag: bool):
     cubercnn_model_adaptor = CubeRCNNModelAdaptor()
 
     return load_atek_wds_dataset(
         urls,
+        batch_size=batch_size,
         dict_key_mapping=CubeRCNNModelAdaptor.get_dict_key_mapping_all(),
         data_transform_fn=pipelinefilter(cubercnn_model_adaptor.atek_to_cubercnn)(),
+        collation_fn=cubercnn_collation_fn,
+        repeat_flag=repeat_flag,
     )
