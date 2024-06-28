@@ -18,7 +18,9 @@ def undistort_pixel_coords(
     for i in range(pixels.shape[0]):
         unprojected_ray = src_calib.unproject_no_checks(pixels[i, :].numpy())
         new_pixel_list.append(
-            torch.tensor(dst_calib.project_no_checks(unprojected_ray))
+            torch.tensor(
+                dst_calib.project_no_checks(unprojected_ray), dtype=torch.float32
+            )
         )
     return torch.stack(new_pixel_list)
 
@@ -37,13 +39,16 @@ def rotate_pixel_coords_cw90(
     batch rotate pixel coords by 90deg clockwise, where pixels is a tensor of [N, 2]
     """
     # this looks like swapped because it is easier to pass in dim_after_rotation instead of dim_before_rotation
-    center_y = (image_dim_after_rot[0] - 1.0) / 2.0
-    center_x = (image_dim_after_rot[1] - 1.0) / 2.0
+    old_center_y = (image_dim_after_rot[0] - 1.0) / 2.0
+    old_center_x = (image_dim_after_rot[1] - 1.0) / 2.0
 
-    translated_pixels = pixels - torch.tensor([[center_x, center_y]])
-    rotated_pixels = torch.stack(
-        [translated_pixels[:, 1], -translated_pixels[:, 0]], dim=1
+    translated_pixels = pixels - torch.tensor(
+        [[old_center_x, old_center_y]], dtype=torch.float32
     )
-    rotated_pixels += torch.tensor([[center_x, center_y]])
+
+    rotation_matrix = torch.tensor([[0, 1], [-1, 0]], dtype=torch.float32)
+    rotated_pixels = torch.matmul(translated_pixels, rotation_matrix)
+
+    rotated_pixels += torch.tensor([[old_center_y, old_center_x]], dtype=torch.float32)
 
     return rotated_pixels
