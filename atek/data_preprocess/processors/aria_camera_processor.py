@@ -13,6 +13,7 @@ from atek.data_preprocess.util.camera_calib_utils import (
 )
 
 from omegaconf.omegaconf import DictConfig
+from PIL import Image
 from projectaria_tools.core import calibration, data_provider
 from projectaria_tools.core.sensor_data import TimeDomain, TimeQueryOptions  # @manual
 from torchvision.transforms import InterpolationMode, v2
@@ -30,18 +31,24 @@ class AriaCameraProcessor:
     def __init__(
         self,
         video_vrs: str,
-        conf: DictConfig,
+        conf: DictConfig,  # TODO: consider use more explicit init, and overload with DictConfig
     ):
         # Parse in conf
         self.conf = conf
+        # Resolution-rescale related params
         self.target_camera_resolution: List = (
             conf.target_camera_resolution if "target_camera_resolution" in conf else []
         )
+        self.rescale_antialias: bool = (
+            conf.rescale_antialias if "rescale_antialias" in conf else True
+        )
+        # Camera model undistortion related params
         self.undistort_to_linear_camera: bool = (
             conf.undistort_to_linear_camera
             if "undistort_to_linear_camera" in conf
             else False
         )
+        # Image rotation related params
         self.rotate_image_cw90deg: bool = (
             conf.rotate_image_cw90deg if "rotate_image_cw90deg" in conf else False
         )
@@ -173,7 +180,8 @@ class AriaCameraProcessor:
             return torch.stack(result_list, dim=0)
 
     def get_image_transform(
-        self, rescale_interpolation: InterpolationMode = InterpolationMode.BILINEAR
+        self,
+        rescale_interpolation: InterpolationMode = InterpolationMode.BILINEAR,
     ) -> Callable:
         """
         Returns a list of torchvision transform functions to be applied to the raw image data,
@@ -201,6 +209,7 @@ class AriaCameraProcessor:
                         self.target_camera_resolution[0],
                     ],
                     interpolation=rescale_interpolation,
+                    antialias=self.rescale_antialias,
                 )
             )
 
