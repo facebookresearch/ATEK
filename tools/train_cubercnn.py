@@ -12,11 +12,13 @@ import torch
 import torch.distributed as dist
 import yaml
 
-from atek.dataset.atek_webdataset import create_wds_dataloader
-from atek.dataset.omni3d_adapter import create_omni3d_webdataset, ObjectDetectionMode
-from atek.model.cubercnn import build_model
+from atek.data_loaders.cubercnn_model_adaptor import load_atek_wds_dataset_as_cubercnn
+
+# from atek.model.cubercnn import build_model
 
 from cubercnn.config import get_cfg_defaults
+from cubercnn.modeling.backbone import build_dla_from_vision_fpn_backbone
+from cubercnn.modeling.meta_arch import build_model
 from cubercnn.solver import build_optimizer, freeze_bn, PeriodicCheckpointerOnlyOne
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg
@@ -74,15 +76,15 @@ def build_test_loader(cfg):
     local_batch_size = max(cfg.SOLVER.IMS_PER_BATCH // world_size, 1)
     print("local_batch_size:", local_batch_size)
 
-    test_wds = create_omni3d_webdataset(
-        test_tars_local,
-        batch_size=local_batch_size,
-        repeat=True,
-        category_id_remapping_json=cfg.ID_MAP_JSON,
-        object_detection_mode=ObjectDetectionMode[cfg.DATASETS.OBJECT_DETECTION_MODE],
+    test_wds = load_atek_wds_dataset_as_cubercnn(
+        urls=test_tars_local, batch_size=local_batch_size, repeat_flag=True
     )
-    test_dataloader = create_wds_dataloader(
-        test_wds, num_workers=cfg.DATALOADER.NUM_WORKERS, pin_memory=True
+
+    test_dataloader = torch.utils.data.DataLoader(
+        test_wds,
+        batch_size=None,
+        num_workers=cfg.DATALOADER.NUM_WORKERS,
+        pin_memory=True,
     )
 
     dataset_name = os.path.basename(cfg.TEST_LIST).split(".")[0]
@@ -105,15 +107,15 @@ def build_train_loader(cfg):
     local_batch_size = max(cfg.SOLVER.IMS_PER_BATCH // world_size, 1)
     print("local_batch_size:", local_batch_size)
 
-    train_wds = create_omni3d_webdataset(
-        train_tars_local,
-        batch_size=local_batch_size,
-        repeat=True,
-        category_id_remapping_json=cfg.ID_MAP_JSON,
-        object_detection_mode=ObjectDetectionMode[cfg.DATASETS.OBJECT_DETECTION_MODE],
+    train_wds = load_atek_wds_dataset_as_cubercnn(
+        urls=train_tars_local, batch_size=local_batch_size, repeat_flag=True
     )
-    train_dataloader = create_wds_dataloader(
-        train_wds, num_workers=cfg.DATALOADER.NUM_WORKERS, pin_memory=True
+
+    train_dataloader = torch.utils.data.DataLoader(
+        train_wds,
+        batch_size=None,
+        num_workers=cfg.DATALOADER.NUM_WORKERS,
+        pin_memory=True,
     )
 
     dataset_name = os.path.basename(cfg.TRAIN_LIST).split(".")[0]
