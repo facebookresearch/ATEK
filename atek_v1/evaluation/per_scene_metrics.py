@@ -5,14 +5,14 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 import torch
-from atek.evaluation.bbox3d_metrics import diagonal_error, iou_giou
-from atek.evaluation.math_metrics.distance_metrics import (
+from atek.utils.obb3 import Obb3
+from atek_v1.evaluation.bbox3d_metrics import diagonal_error, iou_giou
+from atek_v1.evaluation.math_metrics.distance_metrics import (
     chamfer_distance,
     euclidean_distance,
     hungarian_distance,
 )
-from atek.evaluation.math_metrics.rotation_metrics import geodesic_angular_error
-from atek.utils.obb3 import Obb3
+from atek_v1.evaluation.math_metrics.rotation_metrics import geodesic_angular_error
 
 
 METRIC_DATA_TYPES = {

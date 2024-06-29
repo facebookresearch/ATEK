@@ -5,7 +5,7 @@ from typing import Tuple, Union
 import numpy as np
 import torch
 
-from atek.utils.transform_utils import (
+from atek_v1.utils.transform_utils import (
     batch_inverse,
     batch_transform_points,
     get_cuboid_corners,

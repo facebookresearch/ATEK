@@ -4,7 +4,7 @@ from typing import List, Optional, Union
 
 import torch
 
-from atek.utils.transform_utils import batch_transform_points, get_cuboid_corners
+from atek_v1.utils.transform_utils import batch_transform_points, get_cuboid_corners
 from pytorch3d.transforms import euler_angles_to_matrix
 
 

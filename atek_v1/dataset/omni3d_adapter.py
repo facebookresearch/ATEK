@@ -7,10 +7,10 @@ from typing import Callable, Dict, List, Optional, Tuple
 import numpy as np
 import torch
 
-from atek.data_preprocess.data_schema import Frame
-from atek.dataset.atek_raw_dataset import AriaStreamIds, AtekRawFrameDataset
-from atek.dataset.atek_webdataset import create_atek_webdataset
-from atek.utils.camera_utils import linear_cam_matrix_from_intrinsics
+from atek_v1.data_preprocess.data_schema import Frame
+from atek_v1.dataset.atek_raw_dataset import AriaStreamIds, AtekRawFrameDataset
+from atek_v1.dataset.atek_webdataset import create_atek_webdataset
+from atek_v1.utils.camera_utils import linear_cam_matrix_from_intrinsics
 
 from detectron2.structures import Boxes, Instances
 from webdataset.filters import pipelinefilter

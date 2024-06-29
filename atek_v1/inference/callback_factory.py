@@ -1,10 +1,10 @@
 from argparse import Namespace
 from typing import Callable, Dict, List, Union
 
-from atek.evaluation.bbox3d_evaluator import Bbox3DEvaluator
-from atek.inference.adt_prediction_saver import AdtPredictionSaver
-from atek.inference.cubercnn_postprocessor import CubercnnPredictionConverter
-from atek.viz.visualization_callbacks import AtekInferViewer
+from atek_v1.evaluation.bbox3d_evaluator import Bbox3DEvaluator
+from atek_v1.inference.adt_prediction_saver import AdtPredictionSaver
+from atek_v1.inference.cubercnn_postprocessor import CubercnnPredictionConverter
+from atek_v1.viz.visualization_callbacks import AtekInferViewer
 
 
 def create_inference_callback(

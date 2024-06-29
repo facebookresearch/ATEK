@@ -8,9 +8,9 @@ from functools import partial
 from typing import Dict, Optional, Tuple
 
 import numpy as np
-from atek.data_preprocess.base_gt_data_processor import BaseGtDataProcessor
-from atek.data_preprocess.data_schema import Frame
-from atek.data_preprocess.data_utils import insert_and_check
+from atek_v1.data_preprocess.base_gt_data_processor import BaseGtDataProcessor
+from atek_v1.data_preprocess.data_schema import Frame
+from atek_v1.data_preprocess.data_utils import insert_and_check
 from projectaria_tools.core import calibration
 
 from projectaria_tools.core.sophus import SE3

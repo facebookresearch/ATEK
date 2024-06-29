@@ -1,6 +1,6 @@
 from argparse import Namespace
 
-from atek.model.cubercnn import create_cubercnn_config, create_cubercnn_model
+from atek_v1.model.cubercnn import create_cubercnn_config, create_cubercnn_model
 
 
 def create_inference_model(args: Namespace):

@@ -6,12 +6,12 @@ import numpy as np
 import pandas as pd
 import torch
 
-from atek.evaluation.per_scene_metrics import (
+from atek_v1.evaluation.per_scene_metrics import (
     compute_per_scene_metrics,
     METRIC_DATA_TYPES,
 )
-from atek.utils.eval_utils import compute_average_precision
-from atek.utils.obb3 import Obb3
+from atek_v1.utils.eval_utils import compute_average_precision
+from atek_v1.utils.obb3 import Obb3
 
 
 def _set_false_positive(fp_df: pd.DataFrame) -> pd.DataFrame:

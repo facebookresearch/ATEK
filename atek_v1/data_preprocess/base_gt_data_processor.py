@@ -4,7 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from atek.data_preprocess.data_schema import Frame
+from atek_v1.data_preprocess.data_schema import Frame
 
 from projectaria_tools.core import calibration
 

@@ -6,7 +6,7 @@ import numpy as np
 import seaborn as sns
 
 import torch
-from atek.data_preprocess.data_schema import Frameset, FramesetGroup
+from atek_v1.data_preprocess.data_schema import Frameset, FramesetGroup
 
 
 def get_rate_stats(timestamps_ns: List[int]):

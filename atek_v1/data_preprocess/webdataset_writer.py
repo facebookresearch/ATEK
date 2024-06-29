@@ -12,7 +12,7 @@ import numpy as np
 import torch
 import webdataset as wds
 
-from atek.data_preprocess.data_schema import Frame, Frameset, FramesetGroup
+from atek_v1.data_preprocess.data_schema import Frame, Frameset, FramesetGroup
 from PIL import Image
 
 

@@ -1,7 +1,7 @@
 from argparse import Namespace
 from typing import Dict
 
-from atek.dataset.omni3d_adapter import (
+from atek_v1.dataset.omni3d_adapter import (
     create_omni3d_raw_dataset,
     create_omni3d_webdataset,
     ObjectDetectionMode,

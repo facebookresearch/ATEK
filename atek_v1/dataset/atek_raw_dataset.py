@@ -3,9 +3,9 @@ from typing import Callable, Dict, List, Optional, Tuple
 import numpy as np
 import torch
 
-from atek.data_preprocess.adt_gt_data_processor import AdtGtDataProcessor
-from atek.data_preprocess.frame_data_processor import FrameDataProcessor
-from atek.data_preprocess.mps_data_processor import MpsDataProcessor
+from atek_v1.data_preprocess.adt_gt_data_processor import AdtGtDataProcessor
+from atek_v1.data_preprocess.frame_data_processor import FrameDataProcessor
+from atek_v1.data_preprocess.mps_data_processor import MpsDataProcessor
 
 from projectaria_tools.core.stream_id import StreamId
 from projectaria_tools.projects.adt import AriaDigitalTwinDataPathsProvider

@@ -8,10 +8,10 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from atek.data_preprocess.base_gt_data_processor import BaseGtDataProcessor
-from atek.data_preprocess.data_schema import Frame
-from atek.data_preprocess.mps_data_processor import MpsDataProcessor
-from atek.utils.camera_utils import get_camera_fov_spherical_cone
+from atek_v1.data_preprocess.base_gt_data_processor import BaseGtDataProcessor
+from atek_v1.data_preprocess.data_schema import Frame
+from atek_v1.data_preprocess.mps_data_processor import MpsDataProcessor
+from atek_v1.utils.camera_utils import get_camera_fov_spherical_cone
 
 from projectaria_tools.core import calibration, data_provider
 from projectaria_tools.core.sensor_data import TimeDomain
