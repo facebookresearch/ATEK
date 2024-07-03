@@ -28,7 +28,10 @@ logger.setLevel(logging.INFO)
 
 class EfmSampleBuilder:
     """
-    A Sample builder for EFM, which performs Obb3 detection and surface recon task.
+    A customized sample builder for EFM, which includes both 3D obb detection task and surface reconstruction task.
+
+    Models using this sample builder:
+    - EFM
     """
 
     def __init__(
@@ -40,14 +43,29 @@ class EfmSampleBuilder:
         depth_vrs_file: str,
     ) -> None:
         """
-        vrs_file: the main Aria vrs file
+        Initializes the EfmSampleBuilder with necessary configuration and file paths.
+
+        Args:
+            conf (DictConfig): Configuration object containing settings for various processors.
+            vrs_file (str): Path to the main Aria VRS file used for video and sensor data.
+            mps_files (Dict[str, str]): Dictionary mapping keys to file paths for MPS data, including:
+                "mps_closedloop_traj_file": Path to the closed-loop trajectory file.
+                "mps_semidense_points_file": Path to the global semidense points file.
+                "mps_semidense_observations_file": Path to the observations of semidense points, indicating which points are observable by which camera, at each timestamp.
+            gt_files (Dict[str, str]): Dictionary mapping keys to file paths for ground truth data, including:
+                "obb3_file": Path to the 3D object bounding box file.
+                "obb3_traj_file": Path to the 3D object bounding box trajectory file.
+                "obb2_file": Path to the 2D object bounding box file.
+                "instance_json_file": Path to the JSON file containing object instance information.
+            depth_vrs_file [Optional]: Path to the depth VRS file. This is required for the surface recon task.
         """
         self.conf = conf
 
         self.vrs_file = vrs_file
+        self.depth_vrs_file = depth_vrs_file
 
         self.processors = self._add_processors_from_conf(
-            conf, vrs_file, mps_files, gt_files, depth_vrs_file
+            conf, vrs_file, mps_files, gt_files
         )
 
     def _add_processors_from_conf(
@@ -56,7 +74,6 @@ class EfmSampleBuilder:
         vrs_file: str,
         mps_files: Dict[str, str],
         gt_files: Dict[str, str],
-        depth_vrs_file: str,
     ):
         """
         This function creates a dict of processors from the config file.
@@ -96,7 +113,7 @@ class EfmSampleBuilder:
         # Depth processor
         if "rgb-depth" in conf and conf.rgb_depth.selected:
             assert (
-                depth_vrs_file is not None
+                self.depth_vrs_file is not ""
             ), "need to specify depth vrs file to use depth processor"
 
             # Obtain image transformations from rgb AriaCameraProcessor, where interpolation needs to be exactly set to NEAREST
@@ -108,7 +125,7 @@ class EfmSampleBuilder:
             ].get_image_transform_list(rescale_interpolation=InterpolationMode.NEAREST)
 
             processors["rgb_depth"] = DepthImageProcessor(
-                depth_vrs=depth_vrs_file,
+                depth_vrs=self.depth_vrs_file,
                 image_transform_list=depth_image_transform_list,
                 conf=conf.rgb_depth,
             )

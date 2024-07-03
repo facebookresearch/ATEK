@@ -52,7 +52,7 @@ class Obb2GtProcessorTest(unittest.TestCase):
                 rgb_calib.get_label(): rgb_camera_processor.get_pixel_transform()
             },
             camera_label_to_calib={rgb_calib.get_label(): rgb_calib},
-            conf=conf.processors.cubercnn_gt,
+            conf=conf.processors.obb_gt,
         )
 
         instance_id = 6243788802362822

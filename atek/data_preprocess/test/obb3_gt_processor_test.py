@@ -24,7 +24,7 @@ class Obb3GtProcessorTest(unittest.TestCase):
 
     def test_get_obb3_gt_data(self) -> None:
         conf = OmegaConf.load(CONFIG_PATH)
-        conf.processors.obb3_gt.category_mapping_field_name = "prototype_name"
+        conf.processors.obb_gt.category_mapping_field_name = "prototype_name"
 
         camera_label_to_stream_ids = {
             "camera-rgb": StreamId("214-1"),
@@ -41,7 +41,7 @@ class Obb3GtProcessorTest(unittest.TestCase):
             instance_json_file_path=os.path.join(TEST_DIR_PATH, "test_instances.json"),
             category_mapping_file_path=CATEGORY_MAPPING_PATH,
             camera_label_to_stream_ids=camera_label_to_stream_ids,
-            conf=conf.processors.obb3_gt,
+            conf=conf.processors.obb_gt,
         )
 
         # Test for valid query

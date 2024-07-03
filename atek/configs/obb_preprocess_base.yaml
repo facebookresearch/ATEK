@@ -12,6 +12,7 @@ processors:
     tolerance_ns: 10_000_000
     undistort_to_linear_camera: false  # if set, undistort to a linear camera model
     target_camera_resolution: [] # if set, rescale to [image_width, image_height]
+    # rescale_antialias: true[default] controls whether to perform antialiasing during image rescaling.
     rotate_image_cw90deg: true  # if set, rotate image by 90 degrees clockwise
   slam_left:
     selected: true
@@ -28,10 +29,11 @@ processors:
     tolerance_ns: 10_000_000
   mps_semidense:
     selected: false
-  obb3_gt:
+  obb_gt:
     selected: true
     tolerance_ns : 10_000_000
     category_mapping_field_name: prototype_name # {prototype_name, category}
+    bbox2d_num_samples_on_edge: 10
 wds_writer:
   prefix_string: ""
   max_samples_per_shard: 32

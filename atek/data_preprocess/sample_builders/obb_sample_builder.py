@@ -20,16 +20,12 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-class CubeRCNNSampleBuilder:
+class ObbSampleBuilder:
     """
-    A sample builder for the CubeRCNN model, designed for 3D object detection tasks.
+    A general sample builder for general 2D/3D object detection tasks.
 
-    Attributes:
-        conf (DictConfig): Configuration object containing settings for the processor.
-        vrs_file (str): Path to the main Aria VRS file.
-        mps_files (Dict[str, str]): Dictionary containing paths to MPS-related files.
-        gt_files (Dict[str, str]): Dictionary containing paths to ground truth files.
-        processors (dict): Dictionary of data processors keyed by their type or label.
+    Models using this sample builder:
+    - CubeRCNN
     """
 
     def __init__(
@@ -40,7 +36,7 @@ class CubeRCNNSampleBuilder:
         gt_files: Dict[str, str],
     ) -> None:
         """
-        Initializes the CubeRCNNSampleBuilder with necessary configuration and file paths.
+        Initializes the ObbSampleBuilder with necessary configuration and file paths.
 
         Args:
             conf (DictConfig): Configuration object containing settings for various processors.
@@ -102,8 +98,9 @@ class CubeRCNNSampleBuilder:
                 conf=conf.mps_traj,
             )
 
-        if "cubercnn_gt" in conf and conf.cubercnn_gt.selected:
-            # Cube RCNN GT data contains both obb3 and obb2 data, therefore we create 2 processors
+        if "obb_gt" in conf and conf.obb_gt.selected:
+            # GT data contains both obb3 and obb2 data, therefore we create 2 processors.
+
             # Create obb3 processor
             processors["obb3_gt"] = Obb3GtProcessor(
                 obb3_file_path=gt_files["obb3_file"],
@@ -114,7 +111,7 @@ class CubeRCNNSampleBuilder:
                     "category_mapping_file", None
                 ),  # this file is optional
                 camera_label_to_stream_ids=selected_camera_label_to_stream_ids,
-                conf=conf.cubercnn_gt,
+                conf=conf.obb_gt,
             )
 
             # Create obb2 processor, which requires streamid, pixel transforms, and calib from camera processors.
@@ -127,7 +124,7 @@ class CubeRCNNSampleBuilder:
                 camera_label_to_stream_ids=selected_camera_label_to_stream_ids,
                 camera_label_to_pixel_transforms=selected_camera_label_to_pixel_transforms,
                 camera_label_to_calib=selected_camera_label_to_calib,
-                conf=conf.cubercnn_gt,
+                conf=conf.obb_gt,
             )
 
         return processors
