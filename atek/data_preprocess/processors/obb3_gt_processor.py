@@ -196,7 +196,7 @@ class Obb3GtProcessor:
                 self._obtain_obj_category_info(instance_id)
             )
 
-            # fill in 3d aabb information, need to put the object coorindate to box center
+            # fill in 3d aabb information, need to put the object coordinate to box center
             aabb_non_centered = single_data.aabb
             T_world_object_non_centered = single_data.transform_scene_object
             (object_dimensions, T_world_object) = self._center_object_bb3d(

@@ -198,7 +198,7 @@ def iou_giou_single(
     convex_hull_A = ConvexHull(cuboid_A_corners_in_world.squeeze(0).numpy())
     convex_hull_B = ConvexHull(cuboid_B_corners_in_world.squeeze(0).numpy())
 
-    # compute convext hull for all points from A and B
+    # compute convex hull for all points from A and B
     all_points = np.row_stack(
         [
             cuboid_A_corners_in_world.squeeze(0).numpy(),

@@ -95,7 +95,7 @@ def batch_inverse(T: torch.Tensor) -> torch.Tensor:
         T: (..., 3, 4) tensor, transformation matrix
 
     Returns:
-        inversed_T: (..., 3, 4) tensor, inversed transformation matrix
+        inversed_T: (..., 3, 4) tensor, inverse transformation matrix
     """
     inversed_T = T.clone()
     inversed_T[..., :, :3] = T[..., :, :3].transpose(1, 2)

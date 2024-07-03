@@ -76,7 +76,7 @@ class MultiFrameCameraData:
                     )
                 continue
 
-            # add file extentions so that WDS writer knows how to handle the data
+            # add file extensions so that WDS writer knows how to handle the data
             if field_name in self.tensor_field_names():
                 file_extension = ".pth"
             elif field_name in self.str_field_names():
