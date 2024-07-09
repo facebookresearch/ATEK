@@ -44,3 +44,28 @@ def fill_or_trim_tensor(tensor: torch.Tensor, dim_size: int, dim: int, fill_valu
     else:
         new_tensor = tensor
     return new_tensor
+
+
+def check_dicts_same_w_tensors(dict_1, dict_2, atol=1e-5) -> bool:
+    """
+    A utility function to check if two dicts are the same, with special handling of tensors.
+    """
+    if dict_1.keys() != dict_2.keys():
+        return False
+
+    for key in dict_1.keys():
+        value1, value2 = dict_1[key], dict_2[key]
+
+        if isinstance(value1, torch.Tensor) and isinstance(value2, torch.Tensor):
+            if not torch.allclose(value1, value2, atol=atol):
+                return False
+
+        elif isinstance(value1, dict) and isinstance(value2, dict):
+            # recursively check sub-dicts
+            if not check_dicts_same_w_tensors(value1, value2, atol=atol):
+                return False
+
+        elif value1 != value2:
+            return False
+
+    return True
