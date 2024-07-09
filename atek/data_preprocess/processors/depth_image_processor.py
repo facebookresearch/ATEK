@@ -3,6 +3,8 @@
 import logging
 from typing import Callable, List, Optional, Tuple
 
+import numpy as np
+
 import torch
 
 from atek.data_preprocess.atek_data_sample import MultiFrameCameraData
@@ -79,7 +81,12 @@ class DepthImageProcessor:
             # Check if fetched frame is within tolerance
             if abs(capture_timestamp - single_timestamp) > self.conf.tolerance_ns:
                 continue
-            image = torch.from_numpy(image_data_and_record[0].to_numpy_array())
+
+            # Handle uint16 not supported by torch
+            np_image = image_data_and_record[0].to_numpy_array()
+            if np_image.dtype == np.uint16:
+                np_image = np_image.astype(np.int32)
+            image = torch.from_numpy(np_image)
             if len(image.shape) == 2:
                 # single channel image: [h,w] -> [c, h, w]
                 image = torch.unsqueeze(image, dim=0)
