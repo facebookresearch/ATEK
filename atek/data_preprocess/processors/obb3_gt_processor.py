@@ -146,7 +146,8 @@ class Obb3GtProcessor:
         Returns:
             Optional[Dict]: A dictionary containing the ground truth data if available and valid; otherwise, None.
 
-            If not None, the returned dictionary will have the following structure:
+            If not None, the returned dictionary will have the following structure, where all fields are intentionally lowercased because WDS
+            by default lowercase all file suffix.
             {
                 "camera_label_1": {
                     "instance_ids": torch.Tensor (shape: [num_instances], int64)
