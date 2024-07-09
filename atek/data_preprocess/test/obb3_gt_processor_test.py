@@ -31,7 +31,6 @@ class Obb3GtProcessorTest(unittest.TestCase):
             "camera-slam-left": StreamId("1201-1"),
         }
 
-        instance_id = 4709930779068635
         obb3_gt_processor = Obb3GtProcessor(
             obb3_file_path=os.path.join(TEST_DIR_PATH, "test_3d_bounding_box.csv"),
             obb3_traj_file_path=os.path.join(
@@ -48,37 +47,61 @@ class Obb3GtProcessorTest(unittest.TestCase):
         queried_obb3_data = obb3_gt_processor.get_gt_by_timestamp_ns(
             timestamp_ns=87551170910700
         )
-        bbox3d_all_instances = queried_obb3_data["bbox3d_all_instances"]
         visible_instances = queried_obb3_data["instances_visible_to_cameras"]
+
+        # Check bbox gt tensor shapes
+        gt_num_instances = 349
         self.assertEqual(
-            len(bbox3d_all_instances), 349
+            queried_obb3_data["obb3_all_category_ids"].shape,
+            torch.Size([gt_num_instances]),
         )  # 349 instances at this timestamp
+        self.assertEqual(
+            len(queried_obb3_data["obb3_all_category_names"]), gt_num_instances
+        )
+        self.assertEqual(
+            queried_obb3_data["obb3_all_object_dimensions"].shape,
+            torch.Size([gt_num_instances, 3]),
+        )
+        self.assertEqual(
+            queried_obb3_data["obb3_all_Ts_World_Object"].shape,
+            torch.Size([gt_num_instances, 3, 4]),
+        )
 
         # Check the content of a specific instance 3d bbox
+        instance_id = 4709930779068635
+        ind = torch.where(queried_obb3_data["obb3_all_instance_ids"] == instance_id)[0]
+        self.assertTrue(len(ind) == 1)
+        ind = ind.item()
+
+        gt_cat_name = "door"
+        gt_cat_id = 32
         gt_obj_dim = torch.tensor(
             [0.091384992 * 2, 1.00719845295 * 2, 0.39432799816 * 2]
         )
-        gt_instance_dict = {
-            "instance_id": instance_id,
-            "category_name": "door",
-            "category_id": 32,
-            "object_dimensions": gt_obj_dim,
-        }
-        instance_dict = {
-            key: bbox3d_all_instances[instance_id][key]
-            for key in gt_instance_dict.keys()
-        }
 
-        self.assertEqual(instance_dict["instance_id"], instance_id)
-        self.assertEqual(instance_dict["category_name"], "door")
+        self.assertEqual(gt_cat_name, queried_obb3_data["obb3_all_category_names"][ind])
+        self.assertEqual(
+            gt_cat_id, queried_obb3_data["obb3_all_category_ids"][ind].item()
+        )
         self.assertTrue(
-            torch.allclose(instance_dict["object_dimensions"], gt_obj_dim, atol=1e-5)
+            torch.allclose(
+                gt_obj_dim, queried_obb3_data["obb3_all_object_dimensions"][ind]
+            )
         )
 
         # Check the content of visible instances
-        self.assertEqual(len(visible_instances["camera-rgb"]), 91)
-        self.assertEqual(len(visible_instances["camera-slam-left"]), 69)
-        for i in visible_instances["camera-rgb"]:
-            self.assertTrue(i in bbox3d_all_instances)
-        for i in visible_instances["camera-slam-left"]:
-            self.assertTrue(i in bbox3d_all_instances)
+        self.assertEqual(visible_instances["camera-rgb"].shape, torch.Size([91]))
+        self.assertEqual(visible_instances["camera-slam-left"].shape, torch.Size([69]))
+        # Check that all visible instances are in instance list
+        self.assertTrue(
+            torch.isin(
+                visible_instances["camera-rgb"],
+                queried_obb3_data["obb3_all_instance_ids"],
+            ).all()
+        )
+        self.assertTrue(
+            torch.isin(
+                visible_instances["camera-slam-left"],
+                queried_obb3_data["obb3_all_instance_ids"],
+            ).all()
+        )

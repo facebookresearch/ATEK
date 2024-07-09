@@ -147,23 +147,18 @@ class Obb3GtProcessor:
             Optional[Dict]: A dictionary containing the ground truth data if available and valid; otherwise, None.
 
             If not None, the returned dictionary will have the following structure:
-                {
-                    "bbox3d_all_instances": {
-                        "instance_id_1": {
-                            "instance_id": str,
-                            "category_name": str,
-                            "category_id": int,
-                            "object_dimensions": torch.Tensor (shape: [3], float32),
-                            "T_World_Object": torch.Tensor (shape: [3, 4], float32)
-                        },
-                        ...
-                    },
-                    "instances_visible_to_cameras": {
-                        "camera_1": ["instance_id_1", "instance_id_2", ...],
-                        "camera_2": ["instance_id_1", "instance_id_2", ...],
-                        ...
-                    }
+            {
+                "obb3_all_instance_ids": torch.Tensor (shape: [num_instances], int64)
+                "obb3_all_category_names": list[str]
+                "obb3_all_category_ids": torch.Tensor (shape: [num_instances], int64)
+                "obb3_all_object_dimensions": torch.Tensor (shape: [num_instances, 3], float32, 3 is x, y, z)
+                "obb3_all_Ts_World_Object": torch.Tensor (shape: [num_instances, 3, 4], float32)
+                "obb3_instances_visible_to_cameras": {
+                    "camera_label_1": torch.Tensor (shape: [num_visible_1], int64),
+                    "camera_label_2": torch.Tensor (shape: [num_visible_2], int64),
+                    ...
                 }
+            }
 
         Notes:
             Returns None if the data at the specified timestamp is not valid or does not meet the configured tolerances.
@@ -182,40 +177,57 @@ class Obb3GtProcessor:
             )
             return None
 
+        # dict should contain valid data
+        num_all_instances = len(bbox3d_with_dt.data())
+        if num_all_instances == 0:
+            logger.debug(f"No valid 3d bbox data at {timestamp_ns}")
+            return None
+
+        # Initialize result dict
+        # TODO: is empty safe here?
         bbox3d_dict = {
-            "bbox3d_all_instances": {},
+            "obb3_all_instance_ids": torch.empty(
+                (num_all_instances), dtype=torch.int64
+            ),
+            "obb3_all_category_names": [],
+            "obb3_all_category_ids": torch.empty(
+                (num_all_instances), dtype=torch.int64
+            ),
+            "obb3_all_object_dimensions": torch.empty(
+                (num_all_instances, 3), dtype=torch.float32
+            ),
+            "obb3_all_Ts_World_Object": torch.empty(
+                (num_all_instances, 3, 4), dtype=torch.float32
+            ),
             "instances_visible_to_cameras": {},
         }
 
-        # First, insert all instances of 3d bbox data into a dict
+        # First, insert all instances of 3d bbox data
+        i_row = 0
         for instance_id, single_data in bbox3d_with_dt.data().items():
-            single_bbox3d_dict = {}
             # fill in instance id and category information
-            single_bbox3d_dict["instance_id"] = instance_id
-            single_bbox3d_dict["category_name"], single_bbox3d_dict["category_id"] = (
-                self._obtain_obj_category_info(instance_id)
-            )
+            cat_name, cat_id = self._obtain_obj_category_info(instance_id)
+            bbox3d_dict["obb3_all_instance_ids"][i_row] = instance_id
+            bbox3d_dict["obb3_all_category_names"].append(cat_name)
+            bbox3d_dict["obb3_all_category_ids"][i_row] = cat_id
 
-            # fill in 3d aabb information, need to put the object coordinate to box center
+            # fill in 3d aabb information, need to put the object coordindate to box center
             aabb_non_centered = single_data.aabb
             T_world_object_non_centered = single_data.transform_scene_object
             (object_dimensions, T_world_object) = self._center_object_bb3d(
                 aabb_non_centered, T_world_object_non_centered
             )
             # convert to tensor
-            single_bbox3d_dict["object_dimensions"] = torch.from_numpy(
+            bbox3d_dict["obb3_all_object_dimensions"][i_row] = torch.from_numpy(
                 object_dimensions.astype(np.float32)
             )
-            single_bbox3d_dict["T_World_Object"] = torch.from_numpy(
+            bbox3d_dict["obb3_all_Ts_World_Object"][i_row] = torch.from_numpy(
                 T_world_object.to_matrix3x4().astype(np.float32)
             )
-
-            bbox3d_dict["bbox3d_all_instances"][instance_id] = single_bbox3d_dict
-
-        # dict should contain valid data
-        if len(bbox3d_dict["bbox3d_all_instances"]) == 0:
-            logger.debug(f"No valid 3d bbox data at {timestamp_ns}")
-            return None
+            i_row += 1
+        assert (
+            i_row == num_all_instances
+        ), f"filled number {i_row} != num of instances {num_all_instances}, tensor contains initialized values, unsafe hence abort"
 
         # Second, we record which instances are visible in each camera, by checking bbox2d data
         for camera_label, stream_id in self.camera_label_to_stream_ids.items():
@@ -237,9 +249,15 @@ class Obb3GtProcessor:
                 bbox3d_dict["instances_visible_to_cameras"][camera_label] = []
             else:
                 # insert visible instances
-                bbox3d_dict["instances_visible_to_cameras"][camera_label] = list(
-                    bbox2d_with_dt.data().keys()
-                )
+                visible_instances = list(bbox2d_with_dt.data().keys())
+                if len(visible_instances) > 0:
+                    bbox3d_dict["instances_visible_to_cameras"][camera_label] = (
+                        torch.tensor(visible_instances, dtype=torch.int64)
+                    )
+                else:
+                    bbox3d_dict["instances_visible_to_cameras"][camera_label] = (
+                        torch.empty(0)
+                    )
 
         # one of the cameras should have visible data
         if all(not x for x in bbox3d_dict["instances_visible_to_cameras"]):
