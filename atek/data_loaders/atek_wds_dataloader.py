@@ -10,7 +10,10 @@ import numpy as np
 import torch
 import webdataset as wds
 
-from atek.data_preprocess.util.file_io_utils import unpack_list_of_tensors
+from atek.data_preprocess.util.file_io_utils import (
+    merge_tensors_into_dict,
+    unpack_list_of_tensors,
+)
 from torchvision.io import read_image
 
 
@@ -85,6 +88,20 @@ def process_wds_sample(sample: Dict):
                 stacked_tensor=sample_as_dict[f"msdpd#stacked_{key}"],
                 lengths_of_tensors=sample_as_dict[f"msdpd#points_world_lengths"],
             )
+    # For tensors starting with "GtData#...", merge them back into GT dict
+    keys_to_pop = []
+    for key, value in sample_as_dict.items():
+        if key.startswith("gtdata#") and isinstance(value, torch.Tensor):
+            # merge into sample_dict["gt_data"]
+            tensor_key_to_be_merged = key.replace("gtdata#", "")
+            sample_as_dict["gtdata"] = merge_tensors_into_dict(
+                sample_as_dict["gtdata"], {tensor_key_to_be_merged: value}
+            )
+            keys_to_pop.append(key)
+
+    # pop the original gt tensors from sample_dict
+    for tensor_key in keys_to_pop:
+        sample_as_dict.pop(tensor_key)
 
     return sample_as_dict
 
