@@ -148,16 +148,17 @@ class Obb3GtProcessor:
 
             If not None, the returned dictionary will have the following structure:
             {
-                "obb3_all_instance_ids": torch.Tensor (shape: [num_instances], int64)
-                "obb3_all_category_names": list[str]
-                "obb3_all_category_ids": torch.Tensor (shape: [num_instances], int64)
-                "obb3_all_object_dimensions": torch.Tensor (shape: [num_instances, 3], float32, 3 is x, y, z)
-                "obb3_all_Ts_World_Object": torch.Tensor (shape: [num_instances, 3, 4], float32)
-                "obb3_instances_visible_to_cameras": {
-                    "camera_label_1": torch.Tensor (shape: [num_visible_1], int64),
-                    "camera_label_2": torch.Tensor (shape: [num_visible_2], int64),
+                "camera_label_1": {
+                    "instance_ids": torch.Tensor (shape: [num_instances], int64)
+                    "category_names": list[str],
+                    "category_ids": torch.Tensor (shape: [num_instances], int64)
+                    "object_dimensions": torch.Tensor (shape: [num_instances, 3], float32, 3 is x, y, z)
+                    "ts_world_object": torch.Tensor (shape: [num_instances, 3, 4], float32)
+                },
+                "camera_label_2": {
                     ...
                 }
+                ...
             }
 
         Notes:
@@ -168,68 +169,19 @@ class Obb3GtProcessor:
                 timestamp_ns,
             )
         )
-        # no valid data, return empty dict
+        # no valid 3d data, return empty dict
         if (
-            not bbox3d_with_dt.is_valid()
-        ) or bbox3d_with_dt.dt_ns() > self.conf.tolerance_ns:
+            (not bbox3d_with_dt.is_valid())
+            or bbox3d_with_dt.dt_ns() > self.conf.tolerance_ns
+            or (len(bbox3d_with_dt.data()) == 0)
+        ):
             logger.warn(
                 f"Cannot obtain valid 3d bbox data at {timestamp_ns}, or the nearest valid bb3d is too far away."
             )
             return None
 
-        # dict should contain valid data
-        num_all_instances = len(bbox3d_with_dt.data())
-        if num_all_instances == 0:
-            logger.debug(f"No valid 3d bbox data at {timestamp_ns}")
-            return None
-
-        # Initialize result dict
-        # TODO: is empty safe here?
-        bbox3d_dict = {
-            "obb3_all_instance_ids": torch.empty(
-                (num_all_instances), dtype=torch.int64
-            ),
-            "obb3_all_category_names": [],
-            "obb3_all_category_ids": torch.empty(
-                (num_all_instances), dtype=torch.int64
-            ),
-            "obb3_all_object_dimensions": torch.empty(
-                (num_all_instances, 3), dtype=torch.float32
-            ),
-            "obb3_all_Ts_World_Object": torch.empty(
-                (num_all_instances, 3, 4), dtype=torch.float32
-            ),
-            "instances_visible_to_cameras": {},
-        }
-
-        # First, insert all instances of 3d bbox data
-        i_row = 0
-        for instance_id, single_data in bbox3d_with_dt.data().items():
-            # fill in instance id and category information
-            cat_name, cat_id = self._obtain_obj_category_info(instance_id)
-            bbox3d_dict["obb3_all_instance_ids"][i_row] = instance_id
-            bbox3d_dict["obb3_all_category_names"].append(cat_name)
-            bbox3d_dict["obb3_all_category_ids"][i_row] = cat_id
-
-            # fill in 3d aabb information, need to put the object coordindate to box center
-            aabb_non_centered = single_data.aabb
-            T_world_object_non_centered = single_data.transform_scene_object
-            (object_dimensions, T_world_object) = self._center_object_bb3d(
-                aabb_non_centered, T_world_object_non_centered
-            )
-            # convert to tensor
-            bbox3d_dict["obb3_all_object_dimensions"][i_row] = torch.from_numpy(
-                object_dimensions.astype(np.float32)
-            )
-            bbox3d_dict["obb3_all_Ts_World_Object"][i_row] = torch.from_numpy(
-                T_world_object.to_matrix3x4().astype(np.float32)
-            )
-            i_row += 1
-        assert (
-            i_row == num_all_instances
-        ), f"filled number {i_row} != num of instances {num_all_instances}, tensor contains initialized values, unsafe hence abort"
-
-        # Second, we record which instances are visible in each camera, by checking bbox2d data
+        # We record which instances are visible in each camera, by checking bbox2d data
+        bbox3d_dict = {}
         for camera_label, stream_id in self.camera_label_to_stream_ids.items():
             bbox2d_with_dt = (
                 self.adt_gt_provider.get_object_2d_boundingboxes_by_timestamp_ns(
@@ -240,27 +192,79 @@ class Obb3GtProcessor:
 
             # no valid data, assign to empty list
             if (
-                not bbox2d_with_dt.is_valid()
-            ) or bbox2d_with_dt.dt_ns() > self.conf.tolerance_ns:
+                (not bbox2d_with_dt.is_valid())
+                or bbox2d_with_dt.dt_ns() > self.conf.tolerance_ns
+                or (len(bbox2d_with_dt.data()) == 0)
+            ):
                 logger.warn(
                     f"Cannot obtain valid 2d bbox data at {timestamp_ns} for "
                     f"camera {camera_label}, this camera's obb3 dict will be empty"
                 )
-                bbox3d_dict["instances_visible_to_cameras"][camera_label] = []
-            else:
-                # insert visible instances
-                visible_instances = list(bbox2d_with_dt.data().keys())
-                if len(visible_instances) > 0:
-                    bbox3d_dict["instances_visible_to_cameras"][camera_label] = (
-                        torch.tensor(visible_instances, dtype=torch.int64)
+                bbox3d_dict[camera_label] = {}
+                continue
+
+            # Initialize a per-camera obb3 dict
+            visible_instances = list(bbox2d_with_dt.data().keys())
+            num_instances = len(visible_instances)
+            # TODO: is empty safe here?
+            bbox3d_dict[camera_label] = {
+                "instance_ids": torch.empty((num_instances), dtype=torch.int64),
+                "category_names": [],
+                "category_ids": torch.empty((num_instances), dtype=torch.int64),
+                "object_dimensions": torch.empty(
+                    (num_instances, 3), dtype=torch.float32
+                ),
+                "ts_world_object": torch.empty(
+                    (num_instances, 3, 4), dtype=torch.float32
+                ),
+            }
+
+            # Insert 3D bbox information of each visible instance into dict
+            valid_size = 0
+            for i_row in range(num_instances):
+                instance_id = visible_instances[i_row]
+                # query bbox3d data for this instance
+                single_bbox3d_data = bbox3d_with_dt.data().get(instance_id)
+                if single_bbox3d_data is None:
+                    logger.error(
+                        f"bbox2d instance {instance_id} not found in bbox3d data, probably need to double check data source. skipping... "
                     )
+
+                # fill in instance id and category information
+                cat_name, cat_id = self._obtain_obj_category_info(instance_id)
+                bbox3d_dict[camera_label]["instance_ids"][i_row] = instance_id
+                bbox3d_dict[camera_label]["category_names"].append(cat_name)
+                bbox3d_dict[camera_label]["category_ids"][i_row] = cat_id
+
+                # fill in 3d aabb information, need to put the object coordindate to box center
+                aabb_non_centered = single_bbox3d_data.aabb
+                T_world_object_non_centered = single_bbox3d_data.transform_scene_object
+                (object_dimensions, T_world_object) = self._center_object_bb3d(
+                    aabb_non_centered, T_world_object_non_centered
+                )
+                bbox3d_dict[camera_label]["object_dimensions"][i_row] = (
+                    torch.from_numpy(object_dimensions.astype(np.float32))
+                )
+                bbox3d_dict[camera_label]["ts_world_object"][i_row] = torch.from_numpy(
+                    T_world_object.to_matrix3x4().astype(np.float32)
+                )
+                valid_size += 1
+
+            # Crop to valid sizes
+            for key, tensor_or_list in bbox3d_dict[camera_label].items():
+                if isinstance(tensor_or_list, torch.Tensor) or isinstance(
+                    tensor_or_list, list
+                ):
+                    bbox3d_dict[camera_label][key] = tensor_or_list[:valid_size]
                 else:
-                    bbox3d_dict["instances_visible_to_cameras"][camera_label] = (
-                        torch.empty(0)
+                    raise ValueError(
+                        f"Unsupported type of key {key} in bbox3d_dict: {type(tensor_or_list)}, needs to be tensor or list"
                     )
 
         # one of the cameras should have visible data
-        if all(not x for x in bbox3d_dict["instances_visible_to_cameras"]):
+        if all(
+            (not x) or (len(x["category_names"]) == 0) for x in bbox3d_dict.values()
+        ):
             logger.debug(f"No observable bbox from any of the cameras, returning None")
             return None
 
