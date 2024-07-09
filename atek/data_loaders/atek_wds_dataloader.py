@@ -122,13 +122,64 @@ def select_and_remap_dict_keys(
     return remapped_sample
 
 
+def atek_default_collation_fn(samples):
+    """
+    Take a collection of samples (dictionaries) from ATEK WDS, and collate them into a batch.
+    :param samples: list of sample, each sample is a dict.
+    """
+    if len(samples) == 0:
+        return {}
+
+    assert isinstance(samples[0], dict)
+
+    """
+    TODO: add this feature back when needed
+    # Get the common keys between samples. This is required when we train with
+    # multiple datasets with samples having different keys.
+    common_keys = set(samples[0].keys())
+    for sample in samples[1:]:
+        common_keys &= set(sample.keys())
+    """
+
+    batched_dict = {}
+    for key in samples[0].keys():
+        # first insert values of the same key into a list
+        values_as_list = []
+        for sample in samples:
+            values_as_list.append(sample[key])
+
+        # For tensor list, check if they can be stacked. If so, stack them.
+        stackable_flag = False
+        if isinstance(values_as_list[0], torch.Tensor):
+            stackable_flag = True
+            first_tensor_shape = values_as_list[0].shape
+            first_tensor_dtype = values_as_list[0].dtype
+            for tensor_i in values_as_list:
+                if (
+                    tensor_i.shape != first_tensor_shape
+                    or tensor_i.dtype != first_tensor_dtype
+                ):
+                    print(
+                        f"Tensors for {key} have different shapes or dtypes, cannot be stacked, keep as a list"
+                    )
+                    stackable_flag = False
+                    break
+
+        if stackable_flag:
+            batched_dict[key] = torch.stack(values_as_list, dim=0)
+        else:
+            batched_dict[key] = values_as_list
+
+    return batched_dict
+
+
 def load_atek_wds_dataset(
     urls: List[str],
     nodesplitter: Callable = wds.shardlists.single_node_only,
     dict_key_mapping: Optional[Dict[str, str]] = None,
     data_transform_fn: Optional[Callable] = None,
     batch_size: Optional[int] = None,
-    collation_fn: Optional[Callable] = None,
+    collation_fn: Optional[Callable] = atek_default_collation_fn,
     repeat_flag: bool = False,
 ) -> wds.WebDataset:
     # first, load WDS samples back as dicts
