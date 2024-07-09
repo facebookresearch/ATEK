@@ -27,13 +27,13 @@ class MultiFrameCameraDataTest(unittest.TestCase):
 
         data_dict = data.to_flatten_dict()
         expected_keys = [
-            "MFCD#test-camera+images_0.jpeg",
-            "MFCD#test-camera+images_1.jpeg",
-            "MFCD#test-camera+images_2.jpeg",
-            "MFCD#test-camera+images_3.jpeg",
-            "MFCD#test-camera+frame_ids.pth",
-            "MFCD#test-camera+camera_label.txt",
-            "MFCD#test-camera+projection_params.pth",
+            "mfcd#test-camera+images_0.jpeg",
+            "mfcd#test-camera+images_1.jpeg",
+            "mfcd#test-camera+images_2.jpeg",
+            "mfcd#test-camera+images_3.jpeg",
+            "mfcd#test-camera+frame_ids.pth",
+            "mfcd#test-camera+camera_label.txt",
+            "mfcd#test-camera+projection_params.pth",
         ]
         self.assertCountEqual(data_dict.keys(), expected_keys)
 
@@ -56,18 +56,18 @@ class TestMpsSemiDensePointData(unittest.TestCase):
 
         # Check the keys in the flatten_dict
         expected_keys = [
-            "MSDPD#points_world_lengths.pth",
-            "MSDPD#stacked_points_world.pth",
-            "MSDPD#stacked_points_inv_dist_std.pth",
-            "MSDPD#stacked_points_dist_std.pth",
-            "MSDPD#capture_timestamps_ns.pth",
+            "msdpd#points_world_lengths.pth",
+            "msdpd#stacked_points_world.pth",
+            "msdpd#stacked_points_inv_dist_std.pth",
+            "msdpd#stacked_points_dist_std.pth",
+            "msdpd#capture_timestamps_ns.pth",
         ]
         self.assertCountEqual(flatten_dict.keys(), expected_keys)
 
         # Check value
         self.assertTrue(
             torch.allclose(
-                flatten_dict["MSDPD#points_world_lengths.pth"],
+                flatten_dict["msdpd#points_world_lengths.pth"],
                 torch.tensor([2, 1], dtype=torch.int64),
                 atol=0,
             )
@@ -75,10 +75,10 @@ class TestMpsSemiDensePointData(unittest.TestCase):
 
         # Check shape
         self.assertEqual(
-            flatten_dict["MSDPD#stacked_points_world.pth"].shape, torch.Size([3, 3])
+            flatten_dict["msdpd#stacked_points_world.pth"].shape, torch.Size([3, 3])
         )
         self.assertEqual(
-            flatten_dict["MSDPD#stacked_points_inv_dist_std.pth"].shape, torch.Size([3])
+            flatten_dict["msdpd#stacked_points_inv_dist_std.pth"].shape, torch.Size([3])
         )
 
 
@@ -115,20 +115,20 @@ class AtekDataSampleTest(unittest.TestCase):
 
         data_dict = data.to_flatten_dict()
         expected_keys = [
-            "MFCD#camera-rgb+images_0.jpeg",
-            "MFCD#camera-rgb+images_1.jpeg",
-            "MFCD#camera-rgb+images_2.jpeg",
-            "MFCD#camera-rgb+images_3.jpeg",
-            "MFCD#camera-rgb+camera_label.txt",
-            "MFCD#camera-rgb+projection_params.pth",
-            "MFCD#camera-slam-left+images_0.jpeg",
-            "MFCD#camera-slam-left+images_1.jpeg",
-            "MFCD#camera-slam-left+images_2.jpeg",
-            "MFCD#camera-slam-left+images_3.jpeg",
-            "MFCD#camera-slam-left+camera_label.txt",
-            "MFCD#camera-slam-left+frame_ids.pth",
-            "MTD#Ts_World_Device.pth",
-            "MTD#gravity_in_world.pth",
-            "GtData.json",
+            "mfcd#camera-rgb+images_0.jpeg",
+            "mfcd#camera-rgb+images_1.jpeg",
+            "mfcd#camera-rgb+images_2.jpeg",
+            "mfcd#camera-rgb+images_3.jpeg",
+            "mfcd#camera-rgb+camera_label.txt",
+            "mfcd#camera-rgb+projection_params.pth",
+            "mfcd#camera-slam-left+images_0.jpeg",
+            "mfcd#camera-slam-left+images_1.jpeg",
+            "mfcd#camera-slam-left+images_2.jpeg",
+            "mfcd#camera-slam-left+images_3.jpeg",
+            "mfcd#camera-slam-left+camera_label.txt",
+            "mfcd#camera-slam-left+frame_ids.pth",
+            "mtd#ts_world_device.pth",
+            "mtd#gravity_in_world.pth",
+            "gtdata.json",
         ]
         self.assertCountEqual(data_dict.keys(), expected_keys)

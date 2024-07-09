@@ -54,7 +54,7 @@ class MultiFrameCameraData:
     def to_flatten_dict(self):
         """
         Transforms to a flattened dictionary, excluding attributes with None values.
-        Attributes are prefixed to ensure uniqueness and to maintain context.
+        Attributes are prefixed to ensure uniqueness and to maintain context. Keys are lower-cased to be consistent with WDS tariterator behavior
         """
         flatten_dict = {}
         for f in fields(self):
@@ -71,7 +71,8 @@ class MultiFrameCameraData:
                 )
 
                 for id, img in enumerate(image_frames_in_np):
-                    flatten_dict[f"MFCD#{self.camera_label}+images_{id}.jpeg"] = (
+                    key_in_lcase = f"mfcd#{self.camera_label}+images_{id}.jpeg".lower()
+                    flatten_dict[key_in_lcase] = (
                         img if img.shape[-1] == 3 else img.squeeze()
                     )
                 continue
@@ -84,9 +85,11 @@ class MultiFrameCameraData:
             else:
                 file_extension = ".json"
 
-            flatten_dict[f"MFCD#{self.camera_label}+{field_name}{file_extension}"] = (
-                getattr(self, field_name)
+            # "mfcd" stans for MultiFrameCameraData
+            key_in_lcase = (
+                f"mfcd#{self.camera_label}+{field_name}{file_extension}".lower()
             )
+            flatten_dict[key_in_lcase] = getattr(self, field_name)
 
         return flatten_dict
 
@@ -163,9 +166,9 @@ class MpsTrajData:
             else:
                 file_extension = ".json"
 
-            flatten_dict[f"MTD#{field_name}{file_extension}"] = getattr(
-                self, field_name
-            )
+            # "mtd" stans for MpsTrajData
+            key_in_lcase = f"mtd#{field_name}{file_extension}".lower()
+            flatten_dict[key_in_lcase] = getattr(self, field_name)
 
         return flatten_dict
 
@@ -211,12 +214,12 @@ class MpsSemiDensePointData:
             len_points_world, len_points_inv_dist, atol=1
         ), f"The lengths of points_world and points_inv_dist should be the same! Instead got\n {len_points_world} vs \n {len_points_inv_dist}"
 
-        # add to flatten dict
-        flatten_dict[f"MSDPD#points_world_lengths.pth"] = len_points_world
-        flatten_dict[f"MSDPD#stacked_points_world.pth"] = stacked_points_world
-        flatten_dict[f"MSDPD#stacked_points_dist_std.pth"] = stacked_points_dist
-        flatten_dict[f"MSDPD#stacked_points_inv_dist_std.pth"] = stacked_points_inv_dist
-        flatten_dict[f"MSDPD#capture_timestamps_ns.pth"] = self.capture_timestamps_ns
+        # add to flatten dict, "msdpd" stands for MpsSemiDensePointData
+        flatten_dict["msdpd#points_world_lengths.pth"] = len_points_world
+        flatten_dict["msdpd#stacked_points_world.pth"] = stacked_points_world
+        flatten_dict["msdpd#stacked_points_dist_std.pth"] = stacked_points_dist
+        flatten_dict["msdpd#stacked_points_inv_dist_std.pth"] = stacked_points_inv_dist
+        flatten_dict["msdpd#capture_timestamps_ns.pth"] = self.capture_timestamps_ns
 
         return flatten_dict
 
@@ -256,7 +259,7 @@ class AtekDataSample:
                 flatten_dict.update(field_value.to_flatten_dict())
             # rename gt_data
             elif field_name == "gt_data":
-                flatten_dict["GtData.json"] = field_value
+                flatten_dict["gtdata.json"] = field_value
             else:
                 raise ValueError(f"This field {field_name} is not implemented yet!")
         return flatten_dict
