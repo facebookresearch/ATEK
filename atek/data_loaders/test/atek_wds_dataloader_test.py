@@ -126,6 +126,32 @@ class LoadAtekWdsDatasetTest(unittest.TestCase):
                 else:
                     self.assertEqual(expected_val, sample_val)
 
+    def test_atek_default_collation(self) -> None:
+        # Preprocess data and create WDS files
+        self._preprocess_data()
+
+        # check number of tars created
+        output_wds_names = os.listdir(self.output_wds_path)
+        self.assertEqual(len(output_wds_names), 1)  # only 1 tar file created
+
+        # Load tars back into ATEK
+        tar_list = [os.path.join(self.output_wds_path, f) for f in output_wds_names]
+        batch_size = 2  # TODO: maybe support a unit test with a larger dataset
+        batched_dataset = load_atek_wds_dataset(
+            tar_list, batch_size=batch_size, repeat_flag=False
+        )
+
+        # Check batched data tensor shape
+        batched_sample = next(iter(batched_dataset))
+        for key, val in batched_sample.items():
+            if key in ["__key__", "__url__"]:
+                continue
+
+            if isinstance(val, torch.Tensor):
+                self.assertEqual(val.shape[0], batch_size)
+            elif isinstance(val, list):
+                self.assertEqual(len(val), batch_size)
+
     # This is like a DTOR
     def tearDown(self):
         # Explicitly cleanup the temporary directory
