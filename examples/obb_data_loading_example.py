@@ -138,6 +138,7 @@ rr.init("ATEK Data Loader Viewer", spawn=True)
 rr.serve(web_port=8888, ws_port=8877)
 
 # Load Native ATEK WDS data
+print("-------------------- loading ATEK data natively --------------- ")
 wds_dir = "/home/louy/Calibration_data_link/Atek/2024_06_23_Test/wds_output/adt_test_1"
 tars = [os.path.join(wds_dir, f"shards-000{i}.tar") for i in range(5)]
 
@@ -157,3 +158,21 @@ for sample in test_dataloader:
     print("K: ", sample[0]['K'])
     """
     log_pred_3d_2d_bbox(sample)
+
+
+# Load ATEK WDS data as cubercnn
+print("-------------------- loading ATEK data as CubeRCNN --------------- ")
+dataset_2 = load_atek_wds_dataset_as_cubercnn(tars, batch_size=8, repeat_flag=False)
+test_dataloader_2 = torch.utils.data.DataLoader(
+    dataset_2,
+    batch_size=None,
+    num_workers=1,
+    pin_memory=True,
+)
+
+for batched_sample in test_dataloader_2:
+
+    print(f"batched_sample_size: {len(batched_sample)}")
+    print(f"dict keys in a single batched sample: {batched_sample[0].keys()}")
+    print(f"content in a single batched sample: {batched_sample[0]}")
+    break  # only print one batched sample
