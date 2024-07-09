@@ -1,30 +1,16 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
+import copy
 import os
 
-from typing import Dict
+from typing import Dict, List, Tuple
 
 import torch
 import webdataset as wds
 
 from atek.data_preprocess.atek_data_sample import AtekDataSample
+from atek.data_preprocess.util.file_io_utils import separate_tensors_from_dict
 from omegaconf import DictConfig
-
-
-def serialize_tensors(obj):
-    """
-    Helper function to recursively serialize tensors in the input object. Only expect list, dict, or values as input
-    This function will convert the value to lists.
-    Return.
-    """
-    if isinstance(obj, torch.Tensor):
-        return obj.tolist()
-    elif isinstance(obj, dict):
-        return {key: serialize_tensors(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [serialize_tensors(value) for value in obj]
-    else:
-        return obj
 
 
 def convert_atek_data_sample_to_wds_dict(
@@ -34,9 +20,14 @@ def convert_atek_data_sample_to_wds_dict(
 ) -> Dict:
     flatten_dict = data_sample.to_flatten_dict()
 
-    # GT dict needs to be Json serializable
-    if "GtData.json" in flatten_dict:
-        flatten_dict["GtData.json"] = serialize_tensors(flatten_dict["GtData.json"])
+    # GT dict needs some special handling. The tensors in the dict needs to be serialized as `.pth` file, while the rest stays in the dcit.
+    if "gtdata.json" in flatten_dict:
+        gt_dict_no_tensor, tensor_dict = separate_tensors_from_dict(
+            flatten_dict["gtdata.json"]
+        )
+        flatten_dict["gtdata.json"] = gt_dict_no_tensor
+        for tensor_key, tensor_value in tensor_dict.items():
+            flatten_dict[f"gtdata#{tensor_key}.pth"] = tensor_value
 
     wds_dict = {"__key__": f"{prefix_string}_AtekDataSample_{index:06}"}
     wds_dict.update(flatten_dict)
