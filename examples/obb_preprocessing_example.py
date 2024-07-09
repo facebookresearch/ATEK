@@ -4,12 +4,12 @@ import logging
 import os
 from logging import StreamHandler
 
+from atek.data_preprocess.atek_wds_writer import AtekWdsWriter
+
 from atek.data_preprocess.sample_builders.obb_sample_builder import ObbSampleBuilder
 from atek.data_preprocess.subsampling_lib.temporal_subsampler import (
     CameraTemporalSubsampler,
 )
-
-from atek.data_preprocess.wds_writer import AtekWdsWriter
 
 from omegaconf import OmegaConf
 
@@ -30,9 +30,7 @@ adt_config_path = os.path.join(
 adt_to_atek_category_mapping_file = (
     "/home/louy/atek_on_fbsource/data/adt_prototype_to_atek.csv"
 )
-output_wds_path = (
-    "/home/louy/Calibration_data_link/Atek/2024_06_23_Test/wds_output/adt_test_1"
-)
+output_wds_path = "/home/louy/Calibration_data_link/Atek/2024_07_02_NewGtStructure/wds_output/adt_test_1"
 
 conf = OmegaConf.load(adt_config_path)
 

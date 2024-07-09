@@ -184,20 +184,19 @@ class Obb2GtProcessor:
             Optional[Dict]: A dictionary containing the ground truth data for 2D bounding boxes if available and valid; otherwise, None.
 
             If not None, the returned dictionary will have the following structure:
-                {
-                    "camera_label": {
-                        "instance_id": {
-                            "instance_id": str,
-                            "category_name": str,
-                            "category_id": int,
-                            "visibility_ratio": float,
-                            "box_range": List[float] (shape: [4])  # [xmin, xmax, ymin, ymax]
-                        },
-                        ...
-                    },
+            {
+                "camera_label_1": {
+                    "instance_ids": torch.Tensor (shape: [num_instances], int64)
+                    "category_names": list[str],
+                    "category_ids": torch.Tensor (shape: [num_instances], int64),
+                    "visibility_ratios": torch.Tensor (shape: [num_instances], float32),
+                    "box_ranges": torch.Tensor (shape: [num_instances, 4], float32, [xmin, xmax, ymin, ymax])
+                },
+                "camera_label_2": {
                     ...
                 }
-
+                ...
+            }
             Each key in the outer dictionary corresponds to a camera label, while each inner dictionary contains instance information for that camera.
 
         Notes:
@@ -205,7 +204,6 @@ class Obb2GtProcessor:
         """
         bbox2d_dict = {}
         for cam_label, stream_id in self.camera_label_to_stream_ids.items():
-            bbox2d_dict[cam_label] = {}
 
             bbox2d_with_dt = (
                 self.adt_gt_provider.get_object_2d_boundingboxes_by_timestamp_ns(
@@ -220,30 +218,50 @@ class Obb2GtProcessor:
             ):
                 continue
 
-            # pack 2d bbox data into a dict
-            for instance_id, bbox2d_data in bbox2d_with_dt.data().items():
-                single_bbox2d_dict = {}
-                # fill in instance id and category information
-                single_bbox2d_dict["instance_id"] = instance_id
-                (
-                    single_bbox2d_dict["category_name"],
-                    single_bbox2d_dict["category_id"],
-                ) = self._obtain_obj_category_info(instance_id)
+            # initialize result dict for current camera
+            num_visible_instances = len(bbox2d_with_dt.data())
 
-                # Fill in 2d bbox information
-                box_range = bbox2d_data.box_range  # [xmin, xmax, ymin, ymax]
-                single_bbox2d_dict["visibility_ratio"] = bbox2d_data.visibility_ratio
+            bbox2d_dict[cam_label] = {
+                "instance_ids": torch.empty((num_visible_instances), dtype=torch.int64),
+                "category_names": [],
+                "category_ids": torch.empty((num_visible_instances), dtype=torch.int64),
+                "visibility_ratios": torch.empty(
+                    (num_visible_instances), dtype=torch.float32
+                ),
+                "box_ranges": torch.empty(
+                    (num_visible_instances, 4), dtype=torch.float32
+                ),
+            }
 
-                # 2d bbox needs to be undistorted -> rescaled -> rotated
-                single_bbox2d_dict["box_range"] = self._apply_transforms_to_bbox2d(
-                    cam_label, box_range
+            if num_visible_instances == 0:
+                logger.debug(
+                    f"No visible 2d bbox data for camera {cam_label} at {timestamp_ns}, skipping"
                 )
-                bbox2d_dict[cam_label][instance_id] = single_bbox2d_dict
+                continue
+
+            # pack 2d bbox data into the dict
+            i_row = 0
+            for instance_id, bbox2d_data in bbox2d_with_dt.data().items():
+                # fill in instance id and category information
+                cat_name, cat_id = self._obtain_obj_category_info(instance_id)
+                bbox2d_dict[cam_label]["instance_ids"][i_row] = instance_id
+                bbox2d_dict[cam_label]["category_names"].append(cat_name)
+                bbox2d_dict[cam_label]["category_ids"][i_row] = cat_id
+                bbox2d_dict[cam_label]["visibility_ratios"][
+                    i_row
+                ] = bbox2d_data.visibility_ratio
+                bbox2d_dict[cam_label]["box_ranges"][i_row] = (
+                    self._apply_transforms_to_bbox2d(cam_label, bbox2d_data.box_range)
+                )
+                i_row += 1
+            assert (
+                i_row == num_visible_instances
+            ), f"camera {cam_label} filled number {i_row} != num of instances {num_visible_instances}, tensor contains initialized values, unsafe hence abort"
 
         # At least one camera should have valid data, or will return None
         valid_data_flag = False
-        for per_cam_data in bbox2d_dict.values():
-            if len(per_cam_data) > 0:
+        for per_cam_dict in bbox2d_dict.values():
+            if len(per_cam_dict["category_names"]) > 0:
                 valid_data_flag = True
 
         if not valid_data_flag:

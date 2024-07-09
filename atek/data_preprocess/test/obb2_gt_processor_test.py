@@ -55,41 +55,40 @@ class Obb2GtProcessorTest(unittest.TestCase):
             conf=conf.processors.obb_gt,
         )
 
-        instance_id = 6243788802362822
-
         # Test for valid query
         queried_obb2_data = obb2_gt_processor.get_gt_by_timestamp_ns(
             timestamp_ns=87551170910700
         )
         self.assertEqual(len(queried_obb2_data), 1)  # 1 camera
+        per_cam_dict = queried_obb2_data["camera-rgb"]
+        gt_num_instances = 91  # 91 instances at this timestamp
+        # Check tensor shapes
+        self.assertEqual(len(per_cam_dict["category_names"]), gt_num_instances)
         self.assertEqual(
-            len(queried_obb2_data["camera-rgb"]), 91
-        )  # 91 instances at this timestamp
-
-        # Check the content of a specific instance 2 bbox
-        gt_instance_dict = {
-            "instance_id": instance_id,
-            "category_name": "box",
-            "category_id": 31,
-            "visibility_ratio": 0.742435,
-            "box_range": torch.tensor([920, 1066, 1157, 1308], dtype=torch.float32),
-        }
-        instance_dict = {
-            key: queried_obb2_data["camera-rgb"][instance_id][key]
-            for key in gt_instance_dict.keys()
-        }
-
-        self.assertEqual(instance_dict["instance_id"], gt_instance_dict["instance_id"])
-        self.assertEqual(
-            instance_dict["category_name"], gt_instance_dict["category_name"]
+            per_cam_dict["instance_ids"].shape, torch.Size([gt_num_instances])
         )
-        self.assertEqual(instance_dict["category_id"], gt_instance_dict["category_id"])
+        self.assertEqual(
+            per_cam_dict["category_ids"].shape, torch.Size([gt_num_instances])
+        )
+        self.assertEqual(
+            per_cam_dict["visibility_ratios"].shape, torch.Size([gt_num_instances])
+        )
+        self.assertEqual(
+            per_cam_dict["box_ranges"].shape, torch.Size([gt_num_instances, 4])
+        )
+
+        # Check content for a specific instance
+        instance_id = 6243788802362822
+        ind = torch.where(per_cam_dict["instance_ids"] == instance_id)[0]
+        self.assertTrue(len(ind) == 1)
+        ind = ind.item()
+
+        gt_visibility = torch.tensor([0.742435], dtype=torch.float32)
+        self.assertEqual(per_cam_dict["category_names"][ind], "box")
+        self.assertEqual(per_cam_dict["category_ids"][ind].item(), 31)
         self.assertTrue(
-            np.allclose(
-                instance_dict["visibility_ratio"],
-                gt_instance_dict["visibility_ratio"],
-                atol=1e-5,
-            )
+            torch.allclose(
+                per_cam_dict["visibility_ratios"][ind], gt_visibility, atol=1e-5
+            ),
         )
-        # check the tensor shape of the distorted box range
-        self.assertEqual(torch.Size([4]), instance_dict["box_range"].shape)
+        # TODO: box_range cannot be easily checked due to rotation and distortion
