@@ -6,7 +6,7 @@ from typing import Callable, Dict, Optional, Tuple
 import numpy as np
 import torch
 
-from atek.data_preprocess.util.file_io_utils import load_category_mapping_from_csv
+from atek.util.file_io_utils import load_category_mapping_from_csv
 
 from omegaconf.omegaconf import DictConfig
 from projectaria_tools.core.calibration import CameraCalibration

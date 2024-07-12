@@ -10,10 +10,8 @@ import numpy as np
 import torch
 import webdataset as wds
 
-from atek.data_preprocess.util.file_io_utils import (
-    merge_tensors_into_dict,
-    unpack_list_of_tensors,
-)
+from atek.util.file_io_utils import merge_tensors_into_dict
+from atek.util.tensor_utils import unpack_list_of_tensors
 from torchvision.io import read_image
 
 

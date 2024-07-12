@@ -3,7 +3,7 @@ from dataclasses import dataclass, field, fields, is_dataclass
 from typing import Dict, List, Optional
 
 import torch
-from atek.data_preprocess.util.file_io_utils import concat_list_of_tensors
+from atek.util.tensor_utils import concat_list_of_tensors
 
 
 @dataclass

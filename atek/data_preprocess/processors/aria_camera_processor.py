@@ -6,7 +6,7 @@ from typing import Callable, List, Optional, Tuple
 import torch
 
 from atek.data_preprocess.atek_data_sample import MultiFrameCameraData
-from atek.data_preprocess.util.camera_calib_utils import (
+from atek.util.camera_calib_utils import (
     rescale_pixel_coords,
     rotate_pixel_coords_cw90,
     undistort_pixel_coords,

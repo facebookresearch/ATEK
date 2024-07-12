@@ -13,7 +13,7 @@ from atek.data_preprocess.sample_builders.obb_sample_builder import ObbSampleBui
 from atek.data_preprocess.subsampling_lib.temporal_subsampler import (
     CameraTemporalSubsampler,
 )
-from atek.data_preprocess.util.tensor_utils import check_dicts_same_w_tensors
+from atek.util.tensor_utils import check_dicts_same_w_tensors
 
 from omegaconf import OmegaConf
 

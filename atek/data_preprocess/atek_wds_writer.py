@@ -9,7 +9,7 @@ import torch
 import webdataset as wds
 
 from atek.data_preprocess.atek_data_sample import AtekDataSample
-from atek.data_preprocess.util.file_io_utils import separate_tensors_from_dict
+from atek.util.file_io_utils import separate_tensors_from_dict
 from omegaconf import DictConfig
 
 

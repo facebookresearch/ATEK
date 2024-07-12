@@ -5,11 +5,8 @@
 import unittest
 
 import torch
-from atek.data_preprocess.util.file_io_utils import (
-    merge_tensors_into_dict,
-    separate_tensors_from_dict,
-)
-from atek.data_preprocess.util.tensor_utils import check_dicts_same_w_tensors
+from atek.util.file_io_utils import merge_tensors_into_dict, separate_tensors_from_dict
+from atek.util.tensor_utils import check_dicts_same_w_tensors
 
 
 class FileIoUtilsTest(unittest.IsolatedAsyncioTestCase):
