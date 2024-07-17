@@ -1,7 +1,7 @@
 #pragma once
 
+#include <igl/MeshBooleanType.h>
 #include <pybind11/pybind11.h>
-
 namespace py = pybind11;
 
 namespace atek::utils {
@@ -24,10 +24,33 @@ py::object intersectMeshes(
     const py::object& trimeshA,
     const py::object& trimeshB);
 
+/**
+ * Calls the Python trimesh library to compute the boolean of two meshes.
+ * @param trimeshA A Trimesh PyObject representing the first mesh.
+ * @param trimeshB A Trimesh hPyObject representing the second mesh.
+ * @param mode The type of boolean operation to perform. See MeshBooleanType.
+ * @return A Trimesh PyObject representing the new mesh after intersection.
+ */
+py::object booleanMeshes(
+    const py::object& trimeshA,
+    const py::object& trimeshB,
+    const igl::MeshBooleanType mode);
+
 // Initialize the Python interpreter and keep it alive
 PYBIND11_MODULE(mesh_boolean_utils, m) {
   m.def("union_meshes", &unionMeshes);
   m.def("intersect_meshes", &intersectMeshes);
+  m.def("boolean_meshes", &booleanMeshes);
+  py::enum_<igl::MeshBooleanType>(m, "MeshBooleanType")
+      .value("UNION", igl::MeshBooleanType::MESH_BOOLEAN_TYPE_UNION)
+      .value("INTERSECT", igl::MeshBooleanType::MESH_BOOLEAN_TYPE_INTERSECT)
+      .value("MINUS", igl::MeshBooleanType::MESH_BOOLEAN_TYPE_MINUS)
+      .value("XOR", igl::MeshBooleanType::MESH_BOOLEAN_TYPE_XOR)
+      .value("RESOLVE", igl::MeshBooleanType::MESH_BOOLEAN_TYPE_RESOLVE)
+      .value(
+          "NUM_MESH_BOOLEAN_TYPES",
+          igl::MeshBooleanType::NUM_MESH_BOOLEAN_TYPES)
+      .export_values();
 }
 
 } // namespace atek::utils

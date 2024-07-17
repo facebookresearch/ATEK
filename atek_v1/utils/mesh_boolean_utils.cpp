@@ -63,5 +63,19 @@ py::object intersectMeshes(
   return convertEigenToTrimesh(VI, FI);
 }
 
+py::object booleanMeshes(
+    const py::object& trimeshA,
+    const py::object& trimeshB,
+    const igl::MeshBooleanType mode) {
+  const auto [VA, FA] = convertTrimeshToEigen(trimeshA);
+  const auto [VB, FB] = convertTrimeshToEigen(trimeshB);
+
+  Eigen::MatrixXd VI;
+  Eigen::MatrixXi FI;
+  igl::copyleft::cgal::mesh_boolean(VA, FA, VB, FB, mode, VI, FI);
+
+  return convertEigenToTrimesh(VI, FI);
+}
+
 } // namespace atek::utils
 ;
