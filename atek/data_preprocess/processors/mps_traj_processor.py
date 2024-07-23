@@ -31,7 +31,7 @@ class MpsTrajProcessor:
         self.mps_data_provider = mps.MpsDataProvider(mps_data_paths)
 
     def get_closed_loop_pose_by_timestamps_ns(
-        self, timestamps_ns: List[int]
+        self, timestamps_ns: List[int], interpolate: bool = False
     ) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         """
         Obtain a single MPS trajectory data by timestamp.
@@ -42,10 +42,15 @@ class MpsTrajProcessor:
         capture_timestamp_list = []
         gravity_in_world = None
         for single_timestamp in timestamps_ns:
-            pose = self.mps_data_provider.get_closed_loop_pose(
-                device_timestamp_ns=single_timestamp,
-                time_query_options=TimeQueryOptions.CLOSEST,
-            )
+            if interpolate:
+                pose = self.mps_data_provider.getInterpolatedClosedLoopPose(
+                    deviceTimeStampNs=single_timestamp,
+                )
+            else:
+                pose = self.mps_data_provider.get_closed_loop_pose(
+                    device_timestamp_ns=single_timestamp,
+                    time_query_options=TimeQueryOptions.CLOSEST,
+                )
 
             # Check if fetched data is within tolerance. Note that pose tracking timestamp is in us
             capture_timestamp = int(
