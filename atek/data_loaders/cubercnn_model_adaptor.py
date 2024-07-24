@@ -89,13 +89,12 @@ class CubeRCNNModelAdaptor:
         sample["T_world_camera"] = T_world_rgbCam.to_matrix3x4()
         return T_world_rgbCam
 
-    def _process_2d_bbox_dict(self, bb2d_dict, shared_instances):
+    def _process_2d_bbox_dict(self, bb2d_dict):
         """
         Process 2D bounding boxes by rearranging the bounding box coordinates to be
         in the order x0, y0, x1, y1 and calculating the area of each 2D bounding box.
         """
-        box_range_list = [bb2d_dict[inst]["box_range"] for inst in shared_instances]
-        bb2ds_x0y0x1y1 = torch.tensor(box_range_list, dtype=torch.float32)
+        bb2ds_x0y0x1y1 = bb2d_dict["box_ranges"]
         bb2ds_x0y0x1y1 = bb2ds_x0y0x1y1[:, [0, 2, 1, 3]]
         bb2ds_area = (bb2ds_x0y0x1y1[:, 2] - bb2ds_x0y0x1y1[:, 0]) * (
             bb2ds_x0y0x1y1[:, 3] - bb2ds_x0y0x1y1[:, 1]
@@ -103,29 +102,26 @@ class CubeRCNNModelAdaptor:
 
         return bb2ds_x0y0x1y1, bb2ds_area
 
-    def _process_3d_bbox_dict(self, bbox3d_dict, shared_instances, T_world_rgbCam):
+    def _process_3d_bbox_dict(self, bbox3d_dict, T_world_rgbCam):
         """
         This function processes 3D bounding box data from a given dictionary,
         extracting dimensions, calculating depths, and computing transformation
         matrices relative to the camera.
         """
-        bb3d_dimensions = torch.tensor(
-            [bbox3d_dict[inst]["object_dimensions"] for inst in shared_instances],
-            dtype=torch.float32,
-        )
+        bb3d_dimensions = bbox3d_dict["object_dimensions"]
 
         bb3d_depths_list = []
         Ts_world_object_list = []
         Ts_cam_object_list = []
-        for inst in shared_instances:
-            single_bb3d_dict = bbox3d_dict[inst]
-            T_world_object = SE3.from_matrix3x4(single_bb3d_dict["T_World_Object"])
+        for _, pose_as_tensor in enumerate(bbox3d_dict["ts_world_object"]):
+            T_world_object = SE3.from_matrix3x4(pose_as_tensor.numpy())
             T_cam_object = T_world_rgbCam.inverse() @ T_world_object
 
             # Add to lists
             Ts_world_object_list.append(
                 torch.tensor(T_world_object.to_matrix3x4(), dtype=torch.float32)
             )
+
             Ts_cam_object_list.append(
                 torch.tensor(T_cam_object.to_matrix3x4(), dtype=torch.float32)
             )
@@ -143,22 +139,20 @@ class CubeRCNNModelAdaptor:
         updates the sample dictionary with filtered ground truth data for both 2D and 3D bounding boxes.
         """
         bbox2d_dict = atek_wds_sample["gtdata"]["obb2_gt"]["camera-rgb"]
-        bbox3d_dict = atek_wds_sample["gtdata"]["obb3_gt"]["bbox3d_all_instances"]
+        bbox3d_dict = atek_wds_sample["gtdata"]["obb3_gt"]["camera-rgb"]
 
-        shared_instances = set(bbox2d_dict.keys()) & set(bbox3d_dict.keys())
+        # Instance id between obb3 and obb2 should be the same
+        assert torch.allclose(
+            bbox3d_dict["instance_ids"], bbox2d_dict["instance_ids"], atol=0
+        ), "instance ids in obb2 and obb3 needs to be exactly the same!"
 
-        category_ids = torch.tensor(
-            [int(bbox3d_dict[inst]["category_id"]) for inst in shared_instances],
-            dtype=torch.int64,
-        )
+        category_ids = bbox3d_dict["category_ids"]
 
         T_world_rgbCam = self.compute_transform_matrices(atek_wds_sample, sample)
 
-        bb2ds_x0y0x1y1, bb2ds_area = self._process_2d_bbox_dict(
-            bbox2d_dict, shared_instances
-        )
+        bb2ds_x0y0x1y1, bb2ds_area = self._process_2d_bbox_dict(bbox2d_dict)
         bb3d_dimensions, bb3d_depths, Ts_world_object, Ts_cam_object = (
-            self._process_3d_bbox_dict(bbox3d_dict, shared_instances, T_world_rgbCam)
+            self._process_3d_bbox_dict(bbox3d_dict, T_world_rgbCam)
         )
 
         # Filter 1: ignore category = -1, meaning "Other".
