@@ -225,6 +225,27 @@ class MpsSemiDensePointData:
 
 
 @dataclass
+class MpsOnlineCalibData:
+    capture_timestamps_ns: Optional[torch.Tensor] = None  # [num_frames]
+    utc_timestamps_ns: Optional[torch.Tensor] = None  # [num_frames]
+
+    # camera calibration, [num_timestamps, num_of_camera, number_of_params]
+    # now all cameras have same number of params(15), but in the future, if
+    # we have different number of params for different cameras, we can use a list of tensors
+    # to store the calibration params for each camera.
+
+    projection_params: Optional[torch.Tensor] = None
+    # online_calib_camera_labels: List[str] todo: add camera labels to online calib data in future
+    #  TODO to support varying intrinsics param count. Filed task: T196065139
+
+    t_device_camera: Optional[torch.Tensor] = (
+        None  # Tensor has shape of [num_timestamps, num_of_camera, 3, 4]
+    )
+
+    # TODO: we can add calibration for IMU in the future
+
+
+@dataclass
 class AtekDataSample:
     """
     Underlying data structure for ATEK data sample.
@@ -241,6 +262,7 @@ class AtekDataSample:
     # MPS data
     mps_traj_data: Optional[MpsTrajData] = None
     mps_semidense_point_data: Optional[MpsSemiDensePointData] = None
+    mps_online_calib_data: Optional[MpsOnlineCalibData] = None
 
     # Depth data
     camera_rgb_depth: Optional[MultiFrameCameraData] = None
