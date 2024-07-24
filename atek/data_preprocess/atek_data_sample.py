@@ -244,6 +244,20 @@ class MpsOnlineCalibData:
 
     # TODO: we can add calibration for IMU in the future
 
+    def to_flatten_dict(self):
+        flatten_dict = {}
+        for f in fields(self):
+            field_name = f.name
+            # Skip if field is None or empty string
+            if (getattr(self, field_name) is None) or (getattr(self, field_name) == ""):
+                continue
+                # all fields are tensors, just use .pth extensions
+            key_in_lcase = (
+                f"moc#{field_name}.pth".lower()
+            )  # "moc" stands for MpsOnlineCalibData
+            flatten_dict[key_in_lcase] = getattr(self, field_name)
+        return flatten_dict
+
 
 @dataclass
 class AtekDataSample:
