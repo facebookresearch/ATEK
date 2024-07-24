@@ -29,6 +29,8 @@ processors:
     tolerance_ns: 10_000_000
   mps_semidense:
     selected: false
+  mps_online_calib:
+    tolerance_ns: 10_000_000
   obb_gt:
     selected: true
     tolerance_ns : 10_000_000
