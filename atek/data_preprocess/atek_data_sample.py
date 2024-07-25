@@ -1,6 +1,6 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
-from dataclasses import dataclass, field, fields, is_dataclass
-from typing import Dict, List, Optional
+from dataclasses import asdict, dataclass, field, fields, is_dataclass
+from typing import Any, Dict, List, Optional
 
 import torch
 from atek.util.tensor_utils import concat_list_of_tensors
@@ -299,3 +299,77 @@ class AtekDataSample:
             else:
                 raise ValueError(f"This field {field_name} is not implemented yet!")
         return flatten_dict
+
+
+def _init_data_class_from_flatten_dict_impl(
+    DataClassType, flatten_dict: Dict[str, Any], prefix: str = ""
+):
+    """
+    A helper (impl) to initialize a data class from its corresponding flattened dictionary.
+    """
+    # find fields in flatten dict that starts with prefix, create a sub-dict from it, with the prefix removed from the keys
+    sub_dict = {}
+    for key in flatten_dict.keys():
+        if key.startswith(prefix):
+            sub_dict[key[len(prefix) :]] = flatten_dict[key]
+    if len(sub_dict) == 0:
+        return None
+
+    data_class_instance = DataClassType()
+
+    # Populate the dataclass fields
+    for data_field in fields(data_class_instance):
+        data_field_name = data_field.name
+        if data_field_name.lower() in sub_dict:
+            setattr(
+                data_class_instance,
+                data_field_name,
+                sub_dict[data_field_name.lower()],
+            )
+        else:
+            continue
+
+    return data_class_instance
+
+
+def create_atek_data_sample_from_flatten_dict(flatten_dict):
+    """
+    A helper function to initialize an ATEK data sample from its corresponding flattened dictionary.
+    """
+    # Camera data + depth
+    atek_data_sample = AtekDataSample()
+    atek_data_sample.camera_rgb = _init_data_class_from_flatten_dict_impl(
+        MultiFrameCameraData,
+        flatten_dict,
+        "mfcd#camera-rgb+",
+    )
+    atek_data_sample.camera_slam_left = _init_data_class_from_flatten_dict_impl(
+        MultiFrameCameraData,
+        flatten_dict,
+        "mfcd#camera-slam-left+",
+    )
+    atek_data_sample.camera_slam_right = _init_data_class_from_flatten_dict_impl(
+        MultiFrameCameraData,
+        flatten_dict,
+        "mfcd#camera-slam-right+",
+    )
+    atek_data_sample.camera_rgb_depth = _init_data_class_from_flatten_dict_impl(
+        MultiFrameCameraData,
+        flatten_dict,
+        "mfcd#camera-rgb-depth+",
+    )
+
+    # MPS data
+    atek_data_sample.mps_traj_data = _init_data_class_from_flatten_dict_impl(
+        MpsTrajData, flatten_dict, "mtd#"
+    )
+    atek_data_sample.mps_semidense_point_data = _init_data_class_from_flatten_dict_impl(
+        MpsSemiDensePointData,
+        flatten_dict,
+        "msdpd#",
+    )
+
+    # GT data is already a dict
+    atek_data_sample.gt_data = flatten_dict["gtdata"]
+
+    return atek_data_sample
