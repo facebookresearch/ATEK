@@ -205,6 +205,7 @@ class CubeRCNNModelAdaptor:
         sample["Ts_world_object"] = Ts_world_object[final_filter].clone().detach()
         sample["object_dimensions"] = bb3d_dimensions[final_filter].clone().detach()
         sample["category"] = category_ids[final_filter].clone().detach()
+        sample["timestamp_ns"] = atek_wds_sample["timestamp_ns"]
 
 
 def cubercnn_collation_fn(batch):
