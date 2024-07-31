@@ -34,7 +34,7 @@ from detectron2.engine import launch
 from omegaconf import DictConfig, OmegaConf
 
 
-def create_inference_model(config_file, ckpt_dir):
+def create_inference_model(config_file, ckpt_dir, use_cpu_only=False):
     """
     Create the model for inference pipeline, with the model config.
     """
@@ -53,6 +53,8 @@ def create_inference_model(config_file, ckpt_dir):
     model_config.SOLVER.VAL_MAX_ITER = 0
 
     model_config.merge_from_file(config_file)
+    if use_cpu_only:
+        model_config.MODEL.DEVICE = "cpu"
     model_config.freeze()
 
     model = build_model(model_config, priors=None)
@@ -79,7 +81,9 @@ def run_inference(args):
     conf = OmegaConf.load(args.config_file)
 
     # setup config and model
-    model_config, model = create_inference_model(args.config_file, args.ckpt_dir)
+    model_config, model = create_inference_model(
+        args.config_file, args.ckpt_dir, args.num_gpus == 0
+    )
 
     # set up data loader from eval dataset
     infer_tars = get_tars(args.input_wds_tar, use_relative_path=True)
