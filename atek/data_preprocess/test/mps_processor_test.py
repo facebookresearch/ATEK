@@ -142,7 +142,7 @@ class MpsOnlineCalibProcessorTest(unittest.TestCase):
     capture_timestamps_ns=capture_timestamp_tensor,
     utc_timestamps_ns=utc_timestamp_tensor, we don't need to test this, since in the test file, this field is not valid
     projection_params=projection_params_tensor,
-    t_device_camera=t_device_camera_tensor,
+    ts_device_camera=ts_device_camera_tensor,
     """
 
     def setUp(self) -> None:
@@ -167,17 +167,17 @@ class MpsOnlineCalibProcessorTest(unittest.TestCase):
             mps_online_calib_data.projection_params.shape, torch.Size([1, 3, 15])
         )
         self.assertEqual(
-            mps_online_calib_data.t_device_camera.shape, torch.Size([1, 3, 3, 4])
+            mps_online_calib_data.ts_device_camera.shape, torch.Size([1, 3, 3, 4])
         )
         self.assertEqual(
             mps_online_calib_data.capture_timestamps_ns,
             torch.tensor([14580434854000], dtype=torch.int64),
         )
-        self._test_translation_and_quaternion(mps_online_calib_data.t_device_camera)
+        self._test_translation_and_quaternion(mps_online_calib_data.ts_device_camera)
         self._test_projection_params(mps_online_calib_data.projection_params)
         return
 
-    def _test_translation_and_quaternion(self, t_device_camera_tensor):
+    def _test_translation_and_quaternion(self, ts_device_camera_tensor):
         expected_translations = [
             [0.0004328977150926845, -0.00009016214024268332, -0.00004893689922337574],
             [0.006082919423532053, -0.11158645596563903, -0.0878174381882055],
@@ -208,7 +208,7 @@ class MpsOnlineCalibProcessorTest(unittest.TestCase):
             expected_translation = np.array(expected_translations[i])
             expected_quaternion = np.array(expected_quaternions[i])
             # Extract the translation and rotation matrix from the tensor
-            matrix = t_device_camera_tensor[0, i, :, :].numpy()
+            matrix = ts_device_camera_tensor[0, i, :, :].numpy()
             actual_translation = matrix[:3, 3]
             rotation_matrix = matrix[:3, :3]
             # Convert rotation matrix to quaternion

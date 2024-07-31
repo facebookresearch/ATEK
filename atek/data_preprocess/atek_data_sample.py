@@ -6,6 +6,22 @@ import torch
 from atek.util.tensor_utils import concat_list_of_tensors
 
 
+def _to_flatten_dict_impl(dataclass_instance, dataclass_prefix):
+    flatten_dict = {}
+    # asdict will create a deep copy. TODO: is this necessary?
+    for (
+        key,
+        value,
+    ) in asdict(dataclass_instance).items():
+        if value is None or value == "":
+            continue
+
+        # add prefix to the key
+        flattened_key_in_lcase = f"{dataclass_prefix}{key}".lower()
+        flatten_dict[flattened_key_in_lcase] = value
+    return flatten_dict
+
+
 @dataclass
 class MultiFrameCameraData:
     """
@@ -56,42 +72,10 @@ class MultiFrameCameraData:
         Transforms to a flattened dictionary, excluding attributes with None values.
         Attributes are prefixed to ensure uniqueness and to maintain context. Keys are lower-cased to be consistent with WDS tariterator behavior
         """
-        flatten_dict = {}
-        for f in fields(self):
-            field_name = f.name
-            # Skip if field is None or empty string
-            if (getattr(self, field_name) is None) or (getattr(self, field_name) == ""):
-                continue
-
-            # Process images separately
-            if field_name in self.image_field_names():
-                # Transpose dimensions
-                image_frames_in_np = (
-                    getattr(self, field_name).numpy().transpose(0, 2, 3, 1)
-                )
-
-                for id, img in enumerate(image_frames_in_np):
-                    key_in_lcase = f"mfcd#{self.camera_label}+images_{id}.jpeg".lower()
-                    flatten_dict[key_in_lcase] = (
-                        img if img.shape[-1] == 3 else img.squeeze()
-                    )
-                continue
-
-            # add file extensions so that WDS writer knows how to handle the data
-            if field_name in self.tensor_field_names():
-                file_extension = ".pth"
-            elif field_name in self.str_field_names():
-                file_extension = ".txt"
-            else:
-                file_extension = ".json"
-
-            # "mfcd" stans for MultiFrameCameraData
-            key_in_lcase = (
-                f"mfcd#{self.camera_label}+{field_name}{file_extension}".lower()
-            )
-            flatten_dict[key_in_lcase] = getattr(self, field_name)
-
-        return flatten_dict
+        # mfcd stands for MultiFrameCameraData, and need to further append camera_label to the prefix, so that the flattened key looks like "mfcd#camera-rgb+images".
+        return _to_flatten_dict_impl(
+            dataclass_instance=self, dataclass_prefix=f"mfcd#{self.camera_label}+"
+        )
 
 
 @dataclass
@@ -117,21 +101,9 @@ class ImuData:
     gyro_rect_matrix: torch.Tensor = None  # [3x3]
     gyro_rect_bias: torch.Tensor = None  # [3]
 
-    @staticmethod
-    def all_field_names():
-        return [
-            "raw_accel_data",
-            "raw_gyro_data",
-            "capture_timestamps_ns",
-            "rectified_accel_data",
-            "rectified_gyro_data",
-            "imu_label",
-            "T_Device_Imu",
-            "accel_rect_matrix",
-            "accel_rect_bias",
-            "gyro_rect_matrix",
-            "gyro_rect_bias",
-        ]
+    def to_flatten_dict(self):
+        # imud stands for ImuData
+        return _to_flatten_dict_impl(dataclass_instance=self, dataclass_prefix="imud#")
 
 
 @dataclass
@@ -153,24 +125,8 @@ class MpsTrajData:
         Transforms to a flattened dictionary, excluding attributes with None values.
         Attributes are prefixed to ensure uniqueness and to maintain context.
         """
-        flatten_dict = {}
-        for f in fields(self):
-            field_name = f.name
-            # Skip if field is None or empty string
-            if (getattr(self, field_name) is None) or (getattr(self, field_name) == ""):
-                continue
-
-            # add file extentions so that WDS writer knows how to handle the data
-            if field_name in self.tensor_field_names():
-                file_extension = ".pth"
-            else:
-                file_extension = ".json"
-
-            # "mtd" stans for MpsTrajData
-            key_in_lcase = f"mtd#{field_name}{file_extension}".lower()
-            flatten_dict[key_in_lcase] = getattr(self, field_name)
-
-        return flatten_dict
+        # mtd stands for MpsTrajData
+        return _to_flatten_dict_impl(dataclass_instance=self, dataclass_prefix="mtd#")
 
 
 @dataclass
@@ -187,41 +143,8 @@ class MpsSemiDensePointData:
     capture_timestamps_ns: torch.Tensor = None  # [num_frames]
 
     def to_flatten_dict(self):
-        """
-        Transforms to a flattened dictionary, excluding attributes with None values.
-        Attributes are prefixed to ensure uniqueness and to maintain context.
-        Semidense point data needs to be flattended from List[Tensor (N, 3)] to a Tensor (M, 3) in order to be writable to WDS.
-        Therefore we store a `stacked_points_world` (Tensor [M, 3]) along with `points_world_lengths` (Tensor [num_frames]),
-        in order to unpack the stacked tensor later. Same for `points_inv_dist_std`.
-        """
-        flatten_dict = {}
-
-        # obtain the "lengths" of each tensor in list.
-        stacked_points_world, len_points_world = concat_list_of_tensors(
-            self.points_world
-        )
-        stacked_points_inv_dist, len_points_inv_dist = concat_list_of_tensors(
-            self.points_inv_dist_std
-        )
-        stacked_points_dist, len_points_dist = concat_list_of_tensors(
-            self.points_dist_std
-        )
-
-        assert torch.allclose(
-            len_points_world, len_points_dist, atol=1
-        ), f"The lengths of points_world and points_dist should be the same! Instead got\n {len_points_world} vs \n {len_points_dist}"
-        assert torch.allclose(
-            len_points_world, len_points_inv_dist, atol=1
-        ), f"The lengths of points_world and points_inv_dist should be the same! Instead got\n {len_points_world} vs \n {len_points_inv_dist}"
-
-        # add to flatten dict, "msdpd" stands for MpsSemiDensePointData
-        flatten_dict["msdpd#points_world_lengths.pth"] = len_points_world
-        flatten_dict["msdpd#stacked_points_world.pth"] = stacked_points_world
-        flatten_dict["msdpd#stacked_points_dist_std.pth"] = stacked_points_dist
-        flatten_dict["msdpd#stacked_points_inv_dist_std.pth"] = stacked_points_inv_dist
-        flatten_dict["msdpd#capture_timestamps_ns.pth"] = self.capture_timestamps_ns
-
-        return flatten_dict
+        # "msdpd" stands for MpsSemiDensePointData
+        return _to_flatten_dict_impl(dataclass_instance=self, dataclass_prefix="msdpd#")
 
 
 @dataclass
@@ -238,25 +161,15 @@ class MpsOnlineCalibData:
     # online_calib_camera_labels: List[str] todo: add camera labels to online calib data in future
     #  TODO to support varying intrinsics param count. Filed task: T196065139
 
-    t_device_camera: Optional[torch.Tensor] = (
+    ts_device_camera: Optional[torch.Tensor] = (
         None  # Tensor has shape of [num_timestamps, num_of_camera, 3, 4]
     )
 
     # TODO: we can add calibration for IMU in the future
 
     def to_flatten_dict(self):
-        flatten_dict = {}
-        for f in fields(self):
-            field_name = f.name
-            # Skip if field is None or empty string
-            if (getattr(self, field_name) is None) or (getattr(self, field_name) == ""):
-                continue
-                # all fields are tensors, just use .pth extensions
-            key_in_lcase = (
-                f"moc#{field_name}.pth".lower()
-            )  # "moc" stands for MpsOnlineCalibData
-            flatten_dict[key_in_lcase] = getattr(self, field_name)
-        return flatten_dict
+        # mocd stands for MpsOnlineCalibData
+        return _to_flatten_dict_impl(dataclass_instance=self, dataclass_prefix="mocd#")
 
 
 @dataclass
@@ -290,14 +203,18 @@ class AtekDataSample:
             # Skip if the field value is None
             if field_value is None:
                 continue
+
+            if field_name == "gt_data":
+                flatten_dict["gt_data"] = field_value
+                continue
+
             # update with flatten sub-dataclasses
             if is_dataclass(field_value) and hasattr(field_value, "to_flatten_dict"):
                 flatten_dict.update(field_value.to_flatten_dict())
-            # rename gt_data
-            elif field_name == "gt_data":
-                flatten_dict["gtdata.json"] = field_value
             else:
-                raise ValueError(f"This field {field_name} is not implemented yet!")
+                raise ValueError(
+                    f"This field {field_name} does not have flatten_to_dict implemented yet!"
+                )
         return flatten_dict
 
 
@@ -370,6 +287,6 @@ def create_atek_data_sample_from_flatten_dict(flatten_dict):
     )
 
     # GT data is already a dict
-    atek_data_sample.gt_data = flatten_dict["gtdata"]
+    atek_data_sample.gt_data = flatten_dict["gt_data"]
 
     return atek_data_sample

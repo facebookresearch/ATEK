@@ -81,19 +81,19 @@ def process_wds_sample(sample: Dict):
 
     # unpack semidense points from a stacked tensor back to List of tensors
     for key in ["points_world", "points_inv_dist_std", "points_dist_std"]:
-        if f"msdpd#stacked_{key}" in sample_as_dict:
+        if f"msdpd#{key}+stacked" in sample_as_dict:
             sample_as_dict[f"msdpd#{key}"] = unpack_list_of_tensors(
-                stacked_tensor=sample_as_dict[f"msdpd#stacked_{key}"],
+                stacked_tensor=sample_as_dict[f"msdpd#{key}+stacked"],
                 lengths_of_tensors=sample_as_dict[f"msdpd#points_world_lengths"],
             )
     # For tensors starting with "GtData#...", merge them back into GT dict
     keys_to_pop = []
     for key, value in sample_as_dict.items():
-        if key.startswith("gtdata#") and isinstance(value, torch.Tensor):
+        if key.startswith("gt_data#") and isinstance(value, torch.Tensor):
             # merge into sample_dict["gt_data"]
-            tensor_key_to_be_merged = key.replace("gtdata#", "")
-            sample_as_dict["gtdata"] = merge_tensors_into_dict(
-                sample_as_dict["gtdata"], {tensor_key_to_be_merged: value}
+            tensor_key_to_be_merged = key.replace("gt_data#", "")
+            sample_as_dict["gt_data"] = merge_tensors_into_dict(
+                sample_as_dict["gt_data"], {tensor_key_to_be_merged: value}
             )
             keys_to_pop.append(key)
 

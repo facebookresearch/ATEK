@@ -100,20 +100,18 @@ class LoadAtekWdsDatasetTest(unittest.TestCase):
             # Check GT content
             self.assertTrue(
                 check_dicts_same_w_tensors(
-                    expected_sample["gtdata.json"], sample["gtdata"], atol=1e-3
+                    expected_sample["gt_data"], sample["gt_data"], atol=1e-3
                 )
             )
             # Check other data content, note that expected_sample's keys have file extensions, like "gtdata.json",
             # while ATEK loaded samples won't have extensions.
-            for key_w_extensions, expected_val in expected_sample.items():
+            for key_wo_extension, expected_val in expected_sample.items():
                 # skip certain fields
-                if "image" in key_w_extensions or "gtdata" in key_w_extensions:
+                if "image" in key_wo_extension or "gt_data" in key_wo_extension:
                     continue
 
-                # remove file extension
-                key_no_extension = key_w_extensions.split(".")[0]
-                self.assertTrue(key_no_extension in sample)
-                sample_val = sample[key_no_extension]
+                self.assertTrue(key_wo_extension in sample)
+                sample_val = sample[key_wo_extension]
 
                 if isinstance(expected_val, torch.Tensor):
                     self.assertTrue(

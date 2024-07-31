@@ -79,7 +79,7 @@ class MpsOnlineCalibProcessor:
             return None
 
         projection_params_tensor = torch.stack(projection_params_list)
-        t_device_camera_tensor = torch.stack(t_device_camera_list)
+        ts_device_camera_tensor = torch.stack(t_device_camera_list)
         capture_timestamp_tensor = torch.tensor(
             capture_timestamp_list, dtype=torch.int64
         )
@@ -89,5 +89,5 @@ class MpsOnlineCalibProcessor:
             capture_timestamps_ns=capture_timestamp_tensor,
             utc_timestamps_ns=utc_timestamp_tensor,
             projection_params=projection_params_tensor,
-            t_device_camera=t_device_camera_tensor,
+            ts_device_camera=ts_device_camera_tensor,
         )

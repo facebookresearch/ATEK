@@ -35,7 +35,7 @@ class CubeRCNNModelAdaptor:
             "mfcd#camera-rgb+frame_ids": "frame_id",
             "mfcd#camera-rgb+capture_timestamps_ns": "timestamp_ns",
             "mtd#ts_world_device": "ts_world_device",
-            "gtdata": "gtdata",
+            "gt_data": "gt_data",
         }
         return dict_key_mapping
 
@@ -57,7 +57,6 @@ class CubeRCNNModelAdaptor:
         Process camera K-matrix information and update the sample dictionary.
         """
         assert atek_wds_sample["image"].shape[0] == 1, "Only support 1 frame"
-        # sample["image"] = atek_wds_sample["image"][0, [2, 1, 0], :, :].clone().detach()
         image_height, image_width = atek_wds_sample["image"].shape[2:]
 
         # calculate K-matrix
@@ -73,6 +72,7 @@ class CubeRCNNModelAdaptor:
 
         sample.update(
             {
+                # rgb -> bgr
                 "image": atek_wds_sample["image"][0, [2, 1, 0], :, :].clone().detach(),
                 "K": k_matrix.tolist(),
                 "height": image_height,
@@ -140,8 +140,8 @@ class CubeRCNNModelAdaptor:
         """
         updates the sample dictionary with filtered ground truth data for both 2D and 3D bounding boxes.
         """
-        bbox2d_dict = atek_wds_sample["gtdata"]["obb2_gt"]["camera-rgb"]
-        bbox3d_dict = atek_wds_sample["gtdata"]["obb3_gt"]["camera-rgb"]
+        bbox2d_dict = atek_wds_sample["gt_data"]["obb2_gt"]["camera-rgb"]
+        bbox3d_dict = atek_wds_sample["gt_data"]["obb3_gt"]["camera-rgb"]
 
         # Instance id between obb3 and obb2 should be the same
         assert torch.allclose(

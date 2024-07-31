@@ -10,27 +10,76 @@ import webdataset as wds
 
 from atek.data_preprocess.atek_data_sample import AtekDataSample
 from atek.util.file_io_utils import separate_tensors_from_dict
+from atek.util.tensor_utils import concat_list_of_tensors
 from omegaconf import DictConfig
 
+SEMIDENSE_POINTS_FIELDS = [
+    "msdpd#points_world",
+    "msdpd#points_dist_std",
+    "msdpd#points_inv_dist_std",
+]
 
-def convert_atek_data_sample_to_wds_dict(
+
+def convert_atek_sample_dict_to_wds_dict(
     index: int,
-    data_sample: AtekDataSample,
+    atek_sample_dict: Dict,
     prefix_string: str,
 ) -> Dict:
-    flatten_dict = data_sample.to_flatten_dict()
-
-    # GT dict needs some special handling. The tensors in the dict needs to be serialized as `.pth` file, while the rest stays in the dcit.
-    if "gtdata.json" in flatten_dict:
-        gt_dict_no_tensor, tensor_dict = separate_tensors_from_dict(
-            flatten_dict["gtdata.json"]
-        )
-        flatten_dict["gtdata.json"] = gt_dict_no_tensor
-        for tensor_key, tensor_value in tensor_dict.items():
-            flatten_dict[f"gtdata#{tensor_key}.pth"] = tensor_value
 
     wds_dict = {"__key__": f"{prefix_string}_AtekDataSample_{index:06}"}
-    wds_dict.update(flatten_dict)
+
+    for atek_key, atek_value in atek_sample_dict.items():
+        # Semidense point data needs special handling later
+        if atek_key in SEMIDENSE_POINTS_FIELDS:
+            continue
+
+        # GT needs special handling. The  tensors in the dict needs to be serialized as `.pth` file, while the rest stays in the dict.
+        elif atek_key == "gt_data":
+            gt_dict_no_tensor, tensor_dict = separate_tensors_from_dict(atek_value)
+            wds_dict["gt_data.json"] = gt_dict_no_tensor
+            for tensor_key, tensor_value in tensor_dict.items():
+                wds_dict[f"gt_data#{tensor_key}.pth"] = tensor_value
+            continue
+
+        # Images needs to be separated into per-frame jpeg files
+        elif atek_key.endswith("images"):
+            assert isinstance(atek_value, torch.Tensor)
+            # Transpose dimensions, [Frame, C, H, W] -> [Frame, H, W, C]
+            image_frames_in_np = atek_value.numpy().transpose(0, 2, 3, 1)
+            for id, img in enumerate(image_frames_in_np):
+                new_key = f"{atek_key}_{id}.jpeg"
+                wds_dict[new_key] = img if img.shape[-1] == 3 else img.squeeze()
+            continue
+
+        # For other fields, simply adds proper file extension to the key
+        elif isinstance(atek_value, torch.Tensor):
+            wds_dict[f"{atek_key}.pth"] = atek_value
+        elif isinstance(atek_value, str):
+            wds_dict[f"{atek_key}.txt"] = atek_value
+        elif isinstance(atek_value, dict):
+            wds_dict[f"{atek_key}.json"] = atek_value
+        else:
+            raise ValueError(f"Unsupported type {type(atek_value)} in ATEK WDS writer.")
+
+    # Semidense point data needs to be flattended from List[Tensor (N, 3)] to a Tensor (M, 3) in order to be writable to WDS.
+    # Therefore we store a `stacked_points_world` (Tensor [M, 3]) along with `points_world_lengths` (Tensor [num_frames]),
+    # in order to unpack the stacked tensor later. Same for `points_inv_dist_std`.
+    # obtain the "lengths" of each tensor in list.
+    len_tensors = None
+    for semidense_key in SEMIDENSE_POINTS_FIELDS:
+        if semidense_key in atek_sample_dict:
+            concatenated_tensor, current_len_tensors = concat_list_of_tensors(
+                atek_sample_dict[semidense_key]
+            )
+            wds_dict[f"{semidense_key}+stacked.pth"] = concatenated_tensor
+            if not len_tensors:
+                len_tensors = current_len_tensors.clone()
+            else:
+                assert torch.allclose(
+                    len_tensors, current_len_tensors, atol=1
+                ), f"The lengths for all semidense points data types should be the same! Instead got\n {current_len_tensors} in {semidense_key} vs \n {len_tensors}"
+    if len_tensors is not None:
+        wds_dict["msdpd#points_world_lengths.pth"] = len_tensors
 
     return wds_dict
 
@@ -50,8 +99,11 @@ class AtekWdsWriter:
         """
         Add a sample to the WDS writer.
         """
-        sample_dict = convert_atek_data_sample_to_wds_dict(
-            self.current_sample_idx, data_sample, self.prefix_string
+        atek_sample_dict = data_sample.to_flatten_dict()
+        wds_dict = convert_atek_sample_dict_to_wds_dict(
+            self.current_sample_idx,
+            atek_sample_dict=atek_sample_dict,
+            prefix_string=self.prefix_string,
         )
 
         if self.sink is None:
@@ -63,7 +115,7 @@ class AtekWdsWriter:
                 maxcount=self.max_samples_per_shard,
             )
 
-        self.sink.write(sample_dict)
+        self.sink.write(wds_dict)
         self.current_sample_idx += 1
 
     def get_num_samples(self):
