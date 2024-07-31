@@ -2,15 +2,21 @@
 
 # pyre-strict
 
+import logging
+
 import numpy as np
 import rerun as rr
 from atek.data_preprocess.atek_data_sample import (
     AtekDataSample,
+    MpsSemiDensePointData,
     MpsTrajData,
     MultiFrameCameraData,
 )
 from projectaria_tools.core.sophus import SE3
 from projectaria_tools.utils.rerun_helpers import ToTransform3D
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class NativeAtekSampleVisualizer:
@@ -21,6 +27,10 @@ class NativeAtekSampleVisualizer:
     COLOR_GREEN = [30, 255, 30]
     COLOR_RED = [255, 30, 30]
     COLOR_BLUE = [30, 30, 255]
+
+    # max x, y,z limit for visualizing points in semidense point cloud
+    # TODO: add to config file
+    MAX_LIMIT_TO_VIZ_IN_SEMIDENSE_POINTS = 10
 
     def __init__(
         self, viz_prefix: str = "", viz_web_port: int = 8888, viz_ws_port: int = 8899
@@ -34,6 +44,7 @@ class NativeAtekSampleVisualizer:
         self.viz_prefix = viz_prefix
         rr.init(f"ATEK Sample Viewer - {self.viz_prefix}", spawn=True)
         rr.serve(web_port=viz_web_port, ws_port=viz_ws_port)
+        return
 
     def plot_atek_sample(
         self,
@@ -42,10 +53,18 @@ class NativeAtekSampleVisualizer:
         suffix="",  # TODO: change to a better name for suffix
     ) -> None:
         """
-        TODO: add docstring
+
+        plot an atek data sample instance in ReRun, including camera data, mps trajectory
+        and semidense points data, and GT data. Currently supported GT data viz includes: obb3, obb2.
         """
+        if not atek_data_sample:
+            logger.debug(
+                "ATEK data sample is empty, please check if the data is loaded correctly"
+            )
+            return
         self.plot_multi_frame_camera_data(atek_data_sample.camera_rgb)
         self.plot_mps_traj_data(atek_data_sample.mps_traj_data)
+        self.plot_semidense_point_cloud(atek_data_sample.mps_semidense_point_data)
 
         # GT data needs timestamps associated with them
         # TODO: maybe add timestamps to GT data? Handle this in a better way
@@ -177,3 +196,39 @@ class NativeAtekSampleVisualizer:
                     # labels=labels_infer, TODO: add labels_infer
                 ),
             )
+
+    def plot_semidense_point_cloud(self, mps_semidense_point_data) -> None:
+        if not mps_semidense_point_data:
+            logger.warning(
+                "ATEK semidense point cloud data is empty, please check if the data is loaded correctly"
+            )
+            return
+
+        # loop over all frames
+        for i_frame in range(len(mps_semidense_point_data.capture_timestamps_ns)):
+            # Setting timestamp
+            pc_timestamp_ns = mps_semidense_point_data.capture_timestamps_ns[
+                i_frame
+            ].item()
+            rr.set_time_seconds("frame_time_s", pc_timestamp_ns * 1e-9)
+
+            points = mps_semidense_point_data.points_world[i_frame].tolist()
+            filtered_points = []
+            for p in points:
+                if (
+                    abs(p[0]) > self.MAX_LIMIT_TO_VIZ_IN_SEMIDENSE_POINTS
+                    or abs(p[1]) > self.MAX_LIMIT_TO_VIZ_IN_SEMIDENSE_POINTS
+                    or abs(p[2]) > self.MAX_LIMIT_TO_VIZ_IN_SEMIDENSE_POINTS
+                ):
+                    continue
+                filtered_points.append(p)
+
+            rr.log(
+                "world/point_cloud",
+                rr.Points3D(
+                    filtered_points,
+                    radii=0.006,
+                ),
+                timeless=False,
+            )
+        pass
