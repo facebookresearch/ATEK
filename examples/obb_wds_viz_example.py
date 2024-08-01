@@ -31,7 +31,7 @@ dataset = load_atek_wds_dataset(tars, batch_size=None, repeat_flag=False)
 test_dataloader = torch.utils.data.DataLoader(
     dataset,
     batch_size=None,
-    num_workers=1,
+    num_workers=0,
     pin_memory=True,
 )
 
