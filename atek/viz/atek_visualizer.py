@@ -161,10 +161,19 @@ class NativeAtekSampleVisualizer:
                 f"world",
                 converted_world_transform,
             )
-
+            # I converted transform3d here to specify the axis length
+            rerun_T_World_Device = ToTransform3D(T_World_Device, False)
+            rerun_T_World_Device.axis_length = self.AXIS_LENGTH
             rr.log(
-                f"world/device",
-                ToTransform3D(T_World_Device, False),
+                "world/device",
+                rerun_T_World_Device,
+            )
+
+            self.full_traj.append(T_World_Device.translation()[0])
+            rr.log(
+                "world/device_trajectory",
+                rr.LineStrips3D(self.full_traj),
+                timeless=False,
             )
 
     def plot_obb2_gt(self, gt_dict, timestamp_ns, plot_color, suffix) -> None:
