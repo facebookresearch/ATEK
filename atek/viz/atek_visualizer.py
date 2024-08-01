@@ -74,7 +74,11 @@ class NativeAtekSampleVisualizer:
                 "ATEK data sample is empty, please check if the data is loaded correctly"
             )
             return
+
         self.plot_multi_frame_camera_data(atek_data_sample.camera_rgb)
+        self.plot_multi_frame_camera_data(atek_data_sample.camera_slam_left)
+        self.plot_multi_frame_camera_data(atek_data_sample.camera_slam_right)
+
         self.plot_mps_traj_data(atek_data_sample.mps_traj_data)
         self.plot_semidense_point_cloud(atek_data_sample.mps_semidense_point_data)
 
