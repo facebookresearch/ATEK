@@ -27,6 +27,12 @@ class NativeAtekSampleVisualizer:
     COLOR_GREEN = [30, 255, 30]
     COLOR_RED = [255, 30, 30]
     COLOR_BLUE = [30, 30, 255]
+    MAX_OBB_PER_BATCH = 30  # max number of obb2d/obb3d per entity can render with label
+
+    # max id of obb id in each batch, we record this since the entity in
+    # the previous rendering batch will not be flushed if the next batch has less entities
+    PREV_MAX_BB3D_ID = 0
+    PREV_MAX_BB2D_ID = 0
 
     # max x, y,z limit for visualizing points in semidense point cloud
     # TODO: add to config file
@@ -76,6 +82,12 @@ class NativeAtekSampleVisualizer:
         )
 
     def plot_gtdata(self, atek_gt_dict, timestamp_ns, plot_line_color, suffix) -> None:
+        if not atek_gt_dict:
+            logger.debug(
+                f"ATEK GT data is empty, please check if the data is loaded correctly,\
+            will skip visualize GT for timestamp {timestamp_ns}"
+            )
+            return
         if "obb2_gt" in atek_gt_dict:
             self.plot_obb2_gt(
                 atek_gt_dict["obb2_gt"],
@@ -136,40 +148,81 @@ class NativeAtekSampleVisualizer:
             )
 
     def plot_obb2_gt(self, gt_dict, timestamp_ns, plot_color, suffix) -> None:
+        if not gt_dict:
+            logger.debug(
+                f"ATEK obb2 GT data is empty, please check if the data is loaded correctly,\
+                will skip visualize obb2 GT for timestamp {timestamp_ns}"
+            )
+            return
         rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
-
-        bb2ds_all = []
         # Loop over all cameras
         for camera_label, per_cam_dict in gt_dict.items():
             num_obb2 = len(per_cam_dict["category_ids"])
+            bb2ds_all = []
+            category_names = []
             for i_obj in range(num_obb2):
                 # re-arrange order because rerun def of bbox(XYXY) is different from ATEK(XXYY)
                 bb2d = per_cam_dict["box_ranges"][i_obj]
+                category_name = per_cam_dict["category_names"][i_obj]
                 bb2ds_XYXY = np.array([bb2d[0], bb2d[2], bb2d[1], bb2d[3]])
                 bb2ds_all.append(bb2ds_XYXY)
+                category_names.append(category_name)
 
-            rr.log(
-                f"{camera_label}_image/bb2d{suffix}",
-                rr.Boxes2D(
-                    array=bb2ds_all,
-                    array_format=rr.Box2DFormat.XYXY,
-                    radii=1,
-                    colors=plot_color,
-                    # labels=labels_infer, TODO: add labels_infer
-                ),
-            )
+            # the max number one instance can be plotted is 30 for bb2d in rerun. So we need to split the whole bb2d into several parts
+            # visualize the bb3d, the max number one instance can be plotted is 30 for bb3d. So we need to split the whole bb3d into several parts
+            batch_id = 0
+            while batch_id * self.MAX_OBB_PER_BATCH < len(bb2ds_all):
+                start_obb_idx = batch_id * self.MAX_OBB_PER_BATCH
+                rr.log(
+                    f"{camera_label}_image/bb2d_split_{batch_id}_{suffix}",
+                    rr.Boxes2D(
+                        array=bb2ds_all[
+                            start_obb_idx : min(
+                                len(bb2ds_all), start_obb_idx + self.MAX_OBB_PER_BATCH
+                            )
+                        ],
+                        array_format=rr.Box2DFormat.XYXY,
+                        radii=1,
+                        labels=category_names[
+                            start_obb_idx : min(
+                                len(bb2ds_all), start_obb_idx + self.MAX_OBB_PER_BATCH
+                            )
+                        ],
+                    ),
+                )
+                batch_id += 1
+            cur_batch_max_id = batch_id - 1
+            # flash the bb2d that is plotted in the previous batches, but has larger id
+            while batch_id <= self.PREV_MAX_BB2D_ID:
+                rr.log(
+                    f"{camera_label}_image/bb2d_split_{batch_id}_{suffix}",
+                    rr.Boxes2D(
+                        array=[],
+                        array_format=rr.Box2DFormat.XYXY,
+                        radii=1,
+                        labels=[],
+                    ),
+                )
+                batch_id += 1
+            self.PREV_MAX_BB2D_ID = cur_batch_max_id
 
     def plot_obb3_gt(self, gt_dict, timestamp_ns, plot_color, suffix) -> None:
+        if not gt_dict:
+            logger.debug(
+                f"ATEK obb3 GT data is empty, please check if the data is loaded correctly,\
+                will skip visualize GT for timestamp {timestamp_ns}"
+            )
+            return
         rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
 
         # These lists are the formats required by ReRun
         bb3d_sizes = []
         bb3d_centers = []
         bb3d_quats_xyzw = []
+        bb3d_labels = []
 
         # Loop over all cameras
-        for _, per_cam_dict in gt_dict.items():
-
+        for camera_label, per_cam_dict in gt_dict.items():
             num_obb3 = len(per_cam_dict["category_ids"])
             for i_obj in range(num_obb3):
                 # Assign obb3 pose info
@@ -179,27 +232,60 @@ class NativeAtekSampleVisualizer:
                 bb3d_centers.append(T_world_obj.translation()[0])
                 wxyz = T_world_obj.rotation().to_quat()[0]
                 bb3d_quats_xyzw.append([wxyz[3], wxyz[0], wxyz[1], wxyz[2]])
-
+                bb3d_labels.append(per_cam_dict["category_names"][i_obj])
                 # Assign obb3 size info
                 bb3d_sizes.append(np.array(per_cam_dict["object_dimensions"][i_obj]))
             # end for i_obj
 
-            # log 3D bounding boxes
+        # visualize the bb3d, the max number one instance can be plotted is 30 for bb3d. So we need to split the whole bb3d into several parts
+        batch_id = 0
+        while batch_id * self.MAX_OBB_PER_BATCH < len(bb3d_sizes):
+            start_obb_idx = batch_id * self.MAX_OBB_PER_BATCH
             rr.log(
-                f"world/bb3d{suffix}",
+                f"world/bb3d_split_{batch_id}_{suffix}",
                 rr.Boxes3D(
-                    sizes=bb3d_sizes,
-                    centers=bb3d_centers,
-                    rotations=bb3d_quats_xyzw,
-                    radii=0.01,
-                    colors=plot_color,
-                    # labels=labels_infer, TODO: add labels_infer
+                    sizes=bb3d_sizes[
+                        start_obb_idx : min(
+                            len(bb3d_sizes), start_obb_idx + self.MAX_OBB_PER_BATCH
+                        )
+                    ],
+                    centers=bb3d_centers[
+                        start_obb_idx : min(
+                            len(bb3d_sizes), start_obb_idx + self.MAX_OBB_PER_BATCH
+                        )
+                    ],
+                    rotations=bb3d_quats_xyzw[
+                        start_obb_idx : min(
+                            len(bb3d_sizes), start_obb_idx + self.MAX_OBB_PER_BATCH
+                        )
+                    ],
+                    labels=bb3d_labels[
+                        start_obb_idx : min(
+                            len(bb3d_sizes), start_obb_idx + self.MAX_OBB_PER_BATCH
+                        )
+                    ],
+                    radii=0.02,
                 ),
             )
+            batch_id += 1
+        cur_batch_max_id = batch_id - 1
+        while batch_id <= self.PREV_MAX_BB3D_ID:
+            rr.log(
+                f"world/bb3d_split_{batch_id}_{suffix}",
+                rr.Boxes3D(
+                    sizes=[],
+                    centers=[],
+                    rotations=[],
+                    radii=0.01,
+                    labels=[],
+                ),
+            )
+            batch_id += 1
+        self.PREV_MAX_BB3D_ID = cur_batch_max_id
 
     def plot_semidense_point_cloud(self, mps_semidense_point_data) -> None:
         if not mps_semidense_point_data:
-            logger.warning(
+            logger.debug(
                 "ATEK semidense point cloud data is empty, please check if the data is loaded correctly"
             )
             return
