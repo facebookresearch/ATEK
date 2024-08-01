@@ -27,6 +27,8 @@ class NativeAtekSampleVisualizer:
     COLOR_GREEN = [30, 255, 30]
     COLOR_RED = [255, 30, 30]
     COLOR_BLUE = [30, 30, 255]
+    full_traj = []
+    AXIS_LENGTH = 0.5
     MAX_OBB_PER_BATCH = 30  # max number of obb2d/obb3d per entity can render with label
 
     # max id of obb id in each batch, we record this since the entity in
@@ -109,6 +111,11 @@ class NativeAtekSampleVisualizer:
             )
 
     def plot_multi_frame_camera_data(self, camera_data: MultiFrameCameraData) -> None:
+        if not camera_data:
+            print(
+                "Multiframe camera data is empty, please check if the data is loaded correctly"
+            )
+            return
         # Some time-invariant variables
         camera_label = camera_data.camera_label
         T_Device_Camera = SE3.from_matrix3x4(camera_data.T_Device_Camera)
@@ -127,23 +134,32 @@ class NativeAtekSampleVisualizer:
                 rr.Image(image),
             )
 
-            # Plot camera pose
-            rr.log(
-                f"world/device/{camera_label}", ToTransform3D(T_Device_Camera, False)
-            )
+        # Plot camera pose, we can keep this line, but now RGB camera pose should be very close to the device pose
+        # to avoid multiple poses drawn on world/device, we will not plot poses for different cameras,
+        # but keep the code incase user want to plot camera pose in the future
+
+        # rerun_T_Device_Camera = ToTransform3D(T_Device_Camera, False)
+        # rerun_T_Device_Camera.axis_length = self.AXIS_LENGTH
+        # rr.log(f"world/device/{camera_label}", rerun_T_Device_Camera)
 
     def plot_mps_traj_data(self, mps_traj_data: MpsTrajData) -> None:
+        if not mps_traj_data:
+            print(
+                "MPS trajectory data is empty, please check if the data is loaded correctly"
+            )
+            return
         # loop over all frames
         for i_frame in range(len(mps_traj_data.capture_timestamps_ns)):
             # Setting timestamp
             timestamp = mps_traj_data.capture_timestamps_ns[i_frame].item()
             rr.set_time_seconds("frame_time_s", timestamp * 1e-9)
-
+            converted_world_transform = ToTransform3D(SE3(), False)
+            converted_world_transform.axis_length = self.AXIS_LENGTH
             # Plot MPS trajectory
             T_World_Device = SE3.from_matrix3x4(mps_traj_data.Ts_World_Device[i_frame])
             rr.log(
                 f"world",
-                ToTransform3D(SE3(), False),
+                converted_world_transform,
             )
 
             rr.log(
