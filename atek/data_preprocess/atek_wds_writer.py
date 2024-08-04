@@ -72,7 +72,7 @@ def convert_atek_sample_dict_to_wds_dict(
                 atek_sample_dict[semidense_key]
             )
             wds_dict[f"{semidense_key}+stacked.pth"] = concatenated_tensor
-            if not len_tensors:
+            if len_tensors is None:
                 len_tensors = current_len_tensors.clone()
             else:
                 assert torch.allclose(

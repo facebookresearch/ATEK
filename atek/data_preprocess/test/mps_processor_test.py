@@ -135,6 +135,12 @@ class MpsSemiDenseProcessorTest(unittest.TestCase):
             torch.allclose(maybe_result.capture_timestamps_ns, gt_timestamps)
         )
 
+        # check vol max and min
+        self.assertTrue(isinstance(maybe_result.points_volumn_min, torch.Tensor))
+        self.assertEqual(maybe_result.points_volumn_min.shape, torch.Size([3]))
+        self.assertTrue(isinstance(maybe_result.points_volumn_max, torch.Tensor))
+        self.assertEqual(maybe_result.points_volumn_max.shape, torch.Size([3]))
+
 
 class MpsOnlineCalibProcessorTest(unittest.TestCase):
     """

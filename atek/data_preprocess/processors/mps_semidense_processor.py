@@ -43,8 +43,12 @@ class MpsSemiDenseProcessor:
         )
         time_2 = time.time()
 
+        self._compute_semidense_volume()
+        time_3 = time.time()
+
         logger.info(
             f"loading semidense points takes {time_1-time_0} seconds, observations takes {time_2-time_1} seconds"
+            f"and computing semidense volume takes {time_3-time_2} seconds"
         )
 
     def get_semidense_points_by_timestamps_ns(
@@ -115,6 +119,8 @@ class MpsSemiDenseProcessor:
             points_dist_std=dist_std_all,
             points_inv_dist_std=inv_dist_std_all,
             capture_timestamps_ns=capture_timestamps_ns,
+            points_volumn_max=self.vol_max,
+            points_volumn_min=self.vol_min,
         )
 
     def _load_semidense_global_points(
@@ -234,3 +240,36 @@ class MpsSemiDenseProcessor:
                 )
 
             return valid_merged_df
+
+    def _compute_semidense_volume(
+        self, gpu_memory_mb=8000, quantiles=[0.001, 0.01, 0.05], voxel_size=0.04
+    ):
+        """
+        compute the bounding volume for TSDF fusion
+
+        gpu_memory: how much memory to be reserved for TSDF fusion, default: 8000MB
+        quantiles: the quantiles of the point cloud in each 3d dimension to bound the global space,
+        default: [0.001, 0.01, 0.05], will test which quantile is the smallest that can fit the memory
+        voxel_size: the voxel size in meters for TSDF fusion, default: 0.04
+        """
+        # at least hold tsdf_vol, vol_weight, vol_color, vox_coords
+        vol_memory = gpu_memory_mb / 4
+        # assume float32 for volume dtype, how many voxels `vol_memory` translates to
+        max_voxels = vol_memory * 1e6 / 4
+
+        # Aggregate all global points
+        all_points = torch.stack(list(self.uid_to_p3.values()))
+
+        for q in quantiles:
+            self.vol_min = torch.quantile(all_points, q, dim=0)
+            self.vol_max = torch.quantile(all_points, 1 - q, dim=0)
+            self.vol_min = self.vol_min.detach().cpu()
+            self.vol_max = self.vol_max.detach().cpu()
+
+            vox_dim = (self.vol_max - self.vol_min) / voxel_size
+            est_num_voxels = vox_dim[0] * vox_dim[1] * vox_dim[2]
+            if est_num_voxels < max_voxels:
+                print(f"compute global bounding volume as {q} to {1-q} quantile")
+                break
+        if est_num_voxels > max_voxels:
+            print("Warning: scene volume too large for TSDF fusion")
