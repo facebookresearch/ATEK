@@ -22,7 +22,7 @@ class EfmGtProcessor(Obb3GtProcessor):
         """
         get a GT Dict by timestamps in nanoseconds, returns a nested Dict of the following structure:
             {
-                timestamp_1: {
+                "timestamp_1": {
                     "bbox3d_all_instances": {
                         "instance_id_1": {
                             "instance_id": str,
@@ -51,7 +51,7 @@ class EfmGtProcessor(Obb3GtProcessor):
             # call parent class's API to get GT Dict for a single timestamp
             single_dict = self.get_gt_by_timestamp_ns(timestamp_ns=single_timestamp)
             if single_dict is not None:
-                all_dict[single_timestamp] = single_dict
+                all_dict[str(single_timestamp)] = single_dict
 
         if len(all_dict) == 0:
             return None

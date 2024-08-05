@@ -113,7 +113,7 @@ class EfmSampleBuilder:
         # Depth processor
         if "rgb-depth" in conf and conf.rgb_depth.selected:
             assert (
-                self.depth_vrs_file is not ""
+                self.depth_vrs_file != ""
             ), "need to specify depth vrs file to use depth processor"
 
             # Obtain image transformations from rgb AriaCameraProcessor, where interpolation needs to be exactly set to NEAREST
@@ -252,7 +252,7 @@ class EfmSampleBuilder:
                         f"Querying GT data for {timestamps_ns} has returned None, skipping this sample."
                     )
                     return None
-                sample.gt_data = maybe_gt_data
+                sample.gt_data["efm_gt"] = maybe_gt_data
 
             else:
                 raise ValueError(

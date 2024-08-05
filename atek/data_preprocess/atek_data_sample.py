@@ -141,6 +141,8 @@ class MpsSemiDensePointData:
         default_factory=list
     )  # Tensor has shape of [N] to represent points' inverse distance, List has length of num_frames
     capture_timestamps_ns: torch.Tensor = None  # [num_frames]
+    points_volumn_min: torch.Tensor = None  # [3], xyz
+    points_volumn_max: torch.Tensor = None  # [3], xyz
 
     def to_flatten_dict(self):
         # "msdpd" stands for MpsSemiDensePointData
