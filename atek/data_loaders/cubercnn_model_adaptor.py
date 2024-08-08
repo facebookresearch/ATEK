@@ -7,6 +7,7 @@ import numpy as np
 import torch
 
 from atek.data_loaders.atek_wds_dataloader import load_atek_wds_dataset
+from atek.util.atek_constants import ATEK_CATEGORY_ID_TO_NAME, ATEK_CATEGORY_NAME_TO_ID
 from detectron2.structures import Boxes, Instances
 from projectaria_tools.core.sophus import SE3
 
@@ -48,7 +49,12 @@ class CubeRCNNModelAdaptor:
         for atek_wds_sample in data:
             sample = {}
             self._update_camera_data_in_sample(atek_wds_sample, sample)
-            self._update_gt_data_in_sample(atek_wds_sample, sample)
+            self._update_T_world_camera(atek_wds_sample, sample)
+
+            # Skip if no gt data
+            if "gt_data" in atek_wds_sample and len(atek_wds_sample["gt_data"]) > 0:
+                self._update_gt_data_in_sample(atek_wds_sample, sample)
+
             yield sample
 
     def _update_camera_data_in_sample(self, atek_wds_sample, sample):
@@ -78,18 +84,18 @@ class CubeRCNNModelAdaptor:
                 "height": image_height,
                 "width": image_width,
                 "K_matrix": k_matrix,
+                "timestamp_ns": atek_wds_sample["timestamp_ns"],
             }
         )
 
-    def compute_transform_matrices(self, atek_wds_sample, sample):
+    def _update_T_world_camera(self, atek_wds_sample, sample):
         """
-        Compute world-to-camera transformation matrices.
+        Compute world-to-camera transformation matrices, and update this field in sample dict.
         """
         T_world_device = SE3.from_matrix3x4(atek_wds_sample["ts_world_device"][0])
         T_device_rgbCam = SE3.from_matrix3x4(atek_wds_sample["t_device_rgbcam"])
         T_world_rgbCam = T_world_device @ T_device_rgbCam
         sample["T_world_camera"] = T_world_rgbCam.to_matrix3x4()
-        return T_world_rgbCam
 
     def _process_2d_bbox_dict(self, bb2d_dict):
         """
@@ -150,7 +156,7 @@ class CubeRCNNModelAdaptor:
 
         category_ids = bbox3d_dict["category_ids"]
 
-        T_world_rgbCam = self.compute_transform_matrices(atek_wds_sample, sample)
+        T_world_rgbCam = SE3.from_matrix3x4(sample["T_world_camera"])
 
         bb2ds_x0y0x1y1, bb2ds_area = self._process_2d_bbox_dict(bbox2d_dict)
         bb3d_dimensions, bb3d_depths, Ts_world_object, Ts_cam_object = (
@@ -207,14 +213,13 @@ class CubeRCNNModelAdaptor:
         sample["Ts_world_object"] = Ts_world_object[final_filter].clone().detach()
         sample["object_dimensions"] = bb3d_dimensions[final_filter].clone().detach()
         sample["category"] = category_ids[final_filter].clone().detach()
-        sample["timestamp_ns"] = atek_wds_sample["timestamp_ns"]
 
     @staticmethod
-    # TODO: fill in category_names
     def cubercnn_gt_to_atek_gt(
         cubercnn_pred_dict: Dict,
         T_world_camera_np: np.array,
         camera_label: str = "camera-rgb",
+        cubercnn_id_to_atek_id: Optional[Dict[int, int]] = None,
     ):
         """
         A helper data transform function to convert the model output prediction (dict) from CubeRCNN,
@@ -240,6 +245,36 @@ class CubeRCNNModelAdaptor:
             "category_ids": cubercnn_pred_instances.pred_classes.detach().cpu(),
             "visibility_ratios": None,
         }
+
+        # Fill in category ids
+        if cubercnn_id_to_atek_id is not None:
+            atek_id_list = [
+                cubercnn_id_to_atek_id[id.item()]
+                for id in cubercnn_pred_instances.pred_classes
+            ]
+            atek_pred_dict["obb3_gt"][camera_label]["category_ids"] = torch.tensor(
+                atek_id_list, dtype=torch.int32
+            )
+            atek_pred_dict["obb2_gt"][camera_label]["category_ids"] = torch.tensor(
+                atek_id_list, dtype=torch.int32
+            )
+        else:
+            atek_pred_dict["obb3_gt"][camera_label][
+                "category_ids"
+            ] = cubercnn_pred_instances.pred_classes.detach().cpu()
+            atek_pred_dict["obb2_gt"][camera_label][
+                "category_ids"
+            ] = cubercnn_pred_instances.pred_classes.detach().cpu()
+
+        # Fill category names
+        atek_pred_dict["obb3_gt"][camera_label]["category_names"] = [
+            ATEK_CATEGORY_ID_TO_NAME[id.item()]
+            for id in atek_pred_dict["obb3_gt"][camera_label]["category_ids"]
+        ]
+        atek_pred_dict["obb2_gt"][camera_label]["category_names"] = [
+            ATEK_CATEGORY_ID_TO_NAME[id.item()]
+            for id in atek_pred_dict["obb2_gt"][camera_label]["category_ids"]
+        ]
 
         # CubeRCNN dimensions are in reversed order (zyx) compared to ATEK (xyz)
         bbox3d_dim = (

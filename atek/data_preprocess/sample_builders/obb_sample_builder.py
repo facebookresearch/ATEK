@@ -98,7 +98,7 @@ class ObbSampleBuilder:
                 conf=conf.mps_traj,
             )
 
-        if "obb_gt" in conf and conf.obb_gt.selected:
+        if len(gt_files) > 0 and "obb_gt" in conf and conf.obb_gt.selected:
             # GT data contains both obb3 and obb2 data, therefore we create 2 processors.
 
             # Create obb3 processor
