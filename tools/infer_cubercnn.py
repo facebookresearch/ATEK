@@ -160,7 +160,23 @@ def run_inference(args):
                 plot_line_color=NativeAtekSampleVisualizer.COLOR_GREEN,
                 suffix="_gt",
             )
-
+            # put pred_samples' category name and confidence together in obb2_gt and obb3_gt
+            for i in range(
+                len(
+                    prediction_in_atek_format["obb2_gt"]["camera-rgb"]["category_names"]
+                )
+            ):
+                prediction_in_atek_format["obb2_gt"]["camera-rgb"]["category_names"][
+                    i
+                ] += f": {prediction_in_atek_format['scores'][i]:.2f}"
+            for i in range(
+                len(
+                    prediction_in_atek_format["obb3_gt"]["camera-rgb"]["category_names"]
+                )
+            ):
+                prediction_in_atek_format["obb3_gt"]["camera-rgb"]["category_names"][
+                    i
+                ] += f": {prediction_in_atek_format['scores'][i]:.2f}"
             # Visualize the prediction results, only visualize the GT part
             atek_viz.plot_gtdata(
                 atek_gt_dict=prediction_in_atek_format,
