@@ -86,7 +86,7 @@ class NativeAtekSampleVisualizer:
         # TODO: maybe add timestamps to GT data? Handle this in a better way
         self.plot_gtdata(
             atek_data_sample.gt_data,
-            atek_data_sample.camera_rgb.capture_timestamps_ns.item(),
+            atek_data_sample.camera_rgb.capture_timestamps_ns[0].item(),
             plot_line_color=plot_line_color,
             suffix=suffix,
         )
@@ -110,6 +110,13 @@ class NativeAtekSampleVisualizer:
             self.plot_obb3_gt(
                 atek_gt_dict["obb3_gt"],
                 timestamp_ns=timestamp_ns,
+                plot_color=plot_line_color,
+                suffix=suffix,
+            )
+
+        if "efm_gt" in atek_gt_dict:
+            self.plot_efm_gt(
+                atek_gt_dict["efm_gt"],
                 plot_color=plot_line_color,
                 suffix=suffix,
             )
@@ -355,3 +362,8 @@ class NativeAtekSampleVisualizer:
                 timeless=False,
             )
         pass
+
+    def plot_efm_gt(self, gt_dict, plot_color, suffix) -> None:
+        # EFM gt is a nested dict with "timestamp(as str) -> obb3_dict"
+        for timestamp_str, obb3_dict in gt_dict.items():
+            self.plot_obb3_gt(obb3_dict, int(timestamp_str), plot_color, suffix)
