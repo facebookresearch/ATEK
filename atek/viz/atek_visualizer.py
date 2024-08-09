@@ -123,7 +123,7 @@ class NativeAtekSampleVisualizer:
 
     def plot_multi_frame_camera_data(self, camera_data: MultiFrameCameraData) -> None:
         if not camera_data:
-            print(
+            logger.debug(
                 "Multiframe camera data is empty, please check if the data is loaded correctly"
             )
             return
@@ -155,7 +155,7 @@ class NativeAtekSampleVisualizer:
 
     def plot_mps_traj_data(self, mps_traj_data: MpsTrajData) -> None:
         if not mps_traj_data:
-            print(
+            logger.debug(
                 "MPS trajectory data is empty, please check if the data is loaded correctly"
             )
             return
@@ -369,3 +369,9 @@ class NativeAtekSampleVisualizer:
         # EFM gt is a nested dict with "timestamp(as str) -> obb3_dict"
         for timestamp_str, obb3_dict in gt_dict.items():
             self.plot_obb3_gt(obb3_dict, int(timestamp_str), plot_color, suffix)
+
+    def save_viz(self, rrd_output_path: str) -> None:
+        # user can use rerun [rrd_file_path] in terminal to load the visualization
+        if rrd_output_path is not None:
+            logger.debug(f"Saving visualization to {rrd_output_path}")
+            rr.save(rrd_output_path)

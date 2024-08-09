@@ -40,7 +40,13 @@ test_dataloader = torch.utils.data.DataLoader(
 from dataclasses import asdict
 
 atek_viz = NativeAtekSampleVisualizer()
+
+# comment this line to disable visualization, then user can see the result on browser
+# to read the saved visualization result, use the following command in terminal:
+# rerun $viz_output_path
+atek_viz.save_viz(rrd_output_path="/Users/ariak/Downloads/atek_viz.rrd")
+
 for unbatched_sample_dict in test_dataloader:
     # First convert it back to ATEK data sample
     atek_sample = create_atek_data_sample_from_flatten_dict(unbatched_sample_dict)
-    atek_viz.plot_atek_sample(atek_sample)
+    atek_viz.plot_atek_sample(atek_data_sample=atek_sample)
