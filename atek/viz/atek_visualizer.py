@@ -224,12 +224,13 @@ class NativeAtekSampleVisualizer:
                             )
                         ],
                         array_format=rr.Box2DFormat.XYXY,
-                        radii=1,
+                        radii=0.5,
                         labels=category_names[
                             start_obb_idx : min(
                                 len(bb2ds_all), start_obb_idx + self.MAX_OBB_PER_BATCH
                             )
                         ],
+                        colors=plot_color,
                     ),
                 )
                 batch_id += 1
@@ -241,7 +242,7 @@ class NativeAtekSampleVisualizer:
                     rr.Boxes2D(
                         array=[],
                         array_format=rr.Box2DFormat.XYXY,
-                        radii=1,
+                        radii=0.5,
                         labels=[],
                     ),
                 )
@@ -308,7 +309,8 @@ class NativeAtekSampleVisualizer:
                             len(bb3d_sizes), start_obb_idx + self.MAX_OBB_PER_BATCH
                         )
                     ],
-                    radii=0.02,
+                    colors=plot_color,
+                    radii=0.01,
                 ),
             )
             batch_id += 1
