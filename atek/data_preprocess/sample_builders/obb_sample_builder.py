@@ -32,6 +32,7 @@ class ObbSampleBuilder:
         self,
         conf: DictConfig,
         vrs_file: str,
+        sequence_name: str,
         mps_files: Dict[str, str],
         gt_files: Dict[str, str],
     ) -> None:
@@ -52,6 +53,7 @@ class ObbSampleBuilder:
         self.conf = conf
 
         self.vrs_file = vrs_file
+        self.sequence_name = sequence_name
 
         self.processors = self._add_processors_from_conf(
             conf, vrs_file, mps_files if mps_files is not None else {}, gt_files
@@ -131,6 +133,9 @@ class ObbSampleBuilder:
 
     def get_sample_by_timestamp_ns(self, timestamp_ns) -> Optional[AtekDataSample]:
         sample = AtekDataSample()
+
+        # First assign sequence name
+        sample.sequence_name = self.sequence_name
 
         for processor_label, processor in self.processors.items():
             if isinstance(processor, AriaCameraProcessor):

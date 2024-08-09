@@ -180,6 +180,9 @@ class AtekDataSample:
     Underlying data structure for ATEK data sample.
     """
 
+    # name of the sequence
+    sequence_name: Optional[str] = None
+
     # Aria sensor data
     camera_rgb: Optional[MultiFrameCameraData] = None
     camera_slam_left: Optional[MultiFrameCameraData] = None
@@ -206,8 +209,8 @@ class AtekDataSample:
             if field_value is None:
                 continue
 
-            if field_name == "gt_data":
-                flatten_dict["gt_data"] = field_value
+            if field_name in ["gt_data", "sequence_name"]:
+                flatten_dict[field_name] = field_value
                 continue
 
             # update with flatten sub-dataclasses
@@ -290,5 +293,6 @@ def create_atek_data_sample_from_flatten_dict(flatten_dict):
 
     # GT data is already a dict
     atek_data_sample.gt_data = flatten_dict["gt_data"]
+    atek_data_sample.sequence_name = flatten_dict["sequence_name"]
 
     return atek_data_sample

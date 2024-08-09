@@ -33,10 +33,12 @@ adt_to_atek_category_mapping_file = (
 output_wds_path = "/home/louy/Calibration_data_link/Atek/2024_07_02_NewGtStructure/wds_output/adt_test_1"
 
 conf = OmegaConf.load(adt_config_path)
+sequence_name = example_adt_data_dir.split("/")[-1]
 
 sample_builder = ObbSampleBuilder(
     conf=conf.processors,
     vrs_file=os.path.join(example_adt_data_dir, "video.vrs"),
+    sequence_name=sequence_name,
     mps_files={
         "mps_closedloop_traj_file": os.path.join(
             example_adt_data_dir, "aria_trajectory.csv"

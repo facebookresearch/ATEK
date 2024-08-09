@@ -30,6 +30,7 @@ class ObbSampleBuilderTest(unittest.TestCase):
         sample_builder = ObbSampleBuilder(
             conf=conf.processors,
             vrs_file=os.path.join(TEST_DIR_PATH, "test_ADT_unit_test_sequence.vrs"),
+            sequence_name="test",
             mps_files={
                 "mps_closedloop_traj_file": os.path.join(
                     TEST_DIR_PATH, "test_ADT_trajectory.csv"
@@ -53,6 +54,7 @@ class ObbSampleBuilderTest(unittest.TestCase):
         )
 
         self.assertTrue(queried_sample is not None)
+        self.assertEqual(queried_sample.sequence_name, "test")
         self.assertTrue(queried_sample.camera_rgb is not None)
         self.assertFalse(hasattr(queried_sample, "camera_et_left"))  # No ET data
         self.assertTrue(queried_sample.mps_traj_data is not None)

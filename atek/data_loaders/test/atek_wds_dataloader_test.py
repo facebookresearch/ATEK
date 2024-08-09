@@ -39,6 +39,7 @@ class LoadAtekWdsDatasetTest(unittest.TestCase):
         sample_builder = ObbSampleBuilder(
             conf=conf.processors,
             vrs_file=os.path.join(TEST_DIR_PATH, "test_ADT_unit_test_sequence.vrs"),
+            sequence_name="test",
             mps_files={
                 "mps_closedloop_traj_file": os.path.join(
                     TEST_DIR_PATH, "test_ADT_trajectory.csv"
@@ -103,6 +104,10 @@ class LoadAtekWdsDatasetTest(unittest.TestCase):
                     expected_sample["gt_data"], sample["gt_data"], atol=1e-3
                 )
             )
+
+            # Check sequence name
+            self.assertEqual(expected_sample["sequence_name"], sample["sequence_name"])
+
             # Check other data content, note that expected_sample's keys have file extensions, like "gtdata.json",
             # while ATEK loaded samples won't have extensions.
             for key_wo_extension, expected_val in expected_sample.items():

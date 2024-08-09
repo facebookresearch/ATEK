@@ -38,6 +38,7 @@ class EfmSampleBuilder:
         self,
         conf: DictConfig,
         vrs_file: str,
+        sequence_name: str,
         mps_files: Dict[str, str],
         gt_files: Dict[str, str],
         depth_vrs_file: str,
@@ -63,6 +64,7 @@ class EfmSampleBuilder:
 
         self.vrs_file = vrs_file
         self.depth_vrs_file = depth_vrs_file
+        self.sequence_name = sequence_name
 
         self.processors = self._add_processors_from_conf(
             conf, vrs_file, mps_files, gt_files
@@ -149,6 +151,9 @@ class EfmSampleBuilder:
         self, timestamps_ns: List[int]
     ) -> Optional[AtekDataSample]:
         sample = AtekDataSample()
+
+        # First assign sequence name
+        sample.sequence_name = self.sequence_name
 
         for processor_label, processor in self.processors.items():
             if isinstance(processor, AriaCameraProcessor):
