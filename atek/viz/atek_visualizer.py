@@ -187,6 +187,42 @@ class NativeAtekSampleVisualizer:
                 timeless=False,
             )
 
+    def plot_semidense_point_cloud(self, mps_semidense_point_data) -> None:
+        if not mps_semidense_point_data:
+            logger.debug(
+                "ATEK semidense point cloud data is empty, please check if the data is loaded correctly"
+            )
+            return
+
+        # loop over all frames
+        for i_frame in range(len(mps_semidense_point_data.capture_timestamps_ns)):
+            # Setting timestamp
+            pc_timestamp_ns = mps_semidense_point_data.capture_timestamps_ns[
+                i_frame
+            ].item()
+            rr.set_time_seconds("frame_time_s", pc_timestamp_ns * 1e-9)
+
+            points = mps_semidense_point_data.points_world[i_frame].tolist()
+            filtered_points = []
+            for p in points:
+                if (
+                    abs(p[0]) > self.MAX_LIMIT_TO_VIZ_IN_SEMIDENSE_POINTS
+                    or abs(p[1]) > self.MAX_LIMIT_TO_VIZ_IN_SEMIDENSE_POINTS
+                    or abs(p[2]) > self.MAX_LIMIT_TO_VIZ_IN_SEMIDENSE_POINTS
+                ):
+                    continue
+                filtered_points.append(p)
+
+            rr.log(
+                "world/point_cloud",
+                rr.Points3D(
+                    filtered_points,
+                    radii=0.006,
+                ),
+                timeless=False,
+            )
+        pass
+
     def plot_obb2_gt(self, gt_dict, timestamp_ns, plot_color, suffix) -> None:
         if not gt_dict:
             logger.debug(
