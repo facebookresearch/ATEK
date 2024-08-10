@@ -120,6 +120,7 @@ def update_from_single_sequence_obb3(
             single_timestamp_to_log_result is not None
             and time == single_timestamp_to_log_result
         ):
+            logger.info(f"logging eval result for a single frame {time} ... ")
             single_timestamp_prec_recall_result = (
                 compute_prec_recall_for_single_timestamp(
                     pred_obb_dict[time],
@@ -178,6 +179,7 @@ def evaluate_obb3_for_single_csv_pair(
         mAP_3d=mAP_3d,
         iou=iou,
         compute_per_class_metrics=compute_per_class_metrics,
+        single_timestamp_to_log_result=timestamp_to_log,
     )
     result.update(single_sequence_result)
 
