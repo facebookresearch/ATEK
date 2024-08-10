@@ -199,6 +199,7 @@ def evaluate_obb3_over_a_dataset(
     prediction_filename: str,
     iou: float = 0.2,
     compute_per_class_metrics: bool = False,
+    max_num_sequences: int = -1,
 ) -> Dict:
     """
     Perform static object detection evaluation at a dataset level.
@@ -209,7 +210,13 @@ def evaluate_obb3_over_a_dataset(
     sequence_names = os.listdir(input_folder)
     dirs = [os.path.join(input_folder, seq) for seq in sequence_names]
     dirs = [d for d in dirs if os.path.isdir(d)]
-    for d in dirs[0:10]:
+    dirs = sorted(dirs)
+
+    # Limit number of sequences
+    if max_num_sequences > 0:
+        dirs = dirs[0:max_num_sequences]
+
+    for d in dirs:
         pred_csv = os.path.join(d, prediction_filename)
         gt_csv = os.path.join(d, gt_filename)
         if os.path.exists(gt_csv) and os.path.exists(pred_csv):
