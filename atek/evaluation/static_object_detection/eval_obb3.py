@@ -3,6 +3,7 @@
 # pyre-strict
 
 import logging
+import os
 from typing import Dict, Optional
 
 import numpy as np
@@ -187,4 +188,67 @@ def evaluate_obb3_for_single_csv_pair(
     }
     result.update(result_map)
 
+    return result
+
+
+def evaluate_obb3_over_a_dataset(
+    input_folder: str,
+    gt_filename: str,
+    prediction_filename: str,
+    iou: float = 0.2,
+    compute_per_class_metrics: bool = False,
+) -> Dict:
+    """
+    Perform static object detection evaluation at a dataset level.
+    The input_folder is a folder containing a list of sequences, each of which contains a pair of prediction and gt obb csv files.
+    """
+    # get all the pred and gt csv files
+    pred_csv_paths, gt_csv_paths = [], []
+    sequence_names = os.listdir(input_folder)
+    dirs = [os.path.join(input_folder, seq) for seq in sequence_names]
+    dirs = [d for d in dirs if os.path.isdir(d)]
+    for d in dirs[0:10]:
+        pred_csv = os.path.join(d, prediction_filename)
+        gt_csv = os.path.join(d, gt_filename)
+        if os.path.exists(gt_csv) and os.path.exists(pred_csv):
+            pred_csv_paths.append(pred_csv)
+            gt_csv_paths.append(gt_csv)
+
+    # If no gt or pred csv files are found, return an almost-empty dict
+    result = {}
+    result["num_seqs"] = len(pred_csv_paths)
+    if len(pred_csv_paths) == 0 or len(gt_csv_paths) == 0:
+        return result
+
+    mAP_3d = AtekObb3Metrics(
+        class_metrics=compute_per_class_metrics,
+        global_name_to_id={
+            name: int(sem_id) for sem_id, name in sem_id_to_name.items()
+        },
+    )
+
+    # Loop over all pred and gt csv file pairs
+    logger.info("loading csv files ... ")
+    for pred_csv, gt_csv in zip(pred_csv_paths, gt_csv_paths):
+        # Load in prediction and gt obbs as a {timestamp -> Obb3GtDict} dict
+        pred_reader = AtekObb3CsvReader(input_filename=pred_csv)
+        pred_obb_dict = pred_reader.read_as_obb_dict()
+        gt_reader = AtekObb3CsvReader(input_filename=gt_csv)
+        gt_obb_dict = gt_reader.read_as_obb_dict()
+
+        # Update mAP metrics from this sequence
+        single_sequence_result = update_from_single_sequence_obb3(
+            pred_obb_dict=pred_obb_dict, gt_obb_dict=gt_obb_dict, mAP_3d=mAP_3d, iou=iou
+        )
+
+        # TODO: enable drawing of prec-recall curve figure.
+
+    # Compute mAP metrics numbers, ignore average recall (e.g. "mar_*")
+    logger.info(f"computing mAP metrics numbers ... ")
+    result_map = mAP_3d.compute()
+    # ignore average recall (e.g. "rgb/mar_220_3D")
+    result_map = {
+        k: v.item() for k, v in result_map.items() if not k.startswith("mar_")
+    }
+    result.update(result_map)
     return result
