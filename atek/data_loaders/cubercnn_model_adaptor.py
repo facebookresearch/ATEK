@@ -319,7 +319,7 @@ def cubercnn_collation_fn(batch):
 
 
 def load_atek_wds_dataset_as_cubercnn(
-    urls: List, batch_size: int, repeat_flag: bool, shuffle_flag: bool = True
+    urls: List, batch_size: int, repeat_flag: bool, shuffle_flag: bool = False
 ):
     cubercnn_model_adaptor = CubeRCNNModelAdaptor()
 
