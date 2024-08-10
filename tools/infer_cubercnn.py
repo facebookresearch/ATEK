@@ -61,11 +61,14 @@ def create_inference_model(config_file, ckpt_dir, use_cpu_only=False):
     model_config.MAX_TRAINING_ATTEMPTS = 3
     model_config.TRAIN_LIST = ""
     model_config.TEST_LIST = ""
+    model_config.TRAIN_WDS_DIR = ""
+    model_config.TEST_WDS_DIR = ""
     model_config.ID_MAP_JSON = ""
     model_config.OBJ_PROP_JSON = ""
     model_config.CATEGORY_JSON = ""
     model_config.DATASETS.OBJECT_DETECTION_MODE = ""
     model_config.SOLVER.VAL_MAX_ITER = 0
+    model_config.SOLVER.MAX_EPOCH = 0
 
     model_config.merge_from_file(config_file)
     if use_cpu_only:
@@ -148,9 +151,13 @@ def run_inference(args):
         batch_size=args.batch_size,
         repeat_flag=False,
         collation_fn=cubercnn_collation_fn,
+        shuffle_flag=False,
     )
     infer_wds_cubercnn_format = load_atek_wds_dataset_as_cubercnn(
-        urls=infer_tars, batch_size=args.batch_size, repeat_flag=False
+        urls=infer_tars,
+        batch_size=args.batch_size,
+        repeat_flag=False,
+        shuffle_flag=False,
     )
 
     atek_format_dataloader = torch.utils.data.DataLoader(

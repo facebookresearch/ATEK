@@ -12,7 +12,6 @@ import webdataset as wds
 
 from atek.util.file_io_utils import merge_tensors_into_dict
 from atek.util.tensor_utils import unpack_list_of_tensors
-from torchvision.io import read_image
 
 
 def process_wds_sample(sample: Dict):
@@ -179,29 +178,34 @@ def load_atek_wds_dataset(
     batch_size: Optional[int] = None,
     collation_fn: Optional[Callable] = atek_default_collation_fn,
     repeat_flag: bool = False,
+    shuffle_flag: bool = False,
 ) -> wds.WebDataset:
-    # first, load WDS samples back as dicts
+    # 1. load WDS samples back as dicts
     wds_dataset = (
         wds.WebDataset(urls, nodesplitter=nodesplitter)
         .decode(wds.imagehandler("torchrgb8"))
         .map(process_wds_sample)
     )
 
-    # second, remap dict keys
+    # 2. random shuffle
+    if shuffle_flag:
+        wds_dataset = wds_dataset.shuffle(1000)
+
+    # 3. remap dict keys
     if dict_key_mapping is not None:
         wds_dataset = wds_dataset.map(
             partial(select_and_remap_dict_keys, key_mapping=dict_key_mapping)
         )
 
-    # third, apply data transforms
+    # 4. apply data transforms
     if data_transform_fn is not None:
         wds_dataset = wds_dataset.compose(data_transform_fn)
 
-    # fourth, batch samples
+    # 5. batch samples
     if batch_size is not None:
         wds_dataset = wds_dataset.batched(batch_size, collation_fn=collation_fn)
 
-    # fifth, repeat dataset
+    # 6. repeat dataset
     if repeat_flag:
         wds_dataset = wds_dataset.repeat()
 
