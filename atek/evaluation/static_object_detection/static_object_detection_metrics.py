@@ -36,6 +36,95 @@ class MAPMetricResults3D(BaseMetricResults):
     )
 
 
+class AtekObb3Metrics(torch.nn.Module):
+    """
+    Metrics class that works with ATEK obb3 gt dict format.
+    This is a thin wrapper around MeanAveragePrecision3D metrics class, to be able to use it with ATEK obb3 gt dict format.
+    It is a torch.nn.Module to be able to behave like a torchmetrics object.
+
+    This class is easily extensible to support more input format, by adding / overloading the `update()` API function.
+    """
+
+    def __init__(
+        self,
+        class_metrics: bool = False,
+        global_name_to_id: Optional[Dict] = None,
+        ret_all_prec_rec: Optional[bool] = False,
+        max_detection_thresholds: Optional[List[float]] = None,
+    ) -> None:
+        """
+        Args:
+            cam_ids (list): list of camera ids to evaluate
+            cam_names (list): list of camera names to evaluate
+            class_metrics (bool): if True, computes per-class metrics
+            max_detection_thresholds (list): list of maximum number of detections to evaluate
+        """
+
+        super().__init__()
+        if max_detection_thresholds is None:
+            # max number of detections to evaluate - 220 is sufficient for ASE scenes
+            max_detection_thresholds = [220]
+
+        self.metric_3d = MeanAveragePrecision3D(
+            class_metrics=class_metrics,
+            max_detection_thresholds=max_detection_thresholds,
+            ret_all_prec_rec=ret_all_prec_rec,
+        )
+        self.sem_id_to_name = None
+
+        if global_name_to_id is not None:
+            self.sem_id_to_name = {
+                int(sem_id): name for name, sem_id in global_name_to_id.items()
+            }
+
+    def update(self, prediction: Dict, target: Dict):
+        """
+        Update from prediction and target, in ATEK obb3 gt dict format.
+        """
+        # Compute bbox corners in world frame, as tensors of shape [N, 8, 3]
+        pred_bb3corners_in_world = prediction["bbox_corners_in_world"]
+        target_bb3corners_in_world = target["bbox_corners_in_world"]
+
+        # convert to lists
+        pred_list = [
+            {
+                "boxes": pred_bb3corners_in_world,
+                "scores": prediction["confidence_scores"],
+                "labels": prediction["category_ids"],
+            }
+        ]
+        target_list = [
+            {
+                "boxes": target_bb3corners_in_world,
+                "labels": target["category_ids"],
+            }
+        ]
+        self.metric_3d.update(pred_list, target_list)
+
+    def forward(self, prediction: Dict, target: Dict):
+        self.update(prediction, target)
+        return self.compute()
+
+    def compute(self):
+        # only compute the 3D metrics (mAP 3D)
+        t0 = time()
+
+        metrics = {}
+        logger.info(f"Computing 3D obb metric")
+        metrics_3d_result = self.metric_3d.compute(self.sem_id_to_name)
+
+        t1 = time()
+        logger.info(f"DONE Computing 3D obb metric in {t1-t0} seconds")
+
+        for metric_name, val in metrics_3d_result.items():
+            metrics[f"{metric_name}_3D"] = val
+        return metrics
+
+    def reset(self):
+        for metric in self.metric_3d.values():
+            metric.reset()
+
+
 class MeanAveragePrecision3D(MeanAveragePrecision):
     def __init__(
         self,
