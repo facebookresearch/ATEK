@@ -13,3 +13,16 @@ python_library(
         "//caffe2:torch",
     ],
 )
+
+python_library(
+    name = "eval_obb3_metrics_utils",
+    srcs = [
+        "eval_obb3_metrics_utils.py",
+    ],
+    base_module = "atek.evaluation.static_object_detection",
+    tags = ["noautodeps"],
+    deps = [
+        "//caffe2:torch",
+        "//vision/fair/pytorch3d/pytorch3d:pytorch3d",
+    ],
+)
