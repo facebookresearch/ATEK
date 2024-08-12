@@ -85,7 +85,7 @@ class DepthImageProcessor:
             # Handle uint16 not supported by torch
             np_image = image_data_and_record[0].to_numpy_array()
             if np_image.dtype == np.uint16:
-                np_image = np_image.astype(np.int32)
+                np_image = np_image.astype(np.uint32)
             image = torch.from_numpy(np_image)
             if len(image.shape) == 2:
                 # single channel image: [h,w] -> [c, h, w]

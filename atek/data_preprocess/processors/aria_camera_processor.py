@@ -158,6 +158,10 @@ class AriaCameraProcessor:
                 raise ValueError(
                     f"Expecting 4D tensor of [Frame, C, H, W], got {image.ndim}D tensor instead."
                 )
+            if image.dtype in [torch.int32, torch.uint32]:
+                # projectaria_tools calibration will cast int32 or uint32 to uint8 but leaves uint64 as uint64
+                image = image.to(torch.uint64)
+
             num_frames = image.size(0)
 
             result_list = []
