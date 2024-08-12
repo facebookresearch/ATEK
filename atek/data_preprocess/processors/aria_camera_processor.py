@@ -149,9 +149,10 @@ class AriaCameraProcessor:
         so that this operation can be chained with other tv.transforms.
         """
 
-        def __init__(self, dstCalib, srcCalib):
+        def __init__(self, dstCalib, srcCalib, is_transforming_label_data=False):
             self.dstCalib = dstCalib
             self.srcCalib = srcCalib
+            self.is_transforming_label_data = is_transforming_label_data
 
         def __call__(self, image):
             if image.ndim != 4:
@@ -168,9 +169,15 @@ class AriaCameraProcessor:
             for i in range(num_frames):
                 # input image is tensor shape of [Frame, C, H, W], while distort_by_calibration requires [H, W, C]
                 single_image = image[i].permute(1, 2, 0).numpy().copy()
-                numpy_result = calibration.distort_by_calibration(
-                    single_image, self.dstCalib, self.srcCalib
-                )
+
+                if self.is_transforming_label_data:
+                    numpy_result = calibration.distort_label_by_calibration(
+                        single_image, self.dstCalib, self.srcCalib
+                    )
+                else:
+                    numpy_result = calibration.distort_by_calibration(
+                        single_image, self.dstCalib, self.srcCalib
+                    )
                 tensor_result = torch.from_numpy(numpy_result)
                 if tensor_result.ndim == 2:
                     # [H, W] -> [1, H, W]
@@ -186,10 +193,13 @@ class AriaCameraProcessor:
     def get_image_transform(
         self,
         rescale_interpolation: InterpolationMode = InterpolationMode.BILINEAR,
+        is_transforming_label_data: bool = False,
     ) -> Callable:
         """
         Returns a list of torchvision transform functions to be applied to the raw image data,
         in the order of: undistortion -> rescale -> rotateCW90, where any step is optional.
+        If transforming label data (as is the case with segmentation masks), the interpolation
+        should be set to nearest, and is_transforming_label_data should be set to True.
         """
         image_transform_list = []
         # undistort if specified
@@ -198,6 +208,7 @@ class AriaCameraProcessor:
                 self.DistortByCalibrationTVWrapper(
                     dstCalib=self.undistorted_linear_camera_calib,
                     srcCalib=self.original_camera_calib,
+                    is_transforming_label_data=is_transforming_label_data,
                 )
             )
 
