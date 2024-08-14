@@ -50,13 +50,17 @@ def main() -> None:
         help="The ground truth obbs csv file",
         default=None,
     )
+    parser.add_argument("--output-file", type=str, help="The output metrics file. ")
     parser.add_argument(
         "--iou-threshold",
         type=float,
         default=0.2,
     )
-    parser.add_argument("--output-file", type=str, help="The output metrics file. ")
-
+    parser.add_argument(
+        "--max-num-sequences",
+        type=int,
+        default=-1,
+    )
     args = parser.parse_args()
 
     if args.input_folder is not None:
@@ -67,6 +71,7 @@ def main() -> None:
             prediction_filename=args.pred_csv,
             iou=args.iou_threshold,
             compute_per_class_metrics=False,
+            max_num_sequences=args.max_num_sequences,
         )
         logger.info(json.dumps(metrics, indent=2, sort_keys=True))
     else:
