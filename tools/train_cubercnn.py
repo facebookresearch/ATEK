@@ -3,8 +3,10 @@
 import json
 import logging
 import os
+import random
 import sys
 from datetime import timedelta
+from typing import List
 
 import detectron2.utils.comm as comm
 import numpy as np
@@ -13,8 +15,6 @@ import torch.distributed as dist
 import yaml
 
 from atek.data_loaders.cubercnn_model_adaptor import load_atek_wds_dataset_as_cubercnn
-
-# from atek.model.cubercnn import build_model
 
 from cubercnn.config import get_cfg_defaults
 from cubercnn.modeling.backbone import build_dla_from_vision_fpn_backbone
@@ -36,7 +36,14 @@ from torch.nn.parallel import DistributedDataParallel
 
 DEFAULT_TIMEOUT = timedelta(minutes=10)
 
-
+# logger set up
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s-%(levelname)s:%(message)s",  # Log message format
+    handlers=[
+        logging.StreamHandler(),  # Output to console
+    ],
+)
 logger = logging.getLogger("cubercnn")
 
 sys.dont_write_bytecode = True
@@ -53,6 +60,7 @@ def add_configs(_C):
     _C.CATEGORY_JSON = ""
     _C.DATASETS.OBJECT_DETECTION_MODE = ""
     _C.SOLVER.VAL_MAX_ITER = 0
+    _C.SOLVER.MAX_EPOCH = 0
 
 
 def get_tars(tar_yaml, use_relative_path=False):
@@ -62,6 +70,12 @@ def get_tars(tar_yaml, use_relative_path=False):
         data_dir = os.path.dirname(tar_yaml)
         tar_files = [os.path.join(data_dir, x) for x in tar_files]
     return tar_files
+
+
+def shuffle_tars(tar_list: List, shuffle_seed: int = 42):
+    random.seed(shuffle_seed)
+    random.shuffle(tar_list)
+    return tar_list
 
 
 def build_test_loader(cfg):
@@ -77,7 +91,10 @@ def build_test_loader(cfg):
     print("local_batch_size:", local_batch_size)
 
     test_wds = load_atek_wds_dataset_as_cubercnn(
-        urls=test_tars_local, batch_size=local_batch_size, repeat_flag=True
+        urls=test_tars_local,
+        batch_size=local_batch_size,
+        repeat_flag=False,
+        shuffle_flag=False,
     )
 
     test_dataloader = torch.utils.data.DataLoader(
@@ -95,7 +112,7 @@ def build_test_loader(cfg):
     return test_dataloader
 
 
-def build_train_loader(cfg):
+def build_train_loader(cfg, shuffle_tars_flag: bool = False, shuffle_seed: int = 42):
     rank = comm.get_rank()
     world_size = comm.get_world_size()
 
@@ -107,8 +124,17 @@ def build_train_loader(cfg):
     local_batch_size = max(cfg.SOLVER.IMS_PER_BATCH // world_size, 1)
     print("local_batch_size:", local_batch_size)
 
+    # Perform random shuffle to local tars
+    if shuffle_tars_flag:
+        train_tars_local = shuffle_tars(
+            tar_list=train_tars_local, shuffle_seed=shuffle_seed
+        )
+
     train_wds = load_atek_wds_dataset_as_cubercnn(
-        urls=train_tars_local, batch_size=local_batch_size, repeat_flag=True
+        urls=train_tars_local,
+        batch_size=local_batch_size,
+        repeat_flag=False,
+        shuffle_flag=True,  # always perform local shuffle
     )
 
     train_dataloader = torch.utils.data.DataLoader(
@@ -193,10 +219,6 @@ def do_train(cfg, model, resume=False):
         default_writers(cfg.OUTPUT_DIR, max_iter) if comm.is_main_process() else []
     )
 
-    # create the dataloader
-    data_loader = build_train_loader(cfg)
-    data_iter = iter(data_loader)
-
     if cfg.MODEL.WEIGHTS_PRETRAIN != "":
         # load ONLY the model, no checkpointables.
         checkpointer.load(cfg.MODEL.WEIGHTS_PRETRAIN, checkpointables=[])
@@ -232,179 +254,195 @@ def do_train(cfg, model, resume=False):
     named_params = list(model.named_parameters())
 
     with EventStorage(start_iter) as storage:
-        while True:
-            orig_data = next(data_iter)
-            storage.iter = iteration
+        # Loop over all epochs
+        for i_epoch in range(cfg.SOLVER.MAX_EPOCH):
+            logger.info(f"Starting training with epoch {i_epoch} ... ")
 
-            # forward
-            # skip empty data
-            # TODO: maybe skip these in WDS creation? Sync with Shangyi on this.
-            data = [
-                x for x in orig_data if x["instances"].get("gt_classes").numel() > 0
-            ]
-            if len(data) == 0:
-                raise ValueError("data contains 0 valid samples.")
-
-            loss_dict = model(data)
-            losses = sum(loss_dict.values())
-
-            # reduce
-            loss_dict_reduced = {
-                k: v.item() for k, v in allreduce_dict(loss_dict).items()
-            }
-            losses_reduced = sum(loss for loss in loss_dict_reduced.values())
-
-            # sync up
-            comm.synchronize()
-
-            if recent_loss is None:
-                # init recent loss fairly high
-                recent_loss = losses_reduced * 2.0
-
-            # Is stabilization enabled, and loss high or NaN?
-            diverging_model = cfg.MODEL.STABILIZE > 0 and (
-                losses_reduced > recent_loss * TOLERANCE
-                or not (np.isfinite(losses_reduced))
-                or np.isnan(losses_reduced)
+            # Generate data loader for current epoch, with random url list
+            data_loader = build_train_loader(
+                cfg, shuffle_tars_flag=True, shuffle_seed=i_epoch
             )
 
-            if diverging_model:
-                # clip and warn the user.
-                losses = losses.clip(0, 1)
-                logger.warning(
-                    "Skipping gradient update due to higher than normal loss {:.2f} vs. rolling mean {:.2f}, Dict-> {}".format(
-                        losses_reduced, recent_loss, loss_dict_reduced
-                    )
-                )
-            else:
-                # compute rolling average of loss
-                recent_loss = recent_loss * (1 - GAMMA) + losses_reduced * GAMMA
+            for orig_data in data_loader:
+                storage.iter = iteration
 
-            if comm.is_main_process():
-                # send loss scalars to tensorboard.
-                storage.put_scalars(total_loss=losses_reduced, **loss_dict_reduced)
+                # forward
+                # skip empty data
+                # TODO: maybe skip these in WDS creation? Sync with Shangyi on this.
+                data = [
+                    x for x in orig_data if x["instances"].get("gt_classes").numel() > 0
+                ]
+                if len(data) == 0:
+                    logger.warning("data contains 0 valid samples, skipping iteration")
+                    continue
 
-            # backward and step
-            optimizer.zero_grad()
-            losses.backward()
+                loss_dict = model(data)
+                losses = sum(loss_dict.values())
 
-            # if the loss is not too high,
-            # we still want to check gradients.
-            if not diverging_model:
-                if cfg.MODEL.STABILIZE > 0:
-                    for _, param in named_params:
-                        if param.grad is not None:
-                            diverging_model = (
-                                torch.isnan(param.grad).any()
-                                or torch.isinf(param.grad).any()
-                            )
+                # reduce
+                loss_dict_reduced = {
+                    k: v.item() for k, v in allreduce_dict(loss_dict).items()
+                }
+                losses_reduced = sum(loss for loss in loss_dict_reduced.values())
 
-                        if diverging_model:
-                            logger.warning(
-                                "Skipping gradient update due to inf/nan detection, loss is {}".format(
-                                    loss_dict_reduced
-                                )
-                            )
-                            break
-
-            # convert exploded to a float, then allreduce it,
-            # if any process gradients have exploded then we skip together.
-            diverging_model = torch.tensor(float(diverging_model)).cuda()
-
-            if world_size > 1:
-                dist.all_reduce(diverging_model)
-
-            # sync up
-            comm.synchronize()
-
-            if diverging_model > 0:
-                optimizer.zero_grad()
-                iterations_explode += 1
-
-            else:
-                optimizer.step()
-                storage.put_scalar(
-                    "lr", optimizer.param_groups[0]["lr"], smoothing_hint=False
-                )
-                iterations_success += 1
-
-            total_iterations = iterations_success + iterations_explode
-
-            # Only retry if we have trained sufficiently long relative
-            # to the latest checkpoint, which we would otherwise revert back to.
-            retry = (iterations_explode / total_iterations) >= cfg.MODEL.STABILIZE and (
-                total_iterations > cfg.SOLVER.CHECKPOINT_PERIOD * 1 / 2
-            )
-
-            # Important for dist training. Convert to a float, then allreduce it,
-            # if any process gradients have exploded then we must skip together.
-            retry = torch.tensor(float(retry)).cuda()
-
-            if world_size > 1:
-                dist.all_reduce(retry)
-
-            # sync up
-            comm.synchronize()
-
-            # any processes need to retry
-            if retry > 0:
-                # instead of failing, try to resume the iteration instead.
-                logger.warning(
-                    "!! Restarting training at {} iters. Exploding loss {:d}% of iters !!".format(
-                        iteration,
-                        int(
-                            100
-                            * (
-                                iterations_explode
-                                / (iterations_success + iterations_explode)
-                            )
-                        ),
-                    )
-                )
-
-                # send these to garbage, for ideally a cleaner restart.
-                del data_loader
-                del optimizer
-                del checkpointer
-                del periodic_checkpointer
-                return False
-
-            scheduler.step()
-
-            # Flush events
-            if iteration - start_iter > 5 and (
-                (iteration + 1) % 20 == 0 or iteration == max_iter - 1
-            ):
-                for writer in writers:
-                    writer.write()
-
-            # Evaluate only when the loss is not diverging.
-            if not (diverging_model > 0) and (
-                do_eval
-                and ((iteration + 1) % cfg.TEST.EVAL_PERIOD) == 0
-                and iteration != (max_iter - 1)
-            ):
-                print("Starting validation for iteration {}".format(iteration + 1))
-                val_iter = do_val(
-                    cfg, model, val_iter + 1, writers, max_iter=cfg.SOLVER.VAL_MAX_ITER
-                )
+                # sync up
                 comm.synchronize()
 
-                if not cfg.MODEL.USE_BN:
-                    freeze_bn(model)
+                if recent_loss is None:
+                    # init recent loss fairly high
+                    recent_loss = losses_reduced * 2.0
 
-            # Do not bother checkpointing if there is potential for a diverging model.
-            if (
-                not (diverging_model > 0)
-                and (iterations_explode / total_iterations) < 0.5 * cfg.MODEL.STABILIZE
-            ):
-                additional_state = {"val_iter": val_iter}
-                periodic_checkpointer.step(iteration, **additional_state)
+                # Is stabilization enabled, and loss high or NaN?
+                diverging_model = cfg.MODEL.STABILIZE > 0 and (
+                    losses_reduced > recent_loss * TOLERANCE
+                    or not (np.isfinite(losses_reduced))
+                    or np.isnan(losses_reduced)
+                )
 
-            iteration += 1
+                if diverging_model:
+                    # clip and warn the user.
+                    losses = losses.clip(0, 1)
+                    logger.warning(
+                        "Skipping gradient update due to higher than normal loss {:.2f} vs. rolling mean {:.2f}, Dict-> {}".format(
+                            losses_reduced, recent_loss, loss_dict_reduced
+                        )
+                    )
+                else:
+                    # compute rolling average of loss
+                    recent_loss = recent_loss * (1 - GAMMA) + losses_reduced * GAMMA
 
-            if iteration >= max_iter:
-                break
+                if comm.is_main_process():
+                    # send loss scalars to tensorboard.
+                    storage.put_scalars(total_loss=losses_reduced, **loss_dict_reduced)
+
+                # backward and step
+                optimizer.zero_grad()
+                losses.backward()
+
+                # if the loss is not too high,
+                # we still want to check gradients.
+                if not diverging_model:
+                    if cfg.MODEL.STABILIZE > 0:
+                        for _, param in named_params:
+                            if param.grad is not None:
+                                diverging_model = (
+                                    torch.isnan(param.grad).any()
+                                    or torch.isinf(param.grad).any()
+                                )
+
+                            if diverging_model:
+                                logger.warning(
+                                    "Skipping gradient update due to inf/nan detection, loss is {}".format(
+                                        loss_dict_reduced
+                                    )
+                                )
+                                break
+
+                # convert exploded to a float, then allreduce it,
+                # if any process gradients have exploded then we skip together.
+                diverging_model = torch.tensor(float(diverging_model)).cuda()
+
+                if world_size > 1:
+                    dist.all_reduce(diverging_model)
+
+                # sync up
+                comm.synchronize()
+
+                if diverging_model > 0:
+                    optimizer.zero_grad()
+                    iterations_explode += 1
+
+                else:
+                    optimizer.step()
+                    storage.put_scalar(
+                        "lr", optimizer.param_groups[0]["lr"], smoothing_hint=False
+                    )
+                    iterations_success += 1
+
+                total_iterations = iterations_success + iterations_explode
+
+                # Only retry if we have trained sufficiently long relative
+                # to the latest checkpoint, which we would otherwise revert back to.
+                retry = (
+                    iterations_explode / total_iterations
+                ) >= cfg.MODEL.STABILIZE and (
+                    total_iterations > cfg.SOLVER.CHECKPOINT_PERIOD * 1 / 2
+                )
+
+                # Important for dist training. Convert to a float, then allreduce it,
+                # if any process gradients have exploded then we must skip together.
+                retry = torch.tensor(float(retry)).cuda()
+
+                if world_size > 1:
+                    dist.all_reduce(retry)
+
+                # sync up
+                comm.synchronize()
+
+                # any processes need to retry
+                if retry > 0:
+                    # instead of failing, try to resume the iteration instead.
+                    logger.warning(
+                        "!! Restarting training at {} iters. Exploding loss {:d}% of iters !!".format(
+                            iteration,
+                            int(
+                                100
+                                * (
+                                    iterations_explode
+                                    / (iterations_success + iterations_explode)
+                                )
+                            ),
+                        )
+                    )
+
+                    # send these to garbage, for ideally a cleaner restart.
+                    del data_loader
+                    del optimizer
+                    del checkpointer
+                    del periodic_checkpointer
+                    return False
+
+                scheduler.step()
+
+                # Flush events
+                if iteration - start_iter > 5 and (
+                    (iteration + 1) % 20 == 0 or iteration == max_iter - 1
+                ):
+                    for writer in writers:
+                        writer.write()
+
+                # Evaluate only when the loss is not diverging.
+                if not (diverging_model > 0) and (
+                    do_eval
+                    and ((iteration + 1) % cfg.TEST.EVAL_PERIOD) == 0
+                    and iteration != (max_iter - 1)
+                ):
+                    print("Starting validation for iteration {}".format(iteration + 1))
+                    val_iter = do_val(
+                        cfg,
+                        model,
+                        val_iter + 1,
+                        writers,
+                        max_iter=cfg.SOLVER.VAL_MAX_ITER,
+                    )
+                    comm.synchronize()
+
+                    if not cfg.MODEL.USE_BN:
+                        freeze_bn(model)
+
+                # Do not bother checkpointing if there is potential for a diverging model.
+                if (
+                    not (diverging_model > 0)
+                    and (iterations_explode / total_iterations)
+                    < 0.5 * cfg.MODEL.STABILIZE
+                ):
+                    additional_state = {"val_iter": val_iter}
+                    periodic_checkpointer.step(iteration, **additional_state)
+
+                iteration += 1
+
+                if iteration >= max_iter:
+                    break
 
     # success
     return True
