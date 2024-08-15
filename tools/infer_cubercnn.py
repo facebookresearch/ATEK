@@ -268,8 +268,13 @@ def run_inference(args):
                         atek_data_sample=gt_sample,
                         plot_line_color=NativeAtekSampleVisualizer.COLOR_GREEN,
                         suffix="_gt",
+                        plot_types=[
+                            "camera_rgb",
+                            "mps_traj",
+                            "obb2_gt",
+                            "obb3_gt",
+                        ],
                     )
-
                     # Visualize the prediction results, only visualize the GT part
                     atek_viz.plot_gtdata(
                         atek_gt_dict=prediction_in_atek_format,
