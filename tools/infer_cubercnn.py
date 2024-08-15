@@ -159,17 +159,17 @@ def run_inference(args):
         repeat_flag=False,
         shuffle_flag=False,
     )
-
+    num_workers = 1 if args.viz_flag else conf.DATALOADER.NUM_WORKERS
     atek_format_dataloader = torch.utils.data.DataLoader(
         infer_wds_atek_format,
         batch_size=None,
-        num_workers=conf.DATALOADER.NUM_WORKERS,
+        num_workers=num_workers,  # conf.DATALOADER.NUM_WORKERS,
         pin_memory=True,
     )
     cubercnn_format_dataloader = torch.utils.data.DataLoader(
         infer_wds_cubercnn_format,
         batch_size=None,
-        num_workers=conf.DATALOADER.NUM_WORKERS,
+        num_workers=num_workers,  # conf.DATALOADER.NUM_WORKERS,
         pin_memory=True,
     )
 
