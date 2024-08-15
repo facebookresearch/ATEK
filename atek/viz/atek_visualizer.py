@@ -58,6 +58,17 @@ class NativeAtekSampleVisualizer:
         """
         self.viz_prefix = viz_prefix
         self.cameras_to_plot = []
+        # if user want to specify plot types, they can pass a config file, other wise, we will use the default plot types
+        self.plot_types = [
+            "camera_rgb",
+            "camera_slam_left",
+            "camera_slam_right",
+            "mps_traj",
+            "semidense_points",
+            "obb2_gt",
+            "obb3_gt",
+            "obb3_in_camera_view",
+        ]
         rr.init(f"ATEK Sample Viewer - {self.viz_prefix}", spawn=True)
         rr.serve(web_port=viz_web_port, ws_port=viz_ws_port)
         return
@@ -65,16 +76,6 @@ class NativeAtekSampleVisualizer:
     def plot_atek_sample(
         self,
         atek_data_sample: Optional[AtekDataSample],
-        plot_types: list[str] = [
-            "camera_rgb",
-            "camera_slam_left",
-            "camera_slam_right",
-            "mps_traj",
-            # "semidense_points",
-            # "obb2_gt",
-            # "obb3_gt",
-            "obb3_in_camera_view",
-        ],  # List of plot types to execute
         plot_line_color=COLOR_GREEN,
         suffix="",
     ) -> None:
@@ -88,59 +89,48 @@ class NativeAtekSampleVisualizer:
             atek_data_sample is not None
         ), "ATEK data sample is empty in plot_atek_sample"
 
-        plot_functions = {
-            "camera_rgb": lambda: self.plot_multi_frame_camera_data(
-                atek_data_sample.camera_rgb
-            ),
-            "camera_slam_left": lambda: self.plot_multi_frame_camera_data(
-                atek_data_sample.camera_slam_left
-            ),
-            "camera_slam_right": lambda: self.plot_multi_frame_camera_data(
-                atek_data_sample.camera_slam_right
-            ),
-            "mps_traj": lambda: self.plot_mps_traj_data(atek_data_sample.mps_traj_data),
-            "semidense_points": lambda: self.plot_semidense_point_cloud(
-                atek_data_sample.mps_semidense_point_data
-            ),
-            "gt_data": lambda: self.plot_gtdata(
+        if atek_data_sample.camera_rgb and "camera_rgb" in self.plot_types:
+            self.plot_multi_frame_camera_data(atek_data_sample.camera_rgb)
+        if atek_data_sample.camera_slam_left and "camera_slam_left" in self.plot_types:
+            self.plot_multi_frame_camera_data(atek_data_sample.camera_slam_left)
+        if (
+            atek_data_sample.camera_slam_right
+            and "camera_slam_right" in self.plot_types
+        ):
+            self.plot_multi_frame_camera_data(atek_data_sample.camera_slam_right)
+        if atek_data_sample.mps_traj_data and "mps_traj" in self.plot_types:
+            self.plot_mps_traj_data(atek_data_sample.mps_traj_data)
+        if (
+            atek_data_sample.mps_semidense_point_data
+            and "semidense_points" in self.plot_types
+        ):
+            self.plot_semidense_point_cloud(atek_data_sample.mps_semidense_point_data)
+        if (
+            atek_data_sample.gt_data["obb3_gt"]
+            and atek_data_sample.camera_rgb
+            and ("camera_rgb" in self.plot_types)
+            and ("obb3_in_camera_view" in self.plot_types)
+        ):
+            self.plot_obb3d_in_camera_view(
+                obb3d_gt_dict=atek_data_sample.gt_data["obb3_gt"]["camera-rgb"],
+                camera_data=atek_data_sample.camera_rgb,
+                mps_traj_data=atek_data_sample.mps_traj_data,
+            )
+        elif (
+            atek_data_sample.gt_data["obb2_gt"]
+            and atek_data_sample.gt_data["obb3_gt"]
+            and ("obb2_gt" in self.plot_types)
+            and ("obb3_gt" in self.plot_types)
+        ):
+            self.plot_gtdata(
                 atek_data_sample.gt_data,
                 atek_data_sample.camera_rgb.capture_timestamps_ns[0].item(),
                 plot_line_color=plot_line_color,
                 suffix=suffix,
-            ),
-            "obb2_gt": lambda: self.plot_obb2_gt(
-                atek_data_sample.gt_data["obb2_gt"],
-                timestamp_ns=atek_data_sample.camera_rgb.capture_timestamps_ns[
-                    0
-                ].item(),
-                plot_color=plot_line_color,
-                suffix=suffix,
-            ),
-            "obb3_gt": lambda: self.plot_obb3_gt(
-                atek_data_sample.gt_data["obb3_gt"],
-                timestamp_ns=atek_data_sample.camera_rgb.capture_timestamps_ns[
-                    0
-                ].item(),
-                plot_color=plot_line_color,
-                suffix=suffix,
-            ),
-            "obb3_in_camera_view": lambda: self.plot_obb3d_in_camera_view(
-                obb3d_gt_dict=atek_data_sample.gt_data["obb3_gt"]["camera-rgb"],
-                camera_data=atek_data_sample.camera_rgb,
-                mps_traj_data=atek_data_sample.mps_traj_data,
-            ),
-        }
-
-        for plot_type in plot_types:
-            if plot_type in plot_functions:
-                plot_functions[plot_type]()
-            else:
-                logger.warning(f"Plot type '{plot_type}' is not supported.")
-        return
+            )
 
     def plot_gtdata(self, atek_gt_dict, timestamp_ns, plot_line_color, suffix) -> None:
 
-        assert atek_gt_dict is not None, "ATEK GT data is empty in plot_gtdata"
         if "obb2_gt" in atek_gt_dict:
             self.plot_obb2_gt(
                 atek_gt_dict["obb2_gt"],
@@ -167,9 +157,6 @@ class NativeAtekSampleVisualizer:
     def plot_multi_frame_camera_data(
         self, camera_data: Optional[MultiFrameCameraData]
     ) -> None:
-        assert (
-            camera_data is not None
-        ), "Multiframe camera data is empty in plot_multi_frame_camera_data"
         # Some time-invariant variables
         camera_label = camera_data.camera_label
         self.cameras_to_plot.append(camera_label)
@@ -198,9 +185,6 @@ class NativeAtekSampleVisualizer:
 
     def plot_mps_traj_data(self, mps_traj_data: Optional[MpsTrajData]) -> None:
 
-        assert (
-            mps_traj_data is not None
-        ), "ATEK mps trajactory data is empty in plot_mps_traj_data"
         # loop over all frames
         for i_frame in range(len(mps_traj_data.capture_timestamps_ns)):
             # Setting timestamp
@@ -233,10 +217,6 @@ class NativeAtekSampleVisualizer:
         self, mps_semidense_point_data: Optional[MpsSemiDensePointData]
     ) -> None:
 
-        assert (
-            mps_semidense_point_data is not None
-        ), "ATEK semidense point cloud data is empty in plot_semidense_point_cloud"
-
         # loop over all frames
         for i_frame in range(len(mps_semidense_point_data.capture_timestamps_ns)):
             # Setting timestamp
@@ -267,9 +247,6 @@ class NativeAtekSampleVisualizer:
         pass
 
     def plot_obb2_gt(self, gt_dict, timestamp_ns, plot_color, suffix) -> None:
-        assert (
-            gt_dict is not None
-        ), "ATEK obb2 ground truth data is empty in plot_obb2_gt"
 
         rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
         # Loop over all cameras
@@ -329,10 +306,6 @@ class NativeAtekSampleVisualizer:
             self.PREV_MAX_BB2D_ID = cur_batch_max_id
 
     def plot_obb3_gt(self, gt_dict, timestamp_ns, plot_color, suffix) -> None:
-
-        assert (
-            gt_dict is not None
-        ), "ATEK obb3 ground truth data is empty in plot_obb3_gt"
 
         rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
 
@@ -421,15 +394,6 @@ class NativeAtekSampleVisualizer:
         corner_camera = T_Device_Camera.inverse() @ (T_World_Device.inverse() @ corner)
         then we project the corner to image view using camera projection model
         """
-        assert (
-            obb3d_gt_dict is not None
-        ), "ATEK obb3d_gt_dict is empty in plot_obb3d_in_camera_view"
-        assert (
-            camera_data is not None
-        ), "ATEK camera_data is empty in plot_obb3d_in_camera_view"
-        assert (
-            mps_traj_data is not None
-        ), "ATEK mps_traj_data is empty in plot_obb3d_in_camera_view"
 
         # we first get all matrix needed for projection
         object_dimensions = obb3d_gt_dict["object_dimensions"]
