@@ -3,15 +3,18 @@
 # pyre-strict
 
 import logging
+from typing import Optional
 
 import numpy as np
 import rerun as rr
+import torch
 from atek.data_preprocess.atek_data_sample import (
     AtekDataSample,
     MpsSemiDensePointData,
     MpsTrajData,
     MultiFrameCameraData,
 )
+from projectaria_tools.core.calibration import CameraModelType, CameraProjection
 from projectaria_tools.core.sophus import SE3
 from projectaria_tools.utils.rerun_helpers import ToTransform3D
 
@@ -54,50 +57,90 @@ class NativeAtekSampleVisualizer:
             viz_prefix (str): a prefix to add to re-run visualization name
         """
         self.viz_prefix = viz_prefix
+        self.cameras_to_plot = []
         rr.init(f"ATEK Sample Viewer - {self.viz_prefix}", spawn=True)
         rr.serve(web_port=viz_web_port, ws_port=viz_ws_port)
         return
 
     def plot_atek_sample(
         self,
-        atek_data_sample: AtekDataSample,
+        atek_data_sample: Optional[AtekDataSample],
+        plot_types: list[str] = [
+            "camera_rgb",
+            "camera_slam_left",
+            "camera_slam_right",
+            "mps_traj",
+            # "semidense_points",
+            # "obb2_gt",
+            # "obb3_gt",
+            "obb3_in_camera_view",
+        ],  # List of plot types to execute
         plot_line_color=COLOR_GREEN,
-        suffix="",  # TODO: change to a better name for suffix
+        suffix="",
     ) -> None:
         """
-
-        plot an atek data sample instance in ReRun, including camera data, mps trajectory
-        and semidense points data, and GT data. Currently supported GT data viz includes: obb3, obb2.
+        Plot an ATEK data sample instance in ReRun, including camera data, mps trajectory
+        and semidense points data, and GT data. User can specify which plots to generate.
+        Currently supported GT data viz includes: obb3, obb2.
         """
-        if not atek_data_sample:
-            logger.debug(
-                "ATEK data sample is empty, please check if the data is loaded correctly"
-            )
-            return
 
-        self.plot_multi_frame_camera_data(atek_data_sample.camera_rgb)
-        self.plot_multi_frame_camera_data(atek_data_sample.camera_slam_left)
-        self.plot_multi_frame_camera_data(atek_data_sample.camera_slam_right)
+        assert (
+            atek_data_sample is not None
+        ), "ATEK data sample is empty in plot_atek_sample"
 
-        self.plot_mps_traj_data(atek_data_sample.mps_traj_data)
-        self.plot_semidense_point_cloud(atek_data_sample.mps_semidense_point_data)
+        plot_functions = {
+            "camera_rgb": lambda: self.plot_multi_frame_camera_data(
+                atek_data_sample.camera_rgb
+            ),
+            "camera_slam_left": lambda: self.plot_multi_frame_camera_data(
+                atek_data_sample.camera_slam_left
+            ),
+            "camera_slam_right": lambda: self.plot_multi_frame_camera_data(
+                atek_data_sample.camera_slam_right
+            ),
+            "mps_traj": lambda: self.plot_mps_traj_data(atek_data_sample.mps_traj_data),
+            "semidense_points": lambda: self.plot_semidense_point_cloud(
+                atek_data_sample.mps_semidense_point_data
+            ),
+            "gt_data": lambda: self.plot_gtdata(
+                atek_data_sample.gt_data,
+                atek_data_sample.camera_rgb.capture_timestamps_ns[0].item(),
+                plot_line_color=plot_line_color,
+                suffix=suffix,
+            ),
+            "obb2_gt": lambda: self.plot_obb2_gt(
+                atek_data_sample.gt_data["obb2_gt"],
+                timestamp_ns=atek_data_sample.camera_rgb.capture_timestamps_ns[
+                    0
+                ].item(),
+                plot_color=plot_line_color,
+                suffix=suffix,
+            ),
+            "obb3_gt": lambda: self.plot_obb3_gt(
+                atek_data_sample.gt_data["obb3_gt"],
+                timestamp_ns=atek_data_sample.camera_rgb.capture_timestamps_ns[
+                    0
+                ].item(),
+                plot_color=plot_line_color,
+                suffix=suffix,
+            ),
+            "obb3_in_camera_view": lambda: self.plot_obb3d_in_camera_view(
+                obb3d_gt_dict=atek_data_sample.gt_data["obb3_gt"]["camera-rgb"],
+                camera_data=atek_data_sample.camera_rgb,
+                mps_traj_data=atek_data_sample.mps_traj_data,
+            ),
+        }
 
-        # GT data needs timestamps associated with them
-        # TODO: maybe add timestamps to GT data? Handle this in a better way
-        self.plot_gtdata(
-            atek_data_sample.gt_data,
-            atek_data_sample.camera_rgb.capture_timestamps_ns[0].item(),
-            plot_line_color=plot_line_color,
-            suffix=suffix,
-        )
+        for plot_type in plot_types:
+            if plot_type in plot_functions:
+                plot_functions[plot_type]()
+            else:
+                logger.warning(f"Plot type '{plot_type}' is not supported.")
+        return
 
     def plot_gtdata(self, atek_gt_dict, timestamp_ns, plot_line_color, suffix) -> None:
-        if not atek_gt_dict:
-            logger.debug(
-                f"ATEK GT data is empty, please check if the data is loaded correctly,\
-            will skip visualize GT for timestamp {timestamp_ns}"
-            )
-            return
+
+        assert atek_gt_dict is not None, "ATEK GT data is empty in plot_gtdata"
         if "obb2_gt" in atek_gt_dict:
             self.plot_obb2_gt(
                 atek_gt_dict["obb2_gt"],
@@ -121,15 +164,15 @@ class NativeAtekSampleVisualizer:
                 suffix=suffix,
             )
 
-    def plot_multi_frame_camera_data(self, camera_data: MultiFrameCameraData) -> None:
-        if not camera_data:
-            logger.debug(
-                "Multiframe camera data is empty, please check if the data is loaded correctly"
-            )
-            return
+    def plot_multi_frame_camera_data(
+        self, camera_data: Optional[MultiFrameCameraData]
+    ) -> None:
+        assert (
+            camera_data is not None
+        ), "Multiframe camera data is empty in plot_multi_frame_camera_data"
         # Some time-invariant variables
         camera_label = camera_data.camera_label
-        T_Device_Camera = SE3.from_matrix3x4(camera_data.T_Device_Camera)
+        self.cameras_to_plot.append(camera_label)
 
         # loop over all frames
         for i_frame in range(len(camera_data.capture_timestamps_ns)):
@@ -153,12 +196,11 @@ class NativeAtekSampleVisualizer:
         # rerun_T_Device_Camera.axis_length = self.AXIS_LENGTH
         # rr.log(f"world/device/{camera_label}", rerun_T_Device_Camera)
 
-    def plot_mps_traj_data(self, mps_traj_data: MpsTrajData) -> None:
-        if not mps_traj_data:
-            logger.debug(
-                "MPS trajectory data is empty, please check if the data is loaded correctly"
-            )
-            return
+    def plot_mps_traj_data(self, mps_traj_data: Optional[MpsTrajData]) -> None:
+
+        assert (
+            mps_traj_data is not None
+        ), "ATEK mps trajactory data is empty in plot_mps_traj_data"
         # loop over all frames
         for i_frame in range(len(mps_traj_data.capture_timestamps_ns)):
             # Setting timestamp
@@ -187,12 +229,13 @@ class NativeAtekSampleVisualizer:
                 timeless=False,
             )
 
-    def plot_semidense_point_cloud(self, mps_semidense_point_data) -> None:
-        if not mps_semidense_point_data:
-            logger.debug(
-                "ATEK semidense point cloud data is empty, please check if the data is loaded correctly"
-            )
-            return
+    def plot_semidense_point_cloud(
+        self, mps_semidense_point_data: Optional[MpsSemiDensePointData]
+    ) -> None:
+
+        assert (
+            mps_semidense_point_data is not None
+        ), "ATEK semidense point cloud data is empty in plot_semidense_point_cloud"
 
         # loop over all frames
         for i_frame in range(len(mps_semidense_point_data.capture_timestamps_ns)):
@@ -224,15 +267,15 @@ class NativeAtekSampleVisualizer:
         pass
 
     def plot_obb2_gt(self, gt_dict, timestamp_ns, plot_color, suffix) -> None:
-        if not gt_dict:
-            logger.debug(
-                f"ATEK obb2 GT data is empty, please check if the data is loaded correctly,\
-                will skip visualize obb2 GT for timestamp {timestamp_ns}"
-            )
-            return
+        assert (
+            gt_dict is not None
+        ), "ATEK obb2 ground truth data is empty in plot_obb2_gt"
+
         rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
         # Loop over all cameras
         for camera_label, per_cam_dict in gt_dict.items():
+            if camera_label not in self.cameras_to_plot:
+                continue
             num_obb2 = len(per_cam_dict["category_ids"])
             bb2ds_all = []
             category_names = []
@@ -286,12 +329,11 @@ class NativeAtekSampleVisualizer:
             self.PREV_MAX_BB2D_ID = cur_batch_max_id
 
     def plot_obb3_gt(self, gt_dict, timestamp_ns, plot_color, suffix) -> None:
-        if not gt_dict:
-            logger.debug(
-                f"ATEK obb3 GT data is empty, please check if the data is loaded correctly,\
-                will skip visualize GT for timestamp {timestamp_ns}"
-            )
-            return
+
+        assert (
+            gt_dict is not None
+        ), "ATEK obb3 ground truth data is empty in plot_obb3_gt"
+
         rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
 
         # These lists are the formats required by ReRun
@@ -318,7 +360,8 @@ class NativeAtekSampleVisualizer:
                 bb3d_sizes.append(np.array(per_cam_dict["object_dimensions"][i_obj]))
             # end for i_obj
 
-        # visualize the bb3d, the max number one instance can be plotted is 30 for bb3d. So we need to split the whole bb3d into several parts
+        # visualize the bb3d, the max number one instance can be plotted is 30 for bb3d.
+        # So we need to split the whole bb3d into several parts
         batch_id = 0
         while batch_id * self.MAX_OBB_PER_BATCH < len(bb3d_sizes):
             start_obb_idx = batch_id * self.MAX_OBB_PER_BATCH
@@ -365,41 +408,185 @@ class NativeAtekSampleVisualizer:
             batch_id += 1
         self.PREV_MAX_BB3D_ID = cur_batch_max_id
 
-    def plot_semidense_point_cloud(self, mps_semidense_point_data) -> None:
-        if not mps_semidense_point_data:
-            logger.debug(
-                "ATEK semidense point cloud data is empty, please check if the data is loaded correctly"
-            )
-            return
+    def plot_obb3d_in_camera_view(
+        self,
+        obb3d_gt_dict: dict,
+        camera_data: Optional[MultiFrameCameraData],
+        mps_traj_data: Optional[MpsTrajData],
+    ) -> None:
+        """
+        Project and plot 3D bounding box in camera view.We only support single
+        timestamp in obb3d_gt_dict and camera_data, becasue input for cubercnn is single tiemstamp
+        we first get all matrix needed for projection, then we calcuate the corner's position in camera view
+        corner_camera = T_Device_Camera.inverse() @ (T_World_Device.inverse() @ corner)
+        then we project the corner to image view using camera projection model
+        """
+        assert (
+            obb3d_gt_dict is not None
+        ), "ATEK obb3d_gt_dict is empty in plot_obb3d_in_camera_view"
+        assert (
+            camera_data is not None
+        ), "ATEK camera_data is empty in plot_obb3d_in_camera_view"
+        assert (
+            mps_traj_data is not None
+        ), "ATEK mps_traj_data is empty in plot_obb3d_in_camera_view"
 
-        # loop over all frames
-        for i_frame in range(len(mps_semidense_point_data.capture_timestamps_ns)):
-            # Setting timestamp
-            pc_timestamp_ns = mps_semidense_point_data.capture_timestamps_ns[
-                i_frame
-            ].item()
-            rr.set_time_seconds("frame_time_s", pc_timestamp_ns * 1e-9)
+        # we first get all matrix needed for projection
+        object_dimensions = obb3d_gt_dict["object_dimensions"]
+        T_World_Object = obb3d_gt_dict["ts_world_object"]
+        T_Device_Camera = SE3.from_matrix3x4(camera_data.T_Device_Camera)
+        camera_label = camera_data.camera_label
 
-            points = mps_semidense_point_data.points_world[i_frame].tolist()
-            filtered_points = []
-            for p in points:
+        # we only support single timestamp for now
+        assert (
+            len(mps_traj_data.Ts_World_Device) == 1
+        ), "We only support single timestamp for now"
+        T_World_Device = SE3.from_matrix3x4(mps_traj_data.Ts_World_Device[0])
+        assert len(object_dimensions) == len(
+            T_World_Object
+        ), "The length of object_dimensions and T_World_Object should be the same"
+        camera_model_type_dict = {
+            "CameraModelType.FISHEYE624": CameraModelType.FISHEYE624,
+            "CameraModelType.KANNALA_BRANDT_K3": CameraModelType.KANNALA_BRANDT_K3,
+            "CameraModelType.LINEAR": CameraModelType.LINEAR,
+            "CameraModelType.SPHERICAL": CameraModelType.SPHERICAL,
+        }
+        camera_projection = CameraProjection(
+            camera_model_type_dict[camera_data.camera_model_name],
+            # we should use factory calibration instead of online calibration,
+            # which is more stable, meanwhile, some datasample may not have online calibration
+            camera_data.projection_params.numpy(),
+        )
+
+        corners_world = self._compute_bbox_corners_in_world(
+            object_dimensions, T_World_Object
+        )  # torch.Size([num_of_instance, 8, 3])
+        projected_boxes = []
+        for instance in corners_world:
+            projected_points = []
+            for corner in instance:
+                corner = np.array(corner)  # 3x1 array (3D point)
+                corner_camera = T_Device_Camera.inverse() @ (
+                    T_World_Device.inverse() @ corner
+                )
+
+                projected_point = camera_projection.project(corner_camera)
+                # filter out boexes outside of the image boundary
+                image_width, image_height = (
+                    camera_data.images.shape[2],
+                    camera_data.images.shape[3],
+                )
+                # Our image coor are on pixel center.
                 if (
-                    abs(p[0]) > self.MAX_LIMIT_TO_VIZ_IN_SEMIDENSE_POINTS
-                    or abs(p[1]) > self.MAX_LIMIT_TO_VIZ_IN_SEMIDENSE_POINTS
-                    or abs(p[2]) > self.MAX_LIMIT_TO_VIZ_IN_SEMIDENSE_POINTS
+                    projected_point[0] < -0.5
+                    or projected_point[0] > image_width - 0.5
+                    or projected_point[1] < -0.5
+                    or projected_point[1] > image_height - 0.5
                 ):
                     continue
-                filtered_points.append(p)
+                projected_points.append(projected_point)
 
+            # filter out boxes that have points outside of the image boundary
+            if len(projected_points) != 8:
+                continue
+            projected_boxes.append(projected_points)
+
+        timestamp_ns = camera_data.capture_timestamps_ns.item()
+        rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
+        idx = 0  # id for the box rerun is drawing
+        rr.log(f"{camera_label}_image/project3d", rr.Clear(recursive=True))
+        for projected_box in projected_boxes:
+            idx += 1
             rr.log(
-                "world/point_cloud",
-                rr.Points3D(
-                    filtered_points,
-                    radii=0.006,
+                f"{camera_label}_image/project3d/{idx}",
+                rr.LineStrips2D(
+                    self._box_points_to_lines(projected_box),
+                    colors=[
+                        [255, 0, 0],
+                        [0, 0, 255],
+                        [255, 0, 0],
+                        [0, 0, 255],
+                        [255, 0, 0],
+                        [0, 0, 255],
+                        [255, 0, 0],
+                        [0, 0, 255],
+                        [0, 255, 0],
+                        [0, 255, 0],
+                        [0, 255, 0],
+                        [0, 255, 0],
+                    ],
+                    radii=1,
                 ),
-                timeless=False,
             )
-        pass
+
+    def _box_points_to_lines(self, projected_box) -> list[list[float]]:
+        """
+        Convert a list of 8 points to a list of lines.
+        """
+        p1, p2, p3, p4, p5, p6, p7, p8 = (
+            projected_box[0],
+            projected_box[1],
+            projected_box[2],
+            projected_box[3],
+            projected_box[4],
+            projected_box[5],
+            projected_box[6],
+            projected_box[7],
+        )
+        return [
+            [p1, p2],
+            [p2, p3],
+            [p3, p4],
+            [p4, p1],
+            [p5, p6],
+            [p6, p7],
+            [p7, p8],
+            [p8, p5],
+            [p1, p5],
+            [p2, p6],
+            [p3, p7],
+            [p4, p8],
+        ]
+
+    def _compute_bbox_corners_in_world(
+        self, object_dimensions: torch.Tensor, T_World_Object: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Compute the 8 corners of the bounding box in world coordinates from object dimensions and T_world_object
+        """
+        num_obbs = object_dimensions.shape[0]
+
+        corners_in_world_list = []
+        # TODO: consider make this batched operation
+        for i in range(num_obbs):
+            # Extract object dimensions as a [8, 3] np array
+            half_extents = object_dimensions[i] / 2.0
+            hX = half_extents[0]
+            hY = half_extents[1]
+            hZ = half_extents[2]
+
+            corners_in_object = np.array(
+                [
+                    [-hX, -hY, -hZ],
+                    [hX, -hY, -hZ],
+                    [hX, hY, -hZ],
+                    [-hX, hY, -hZ],
+                    [-hX, -hY, hZ],
+                    [hX, -hY, hZ],
+                    [hX, hY, hZ],
+                    [-hX, hY, hZ],
+                ],
+                dtype=np.float32,
+            )  # (8, 3)
+
+            T_world_object = SE3.from_matrix3x4(T_World_Object[i].numpy())
+
+            corners_in_world = T_world_object @ (corners_in_object.T)
+            corners_in_world_list.append(
+                torch.tensor(corners_in_world.T, dtype=torch.float32)
+            )  # (8, 3)
+
+        return torch.stack(corners_in_world_list, dim=0)  # (num_obbs, 8, 3)
 
     def plot_efm_gt(self, gt_dict, plot_color, suffix) -> None:
         # EFM gt is a nested dict with "timestamp(as str) -> obb3_dict"
@@ -409,5 +596,5 @@ class NativeAtekSampleVisualizer:
     def save_viz(self, rrd_output_path: str) -> None:
         # user can use rerun [rrd_file_path] in terminal to load the visualization
         if rrd_output_path is not None:
-            logger.debug(f"Saving visualization to {rrd_output_path}")
+            logger.info(f"Saving visualization to {rrd_output_path}")
             rr.save(rrd_output_path)
