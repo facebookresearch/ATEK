@@ -290,6 +290,11 @@ def create_atek_data_sample_from_flatten_dict(flatten_dict):
         flatten_dict,
         "msdpd#",
     )
+    atek_data_sample.mps_online_calib_data = _init_data_class_from_flatten_dict_impl(
+        MpsOnlineCalibData,
+        flatten_dict,
+        "mocd#",
+    )
 
     # GT data is already a dict
     atek_data_sample.gt_data = flatten_dict["gt_data"]
