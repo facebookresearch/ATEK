@@ -303,3 +303,34 @@ def prec_recall_bb3(
         ret = ret + (None,)
 
     return ret
+
+
+def print_obb3_metrics_to_logger(metrics) -> None:
+    # Initialize an empty string to accumulate log messages
+    log_messages = "Object Detection Model Performance Summary\n"
+    log_messages += "=======Overall mAP Scores across all classes=======\n"
+    log_messages += f"mAP (Average across IoU thresholds, defined by MeanAveragePrecision3D class, default is [0.05, 0.10, 0.15, ..., 0.5]): {metrics['map_3D']:.4f}\n"
+    log_messages += f"mAP (IoU=0.25): {metrics['map_25_3D']:.4f}\n"
+    log_messages += f"mAP (IoU=0.50): {metrics['map_50_3D']:.4f}\n"
+    log_messages += (
+        "===mAP across IoU thresholds [0.05, 0.10, 0.15, ..., 0.5]) per Class===\n"
+    )
+
+    # Extract and sort the per-class mAP entries
+    class_map = {
+        key: value for key, value in metrics.items() if "map_per_class@" in key
+    }
+    sorted_class_map = sorted(
+        class_map.items(), key=lambda item: item[1], reverse=True
+    )  # Sort by value in ascending order
+
+    for key, value in sorted_class_map:
+        class_name = key.split("@")[1].replace("_3D", "").replace("_", " ").title()
+        log_messages += f"{class_name}: {value:.4f}\n"
+
+    log_messages += "=======Timestamp Information=======\n"
+    log_messages += f"Number of timestamps: {metrics['num_timestamps']}\n"
+    log_messages += f"Number of timestamps with missing ground truth: {metrics['num_timestamp_miss_gt']}\n"
+    log_messages += f"Number of timestamps with missing predictions: {metrics['num_timestamp_miss_pred']}\n"
+    # Log the entire summary in one log statement
+    logger.info(log_messages)

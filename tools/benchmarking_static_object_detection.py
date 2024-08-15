@@ -15,6 +15,9 @@ from atek.evaluation.static_object_detection.eval_obb3 import (
     evaluate_obb3_for_single_csv_pair,
     evaluate_obb3_over_a_dataset,
 )
+from atek.evaluation.static_object_detection.eval_obb3_metrics_utils import (
+    print_obb3_metrics_to_logger,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -83,10 +86,10 @@ def main() -> None:
             pred_csv=args.pred_csv,
             gt_csv=args.gt_csv,
             iou=args.iou_threshold,
-            log_last_frame_result=True,
+            log_last_frame_result=False,
             compute_per_class_metrics=True,
         )
-        logger.info(json.dumps(metrics, indent=2, sort_keys=True))
+        print_obb3_metrics_to_logger(metrics)
 
     # Write metrics results to file
     with open(args.output_file, "w") as f:
