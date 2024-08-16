@@ -197,12 +197,12 @@ class CubeRCNNModelAdaptor:
         ].unsqueeze(-1)
         instances.gt_boxes3D = torch.cat(
             [
-                filtered_projection_2d,
-                bb3d_depths[final_filter].unsqueeze(-1).clone().detach(),
+                filtered_projection_2d,  # [N, 2]
+                bb3d_depths[final_filter].unsqueeze(-1).clone().detach(),  # [N, 1]
                 # Omni3d has the inverted zyx dimensions
                 # https://github.com/facebookresearch/omni3d/blob/main/cubercnn/util/math_util.py#L144C1-L181C40
-                bb3d_dimensions[final_filter].flip(-1).clone().detach(),
-                trans_cam_object_filtered,
+                bb3d_dimensions[final_filter].flip(-1).clone().detach(),  # [N, 3]
+                trans_cam_object_filtered,  # [N, 3]
             ],
             axis=-1,
         )
@@ -216,33 +216,49 @@ class CubeRCNNModelAdaptor:
 
     @staticmethod
     def cubercnn_gt_to_atek_gt(
-        cubercnn_pred_dict: Dict,
+        cubercnn_dict: Dict,
         T_world_camera_np: np.array,
         camera_label: str = "camera-rgb",
         cubercnn_id_to_atek_id: Optional[Dict[int, int]] = None,
-    ):
+    ) -> Optional[Dict]:
         """
-        A helper data transform function to convert the model output prediction (dict) from CubeRCNN,
-        to ATEK GT dict format (defined in `obb_sample_builder`, which is effectively obb3_gt_processor + obb2_gt_processor)
-        CubeRCNN model is ran only on one camera stream, so user should specific which camera stream to use.
+        A helper data transform function to convert the model input (gt) dict, or output (prediction) dict from CubeRCNN format,
+        back to ATEK GT dict format (defined in `obb_sample_builder`, which is effectively obb3_gt_processor + obb2_gt_processor)
+        CubeRCNN model is ran only on one camera stream, so user should specific which camera stream to use. By default, it is "camera-rgb".
         """
-        cubercnn_pred_instances = cubercnn_pred_dict["instances"]
+        cubercnn_instances = cubercnn_dict["instances"]
+        # Skip if no instances
+        if len(cubercnn_instances) == 0:
+            return None
+
+        # Check if the cubercnn_dict is a prediction dict or gt dict. If it is a gt dict,
+        # "transfer" it to a prediction dict by filling in the pred fields. TODO: Consider another way to handle this!
+        pred_flag = hasattr(cubercnn_instances, "pred_classes")
+        if not pred_flag:
+            # fake pred fields using gt fields
+            num_instances = len(cubercnn_instances.gt_classes)
+            cubercnn_instances.pred_classes = cubercnn_instances.gt_classes
+            cubercnn_instances.pred_boxes = cubercnn_instances.gt_boxes
+            cubercnn_instances.pred_dimensions = cubercnn_instances.gt_boxes3D[:, 3:6]
+            cubercnn_instances.pred_center_cam = cubercnn_instances.gt_boxes3D[:, 6:9]
+            cubercnn_instances.pred_pose = cubercnn_instances.gt_poses
+            cubercnn_instances.scores = torch.ones(num_instances, dtype=torch.float32)
 
         # initialize ATEK GT dict
-        atek_pred_dict = {
+        atek_dict = {
             "obb3_gt": {},
             "obb2_gt": {},
-            "scores": cubercnn_pred_instances.scores.detach().cpu(),  # tensor, shape: [num_instances], float32
+            "scores": cubercnn_instances.scores.detach().cpu(),  # tensor, shape: [num_instances], float32
         }
-        atek_pred_dict["obb3_gt"][camera_label] = {
+        atek_dict["obb3_gt"][camera_label] = {
             "instance_ids": None,
             "category_names": None,
-            "category_ids": cubercnn_pred_instances.pred_classes.detach().cpu(),
+            "category_ids": cubercnn_instances.pred_classes.detach().cpu(),
         }
-        atek_pred_dict["obb2_gt"][camera_label] = {
+        atek_dict["obb2_gt"][camera_label] = {
             "instance_ids": None,
             "category_names": None,
-            "category_ids": cubercnn_pred_instances.pred_classes.detach().cpu(),
+            "category_ids": cubercnn_instances.pred_classes.detach().cpu(),
             "visibility_ratios": None,
         }
 
@@ -250,67 +266,69 @@ class CubeRCNNModelAdaptor:
         if cubercnn_id_to_atek_id is not None:
             atek_id_list = [
                 cubercnn_id_to_atek_id[id.item()]
-                for id in cubercnn_pred_instances.pred_classes
+                for id in cubercnn_instances.pred_classes
             ]
-            atek_pred_dict["obb3_gt"][camera_label]["category_ids"] = torch.tensor(
+            atek_dict["obb3_gt"][camera_label]["category_ids"] = torch.tensor(
                 atek_id_list, dtype=torch.int32
             )
-            atek_pred_dict["obb2_gt"][camera_label]["category_ids"] = torch.tensor(
+            atek_dict["obb2_gt"][camera_label]["category_ids"] = torch.tensor(
                 atek_id_list, dtype=torch.int32
             )
         else:
-            atek_pred_dict["obb3_gt"][camera_label][
+            atek_dict["obb3_gt"][camera_label][
                 "category_ids"
-            ] = cubercnn_pred_instances.pred_classes.detach().cpu()
-            atek_pred_dict["obb2_gt"][camera_label][
+            ] = cubercnn_instances.pred_classes.detach().cpu()
+            atek_dict["obb2_gt"][camera_label][
                 "category_ids"
-            ] = cubercnn_pred_instances.pred_classes.detach().cpu()
+            ] = cubercnn_instances.pred_classes.detach().cpu()
 
         # Fill category names
-        atek_pred_dict["obb3_gt"][camera_label]["category_names"] = [
+        atek_dict["obb3_gt"][camera_label]["category_names"] = [
             ATEK_CATEGORY_ID_TO_NAME[id.item()]
-            for id in atek_pred_dict["obb3_gt"][camera_label]["category_ids"]
+            for id in atek_dict["obb3_gt"][camera_label]["category_ids"]
         ]
-        atek_pred_dict["obb2_gt"][camera_label]["category_names"] = [
+        atek_dict["obb2_gt"][camera_label]["category_names"] = [
             ATEK_CATEGORY_ID_TO_NAME[id.item()]
-            for id in atek_pred_dict["obb2_gt"][camera_label]["category_ids"]
+            for id in atek_dict["obb2_gt"][camera_label]["category_ids"]
         ]
 
         # CubeRCNN dimensions are in reversed order (zyx) compared to ATEK (xyz)
         bbox3d_dim = (
-            cubercnn_pred_instances.pred_dimensions.detach().cpu()
+            cubercnn_instances.pred_dimensions.detach().cpu()
         )  # tensor, shape [num_instances, 3]
-        atek_pred_dict["obb3_gt"][camera_label]["object_dimensions"] = torch.flip(
+        atek_dict["obb3_gt"][camera_label]["object_dimensions"] = torch.flip(
             bbox3d_dim, dims=[1]
         )
 
         # Fill in pose
-        rotations = (
-            cubercnn_pred_instances.pred_pose.detach().cpu()
-        )  # [num_instances, 3, 3]
+        rotations = cubercnn_instances.pred_pose.detach().cpu()  # [num_instances, 3, 3]
         translations = (
-            cubercnn_pred_instances.pred_center_cam.detach().cpu().unsqueeze(2)
+            cubercnn_instances.pred_center_cam.detach().cpu().unsqueeze(2)
         )  # [num_instances, 3, 1]
-        # TODO: This is not correct, need to be fixed.
+
         Ts_cam_object = SE3.from_matrix3x4(
             torch.cat((rotations, translations), dim=2).numpy()
         )
         T_world_cam = SE3.from_matrix3x4(T_world_camera_np)
+
         Ts_world_object = T_world_cam @ Ts_cam_object
-        atek_pred_dict["obb3_gt"][camera_label]["ts_world_object"] = torch.tensor(
-            SE3.to_matrix3x4(Ts_world_object), dtype=torch.float32
+        Ts_world_object = SE3.to_matrix3x4(Ts_world_object)  # [num_instances, 3, 4]
+        if Ts_world_object.shape == (3, 4):
+            Ts_world_object = Ts_world_object.reshape(1, 3, 4)
+        atek_dict["obb3_gt"][camera_label]["ts_world_object"] = torch.tensor(
+            Ts_world_object, dtype=torch.float32
         )
 
         # Fill in 2d bbox ranges
         bbox2d = (
-            cubercnn_pred_instances.pred_boxes.tensor.detach().cpu()
+            cubercnn_instances.pred_boxes.tensor.detach().cpu()
         )  # tensor, shape [num_instances, 4]
         # x0,y0,x1,y1 -> x0,x1,y0,y1
-        atek_pred_dict["obb2_gt"][camera_label]["box_ranges"] = torch.stack(
+        atek_dict["obb2_gt"][camera_label]["box_ranges"] = torch.stack(
             (bbox2d[:, 0], bbox2d[:, 2], bbox2d[:, 1], bbox2d[:, 3]), dim=1
         )
 
-        return atek_pred_dict
+        return atek_dict
 
 
 def cubercnn_collation_fn(batch):

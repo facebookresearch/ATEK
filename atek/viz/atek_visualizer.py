@@ -19,7 +19,7 @@ from projectaria_tools.core.sophus import SE3
 from projectaria_tools.utils.rerun_helpers import ToTransform3D
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 class NativeAtekSampleVisualizer:
@@ -30,7 +30,6 @@ class NativeAtekSampleVisualizer:
     COLOR_GREEN = [30, 255, 30]
     COLOR_RED = [255, 30, 30]
     COLOR_BLUE = [30, 30, 255]
-    full_traj = []
     AXIS_LENGTH = 0.5
     MAX_OBB_PER_BATCH = 30  # max number of obb2d/obb3d per entity can render with label
 
@@ -58,6 +57,10 @@ class NativeAtekSampleVisualizer:
         """
         self.viz_prefix = viz_prefix
         self.cameras_to_plot = []
+
+        # Full trajectory of the device
+        self.full_traj = []
+
         # if user want to specify plot types, they can pass a config file, other wise, we will use the default plot types
         self.plot_types = [
             "camera_rgb",
