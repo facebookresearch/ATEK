@@ -96,3 +96,57 @@ def evaluate_single_mesh_pair(
     return metrics, accuracy, completeness
 
 
+def evaluate_mesh_over_a_dataset(
+    input_folder: str,
+    pred_mesh_filename: str,
+    gt_mesh_filename: str,
+    correct_mesh_gravity: bool = False,
+    threshold: float = 0.05,
+    sample_num: int = 10000,
+    step: int = 50000,
+    cut_height: Optional[float] = None,
+    rnd_seed: int = 42,
+):
+    logger.info(f"==> [eval_mesh_over_a_dataset] ")
+
+    # get all the pred and gt mesh_files
+    pred_mesh_paths, gt_mesh_paths = [], []
+    sequence_names = os.listdir(input_folder)
+    dirs = [os.path.join(input_folder, seq) for seq in sequence_names]
+    dirs = [d for d in dirs if os.path.isdir(d)]
+    dirs = sorted(dirs)
+    for d in dirs:
+        pred_mesh = os.path.join(d, pred_mesh_filename)
+        gt_mesh = os.path.join(d, gt_mesh_filename)
+        if os.path.exists(gt_mesh) and os.path.exists(pred_mesh):
+            pred_mesh_paths.append(pred_mesh)
+            gt_mesh_paths.append(gt_mesh)
+
+    # Process each mesh pair
+    overall_metrics = {
+        "Accuracy_mean_meters": 0,
+        "Completeness_mean_meters": 0,
+        "prec@0.05": 0,
+        "recal@0.05": 0,
+        "fscore@0.05": 0,
+    }
+    for single_pred_mesh, single_gt_mesh in zip(pred_mesh_paths, gt_mesh_paths):
+        logger.info(f" Evaluating over {single_pred_mesh} vs {single_gt_mesh}")
+        metrics, _, _ = evaluate_single_mesh_pair(
+            single_pred_mesh,
+            single_gt_mesh,
+            correct_mesh_gravity=correct_mesh_gravity,
+            threshold=threshold,
+            sample_num=sample_num,
+            step=step,
+            cut_height=cut_height,
+            rnd_seed=rnd_seed,
+        )
+        for metric_key, metric_val in metrics.items():
+            overall_metrics[metric_key] += metric_val
+
+    # Aggregate metrics over all mesh pairs
+    num_sequences = len(pred_mesh_paths)
+    for metric_key, metric_val in overall_metrics.items():
+        overall_metrics[metric_key] = metric_val / num_sequences
+    return overall_metrics
