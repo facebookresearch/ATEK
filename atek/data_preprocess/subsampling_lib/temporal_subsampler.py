@@ -21,7 +21,7 @@ class CameraTemporalSubsampler:
         """
         Args:
             vrs_file: the path to the vrs file
-            conf: contains `main_camera_label`, `sample_target_freq_hz`, and `time_domain`.
+            conf: contains `main_camera_label`, `sample_target_freq_hz`, `time_domain`, `skip_begin_seconds`, and `skip_end_seconds`
         """
 
         self.conf = conf
@@ -40,11 +40,23 @@ class CameraTemporalSubsampler:
         )
 
         # determine subfactor for the main camera, and uniformly subsample the main camera stream
-        freq_in_vrs = vrs_provider.get_nominal_rate_hz(main_stream_id)
+        freq_in_vrs: float = vrs_provider.get_nominal_rate_hz(main_stream_id)
         subsampling_factor: int = self._compute_subsampling_factor(
             int(freq_in_vrs), int(conf.main_camera_target_freq_hz)
         )
-        self.subsampled_timestamps = main_camera_timestamps[::subsampling_factor]
+
+        # If specified, skip first and last few seconds of recording
+        begin_timestamp_id = 0
+        if "skip_begin_seconds" in conf and conf.skip_begin_seconds > 0:
+            begin_timestamp_id = int(conf.skip_begin_seconds * freq_in_vrs)
+        end_timestamp_id = len(main_camera_timestamps)
+        if "skip_end_seconds" in conf and conf.skip_end_seconds > 0:
+            end_timestamp_id = len(main_camera_timestamps) - int(
+                conf.skip_end_seconds * freq_in_vrs
+            )
+        self.subsampled_timestamps = main_camera_timestamps[
+            begin_timestamp_id:end_timestamp_id:subsampling_factor
+        ]
 
         # determine the total number of samples, where each sample may contain multiple sub-sampled frames.
         total_num_cam_frames = len(self.subsampled_timestamps)
