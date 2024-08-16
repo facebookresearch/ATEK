@@ -11,6 +11,7 @@ import fsspec
 import numpy as np
 import pandas as pd
 import torch
+from atek.util.tensor_utils import compute_bbox_corners_in_world
 from projectaria_tools.core.sophus import SE3
 
 logger = logging.getLogger(__name__)
@@ -132,7 +133,7 @@ class AtekObb3CsvReader:
             Ts_world_object = self._extract_poses_from_data_frame(obb_group)
 
             # Compute a new field "bbox_corners in world", which is widely used in eval
-            bbox_corners_in_world = self._compute_bbox_corners_in_world(
+            bbox_corners_in_world = compute_bbox_corners_in_world(
                 object_dimensions, Ts_world_object
             )
 
@@ -181,54 +182,6 @@ class AtekObb3CsvReader:
 
         Ts_world_object = torch.stack(T_world_object_list, dim=0)
         return Ts_world_object
-
-        """
-        # Convert quaternion to rotation matrix
-        Ts_world_object = SE3.from_quat_and_translation(
-            quats_wxyz[:, 0].squeeze().tolist(), quats_wxyz[:, 1:], translations
-        )
-        return torch.tensor(Ts_world_object.to_matrix3x4(), dtype=torch.float32)
-        """
-
-    def _compute_bbox_corners_in_world(
-        self, object_dimensions: torch.Tensor, Ts_world_object: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        Compute the 8 corners of the bounding box in world coordinates from object dimensions and T_world_object
-        """
-        num_obbs = object_dimensions.shape[0]
-
-        corners_in_world_list = []
-        # TODO: consider make this batched operation
-        for i in range(num_obbs):
-            # Extract object dimensions as a [8, 3] np array
-            half_extents = object_dimensions[i] / 2.0
-            hX = half_extents[0]
-            hY = half_extents[1]
-            hZ = half_extents[2]
-
-            corners_in_object = np.array(
-                [
-                    [-hX, -hY, -hZ],
-                    [hX, -hY, -hZ],
-                    [hX, hY, -hZ],
-                    [-hX, hY, -hZ],
-                    [-hX, -hY, hZ],
-                    [hX, -hY, hZ],
-                    [hX, hY, hZ],
-                    [-hX, hY, hZ],
-                ],
-                dtype=np.float32,
-            )  # (8, 3)
-
-            T_world_object = SE3.from_matrix3x4(Ts_world_object[i].numpy())
-
-            corners_in_world = T_world_object @ (corners_in_object.T)
-            corners_in_world_list.append(
-                torch.tensor(corners_in_world.T, dtype=torch.float32)
-            )  # (8, 3)
-
-        return torch.stack(corners_in_world_list, dim=0)  # (num_obbs, 8, 3)
 
 
 class GroupAtekObb3CsvWriter:
