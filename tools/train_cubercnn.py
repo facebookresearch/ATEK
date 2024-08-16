@@ -1,5 +1,6 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
+import csv
 import json
 import logging
 import os
@@ -56,6 +57,8 @@ def add_configs(_C):
 
     _C.TRAIN_LIST = ""
     _C.TEST_LIST = ""
+    _C.TRAIN_WDS_DIR = ""
+    _C.TEST_WDS_DIR = ""
     _C.ID_MAP_JSON = ""
     _C.CATEGORY_JSON = ""
     _C.DATASETS.OBJECT_DETECTION_MODE = ""
@@ -63,11 +66,14 @@ def add_configs(_C):
     _C.SOLVER.MAX_EPOCH = 0
 
 
-def get_tars(tar_yaml, use_relative_path=False):
+def get_tars(tar_yaml, relative_path: str = "", use_relative_path: bool = False):
     with open(tar_yaml, "r") as f:
         tar_files = yaml.safe_load(f)["tars"]
     if use_relative_path:
-        data_dir = os.path.dirname(tar_yaml)
+        if relative_path == "":
+            data_dir = os.path.dirname(tar_yaml)
+        else:
+            data_dir = relative_path
         tar_files = [os.path.join(data_dir, x) for x in tar_files]
     return tar_files
 
@@ -84,7 +90,9 @@ def build_test_loader(cfg):
 
     print("World size:", world_size)
     print("Getting tars from rank:", rank)
-    test_tars = get_tars(cfg.TEST_LIST, use_relative_path=True)
+    test_tars = get_tars(
+        cfg.TEST_LIST, relative_path=cfg.TEST_WDS_DIR, use_relative_path=True
+    )
 
     test_tars_local = test_tars[rank::world_size]
     local_batch_size = max(cfg.SOLVER.IMS_PER_BATCH // world_size, 1)
@@ -118,7 +126,9 @@ def build_train_loader(cfg, shuffle_tars_flag: bool = False, shuffle_seed: int =
 
     print("World size:", world_size)
     print("Getting tars from rank:", rank)
-    train_tars = get_tars(cfg.TRAIN_LIST, use_relative_path=True)
+    train_tars = get_tars(
+        cfg.TRAIN_LIST, relative_path=cfg.TRAIN_WDS_DIR, use_relative_path=True
+    )
 
     train_tars_local = train_tars[rank::world_size]
     local_batch_size = max(cfg.SOLVER.IMS_PER_BATCH // world_size, 1)
@@ -260,7 +270,9 @@ def do_train(cfg, model, resume=False):
 
             # Generate data loader for current epoch, with random url list
             data_loader = build_train_loader(
-                cfg, shuffle_tars_flag=True, shuffle_seed=i_epoch
+                cfg,
+                shuffle_tars_flag=True,
+                shuffle_seed=i_epoch,
             )
 
             for orig_data in data_loader:
