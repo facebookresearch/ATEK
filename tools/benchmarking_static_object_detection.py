@@ -37,7 +37,7 @@ def main() -> None:
     parser.add_argument(
         "--input-folder",
         type=str,
-        help=f"The input folder that contains the gt and pred obbs csv files, with a single timestamp of -1."
+        help=f"The input folder that contains the gt and pred obbs csv files."
         f" If this is provided, the eval will be done at dataset-level",
         default=None,
     )
