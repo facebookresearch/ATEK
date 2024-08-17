@@ -94,6 +94,7 @@ class AtekWdsWriter:
         self.sink = None
         self.current_sample_idx = 0
         self.max_samples_per_shard = conf.max_samples_per_shard
+        self.samples_in_current_shard = 0
 
     def add_sample(self, data_sample: AtekDataSample):
         """
@@ -117,13 +118,22 @@ class AtekWdsWriter:
 
         self.sink.write(wds_dict)
         self.current_sample_idx += 1
+        self.samples_in_current_shard += 1
 
     def get_num_samples(self):
         return self.current_sample_idx
 
-    def close(self):
+    def close(self, remove_last_tar: bool = False):
         """
         Close the WDS writer and flush any remaining data to disk.
         """
         if self.sink is not None:
             self.sink.close()
+
+        if remove_last_tar:
+            tar_files = [f for f in os.listdir(self.output_path) if f.endswith(".tar")]
+            if len(tar_files) > 0:
+                last_tar_file = os.path.join(self.output_path, tar_files[-1])
+                os.remove(last_tar_file)
+            else:
+                print("No tar files found in the output path.")
