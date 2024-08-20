@@ -211,8 +211,9 @@ def prec_recall_bb3(
         prec_recall = (0.0, -1.0, None)
         return prec_recall
 
+    # Pred should be of shape [N, 1], target should be of shape [1, M]
     pred_sems = pred["category_ids"].unsqueeze(1)
-    target_sems = target["category_ids"].squeeze(-1).unsqueeze(0)
+    target_sems = target["category_ids"].unsqueeze(0)
 
     # 1. Match classes
     sem_id_match = pred_sems == target_sems
