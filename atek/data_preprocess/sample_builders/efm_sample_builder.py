@@ -1,6 +1,7 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
 import logging
+from dataclasses import fields
 from typing import Dict, List, Optional
 
 import torch
@@ -147,6 +148,34 @@ class EfmSampleBuilder:
 
         return processors
 
+    def _check_timestamps_are_consistent(
+        self, sample: AtekDataSample, timestamps_ns: List[int]
+    ) -> bool:
+        """
+        Check if all timestamps in the sample are consistent.
+        """
+        num_timestamps = len(timestamps_ns)
+        for data_field in fields(sample):
+            name = data_field.name
+            data_field_value = getattr(sample, name)
+            if hasattr(data_field_value, "capture_timestamps_ns"):
+                time = getattr(data_field_value, "capture_timestamps_ns")
+                if len(time) != num_timestamps:
+                    logger.warning(
+                        f"Timestamps in {name} does not have full count of {num_timestamps}!"
+                    )
+                    return False
+
+            # Check for gt
+            if name == "gt_data":
+                if len(data_field_value["efm_gt"]) != num_timestamps:
+                    logger.warning(
+                        f"Timestamps in {name} does not have full count of {num_timestamps}!"
+                    )
+                    return False
+
+        return True
+
     def get_sample_by_timestamps_ns(
         self, timestamps_ns: List[int]
     ) -> Optional[AtekDataSample]:
@@ -263,5 +292,12 @@ class EfmSampleBuilder:
                 raise ValueError(
                     f"Unimplemented processor class {processor.__name__} in SampleBuilder! "
                 )
+
+        # only return data of common timestamps among all sub-data types
+        if not self._check_timestamps_are_consistent(sample, timestamps_ns):
+            logger.warning(
+                "Timestamps in sample are not consistent, skipping this sample."
+            )
+            return None
 
         return sample
