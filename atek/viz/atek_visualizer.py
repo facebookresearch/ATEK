@@ -14,6 +14,8 @@ from atek.data_preprocess.atek_data_sample import (
     MpsTrajData,
     MultiFrameCameraData,
 )
+from atek.util.tensor_utils import compute_bbox_corners_in_world
+
 from projectaria_tools.core.calibration import CameraModelType, CameraProjection
 from projectaria_tools.core.sophus import SE3
 from projectaria_tools.utils.rerun_helpers import ToTransform3D
@@ -425,7 +427,7 @@ class NativeAtekSampleVisualizer:
             camera_data.projection_params.numpy(),
         )
 
-        corners_world = self._compute_bbox_corners_in_world(
+        corners_world = compute_bbox_corners_in_world(
             object_dimensions, T_World_Object
         )  # torch.Size([num_of_instance, 8, 3])
         projected_boxes = []
@@ -514,46 +516,6 @@ class NativeAtekSampleVisualizer:
             [p3, p7],
             [p4, p8],
         ]
-
-    def _compute_bbox_corners_in_world(
-        self, object_dimensions: torch.Tensor, T_World_Object: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        Compute the 8 corners of the bounding box in world coordinates from object dimensions and T_world_object
-        """
-        num_obbs = object_dimensions.shape[0]
-
-        corners_in_world_list = []
-        # TODO: consider make this batched operation
-        for i in range(num_obbs):
-            # Extract object dimensions as a [8, 3] np array
-            half_extents = object_dimensions[i] / 2.0
-            hX = half_extents[0]
-            hY = half_extents[1]
-            hZ = half_extents[2]
-
-            corners_in_object = np.array(
-                [
-                    [-hX, -hY, -hZ],
-                    [hX, -hY, -hZ],
-                    [hX, hY, -hZ],
-                    [-hX, hY, -hZ],
-                    [-hX, -hY, hZ],
-                    [hX, -hY, hZ],
-                    [hX, hY, hZ],
-                    [-hX, hY, hZ],
-                ],
-                dtype=np.float32,
-            )  # (8, 3)
-
-            T_world_object = SE3.from_matrix3x4(T_World_Object[i].numpy())
-
-            corners_in_world = T_world_object @ (corners_in_object.T)
-            corners_in_world_list.append(
-                torch.tensor(corners_in_world.T, dtype=torch.float32)
-            )  # (8, 3)
-
-        return torch.stack(corners_in_world_list, dim=0)  # (num_obbs, 8, 3)
 
     def plot_efm_gt(self, gt_dict, plot_color, suffix) -> None:
         # EFM gt is a nested dict with "timestamp(as str) -> obb3_dict"

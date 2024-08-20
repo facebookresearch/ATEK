@@ -2,7 +2,10 @@
 
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
+
 import torch
+from projectaria_tools.core.sophus import SE3
 
 
 def fill_or_trim_tensor(tensor: torch.Tensor, dim_size: int, dim: int, fill_value=None):
@@ -108,3 +111,44 @@ def unpack_list_of_tensors(
         tensor_list.append(stacked_tensor[current_index : current_index + length])
         current_index += length
     return tensor_list
+
+
+def compute_bbox_corners_in_world(
+    object_dimensions: torch.Tensor, Ts_world_object: torch.Tensor
+) -> torch.Tensor:
+    """
+    Compute the 8 corners of the bounding box in world coordinates from object dimensions and T_world_object
+    """
+    num_obbs = object_dimensions.shape[0]
+
+    corners_in_world_list = []
+    # TODO: consider make this batched operation
+    for i in range(num_obbs):
+        # Extract object dimensions as a [8, 3] np array
+        half_extents = object_dimensions[i] / 2.0
+        hX = half_extents[0]
+        hY = half_extents[1]
+        hZ = half_extents[2]
+
+        corners_in_object = np.array(
+            [
+                [-hX, -hY, -hZ],
+                [hX, -hY, -hZ],
+                [hX, hY, -hZ],
+                [-hX, hY, -hZ],
+                [-hX, -hY, hZ],
+                [hX, -hY, hZ],
+                [hX, hY, hZ],
+                [-hX, hY, hZ],
+            ],
+            dtype=np.float32,
+        )  # (8, 3)
+
+        T_world_object = SE3.from_matrix3x4(Ts_world_object[i].numpy())
+
+        corners_in_world = T_world_object @ (corners_in_object.T)
+        corners_in_world_list.append(
+            torch.tensor(corners_in_world.T, dtype=torch.float32)
+        )  # (8, 3)
+
+    return torch.stack(corners_in_world_list, dim=0)  # (num_obbs, 8, 3)
