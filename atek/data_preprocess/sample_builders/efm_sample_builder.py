@@ -133,7 +133,7 @@ class EfmSampleBuilder:
                 conf=conf.rgb_depth,
             )
 
-        if "efm_gt" in conf and conf.efm_gt.selected:
+        if len(gt_files) > 0 and "efm_gt" in conf and conf.efm_gt.selected:
             processors["efm_gt"] = EfmGtProcessor(
                 obb3_file_path=gt_files["obb3_file"],
                 obb3_traj_file_path=gt_files["obb3_traj_file"],
