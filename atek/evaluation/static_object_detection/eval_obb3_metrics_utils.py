@@ -94,7 +94,7 @@ def box3d_overlap_wrapper(
     vol = torch.zeros(boxes1.shape[0], boxes2.shape[0], device=boxes1.device)
     iou = torch.zeros_like(vol)
     if b1_good.shape[0] == 0 or b2_good.shape[0] == 0:
-        logger.info("no valid bbs returning 0 volumes and ious")
+        logger.debug("no valid bbs returning 0 volumes and ious")
     else:
         try:
             vol_good, iou_good = _box3d_overlap.apply(b1_good, b2_good)
