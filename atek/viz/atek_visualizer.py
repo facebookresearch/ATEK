@@ -15,6 +15,7 @@ from atek.data_preprocess.atek_data_sample import (
     MultiFrameCameraData,
 )
 from atek.util.tensor_utils import compute_bbox_corners_in_world
+from omegaconf.omegaconf import DictConfig
 
 from projectaria_tools.core.calibration import CameraModelType, CameraProjection
 from projectaria_tools.core.sophus import SE3
@@ -49,7 +50,11 @@ class NativeAtekSampleVisualizer:
     ]  # if the label is in the list, we will not render it
 
     def __init__(
-        self, viz_prefix: str = "", viz_web_port: int = 8888, viz_ws_port: int = 8899
+        self,
+        viz_prefix: str = "",
+        viz_web_port: int = 8888,
+        viz_ws_port: int = 8899,
+        conf: Optional[DictConfig] = None,
     ) -> None:
         """
         Args:
@@ -64,7 +69,7 @@ class NativeAtekSampleVisualizer:
         self.full_traj = []
 
         # if user want to specify plot types, they can pass a config file, other wise, we will use the default plot types
-        self.plot_types = [
+        default_plot_tpyes = [
             "camera_rgb",
             "camera_slam_left",
             "camera_slam_right",
@@ -74,6 +79,10 @@ class NativeAtekSampleVisualizer:
             "obb3_gt",
             "obb3_in_camera_view",
         ]
+        if conf and conf.plot_types:
+            self.plot_types = conf.plot_types
+        else:
+            self.plot_types = default_plot_tpyes
         rr.init(f"ATEK Sample Viewer - {self.viz_prefix}", spawn=True)
         rr.serve(web_port=viz_web_port, ws_port=viz_ws_port)
         return

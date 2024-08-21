@@ -4,7 +4,6 @@ import numpy as np
 
 import rerun as rr
 import torch
-
 from atek.data_loaders.cubercnn_model_adaptor import (
     load_atek_wds_dataset,
     load_atek_wds_dataset_as_cubercnn,
@@ -15,8 +14,13 @@ from atek.data_preprocess.atek_data_sample import (
 )
 from atek.viz.atek_visualizer import NativeAtekSampleVisualizer
 
+from omegaconf import OmegaConf
+
 from tqdm import tqdm
 
+viz_config_dir = (
+    "/Users/ariak/fbsource/fbcode/surreal/data_services/atek/atek/configs/obb_viz.yaml"
+)
 wds_dir = "/home/louy/Calibration_data_link/Atek/2024_08_05_DryRun/wds_output/adt_test"
 
 # Load Native ATEK WDS data
@@ -34,7 +38,8 @@ test_dataloader = torch.utils.data.DataLoader(
 )
 
 # Visualize the WDS dataset
-atek_viz = NativeAtekSampleVisualizer()
+conf = OmegaConf.load(viz_config_dir)
+atek_viz = NativeAtekSampleVisualizer(conf=conf)
 first_sample = None
 for unbatched_sample_dict in test_dataloader:
     # First convert it back to ATEK data sample
