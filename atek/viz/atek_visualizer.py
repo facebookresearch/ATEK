@@ -81,18 +81,15 @@ class NativeAtekSampleVisualizer:
         if conf and conf.plot_types:
             self.plot_types = conf.plot_types
         # if the label is in the list, we will not render it
-        self.obb_labels_to_ignore = obb_labels_to_ignore
-        self.obb_labels_to_include = obb_labels_to_include
         if conf and conf.obb_labels_to_ignore:
             self.obb_labels_to_ignore = conf.obb_labels_to_ignore
         else:
-            self.obb_labels_to_ignore = []
+            self.obb_labels_to_ignore = obb_labels_to_ignore
 
         if conf and conf.obb_labels_to_include:
             self.obb_labels_to_include = conf.obb_labels_to_include
         else:
-            self.obb_labels_to_include = []
-
+            self.obb_labels_to_include = obb_labels_to_include
         rr.init(f"ATEK Sample Viewer - {self.viz_prefix}", spawn=True)
         rr.serve(web_port=viz_web_port, ws_port=viz_ws_port)
         self.obb_labels_to_include = ["chair", "table", "sofa"]
@@ -130,6 +127,15 @@ class NativeAtekSampleVisualizer:
             and "semidense_points" in self.plot_types
         ):
             self.plot_semidense_point_cloud(atek_data_sample.mps_semidense_point_data)
+        if atek_data_sample.gt_data["obb3_gt"] and "obb3_gt" in self.plot_types:
+            self.plot_obb3_gt(
+                atek_data_sample.gt_data["obb3_gt"],
+                timestamp_ns=atek_data_sample.camera_rgb.capture_timestamps_ns[
+                    0
+                ].item(),
+                plot_color=plot_line_color,
+                suffix=suffix,
+            )
         if (
             atek_data_sample.gt_data["obb3_gt"]
             and atek_data_sample.camera_rgb
@@ -143,16 +149,29 @@ class NativeAtekSampleVisualizer:
             )
         elif (
             atek_data_sample.gt_data["obb2_gt"]
-            and atek_data_sample.gt_data["obb3_gt"]
+            and atek_data_sample.gt_data["obb2_gt"]
             and ("obb2_gt" in self.plot_types)
-            and ("obb3_gt" in self.plot_types)
         ):
-            self.plot_gtdata(
-                atek_data_sample.gt_data,
-                atek_data_sample.camera_rgb.capture_timestamps_ns[0].item(),
-                plot_line_color=plot_line_color,
+            self.plot_obb2_gt(
+                atek_data_sample.gt_data["obb2_gt"],
+                timestamp_ns=atek_data_sample.camera_rgb.capture_timestamps_ns[
+                    0
+                ].item(),
+                plot_color=plot_line_color,
                 suffix=suffix,
             )
+        # TODO: Yang will handle the EFM GT visualization logic in other diffs
+        # if atek_data_sample.gt_data["efm_gt"] and "efm_gt" in self.plot_types:
+        #     self.plot_efm_gt(
+        #         atek_data_sample.gt_data["efm_gt"],
+        #         plot_color=plot_line_color,
+        #         suffix=suffix,
+        #     )
+        # self.plot_efm_gt(
+        #         atek_gt_dict["efm_gt"],
+        #         plot_color=plot_line_color,
+        #         suffix=suffix,
+        #     )
 
     def plot_gtdata(self, atek_gt_dict, timestamp_ns, plot_line_color, suffix) -> None:
 

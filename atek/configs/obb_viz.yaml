@@ -8,3 +8,4 @@ plot_types:
   - "obb3_gt"
 obb_labels_to_ignore:
   - "other"
+obb_labels_to_include:
