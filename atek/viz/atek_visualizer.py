@@ -45,16 +45,15 @@ class NativeAtekSampleVisualizer:
     # TODO: add to config file
     MAX_LIMIT_TO_VIZ_IN_SEMIDENSE_POINTS = 10
 
-    OBB_LABELS_TO_IGNORE = [
-        "other"
-    ]  # if the label is in the list, we will not render it
-
     def __init__(
         self,
         viz_prefix: str = "",
         viz_web_port: int = 8888,
         viz_ws_port: int = 8899,
         conf: Optional[DictConfig] = None,
+        plot_types=[],
+        obb_labels_to_ignore=[],
+        obb_labels_to_include=[],
     ) -> None:
         """
         Args:
@@ -69,7 +68,7 @@ class NativeAtekSampleVisualizer:
         self.full_traj = []
 
         # if user want to specify plot types, they can pass a config file, other wise, we will use the default plot types
-        default_plot_tpyes = [
+        self.plot_types = [
             "camera_rgb",
             "camera_slam_left",
             "camera_slam_right",
@@ -81,10 +80,22 @@ class NativeAtekSampleVisualizer:
         ]
         if conf and conf.plot_types:
             self.plot_types = conf.plot_types
+        # if the label is in the list, we will not render it
+        self.obb_labels_to_ignore = obb_labels_to_ignore
+        self.obb_labels_to_include = obb_labels_to_include
+        if conf and conf.obb_labels_to_ignore:
+            self.obb_labels_to_ignore = conf.obb_labels_to_ignore
         else:
-            self.plot_types = default_plot_tpyes
+            self.obb_labels_to_ignore = []
+
+        if conf and conf.obb_labels_to_include:
+            self.obb_labels_to_include = conf.obb_labels_to_include
+        else:
+            self.obb_labels_to_include = []
+
         rr.init(f"ATEK Sample Viewer - {self.viz_prefix}", spawn=True)
         rr.serve(web_port=viz_web_port, ws_port=viz_ws_port)
+        self.obb_labels_to_include = ["chair", "table", "sofa"]
         return
 
     def plot_atek_sample(
@@ -273,12 +284,19 @@ class NativeAtekSampleVisualizer:
             for i_obj in range(num_obb2):
                 # re-arrange order because rerun def of bbox(XYXY) is different from ATEK(XXYY)
                 bb2d = per_cam_dict["box_ranges"][i_obj]
-                category_name = per_cam_dict["category_names"][i_obj]
-                if category_name in self.OBB_LABELS_TO_IGNORE:
+                category_name = per_cam_dict["category_names"][i_obj].split(":")[0]
+                if category_name in self.obb_labels_to_ignore:
+                    continue
+                if (
+                    len(self.obb_labels_to_include) > 0
+                    and category_name not in self.obb_labels_to_include
+                ):
                     continue
                 bb2ds_XYXY = np.array([bb2d[0], bb2d[2], bb2d[1], bb2d[3]])
                 bb2ds_all.append(bb2ds_XYXY)
-                category_names.append(category_name)
+                category_names.append(
+                    per_cam_dict["category_names"][i_obj]
+                )  # we append this instead of category_name to keep confidence score
 
             # the max number one instance can be plotted is 30 for bb2d in rerun. So we need to split the whole bb2d into several parts
             # visualize the bb3d, the max number one instance can be plotted is 30 for bb3d. So we need to split the whole bb3d into several parts
@@ -333,8 +351,16 @@ class NativeAtekSampleVisualizer:
         for camera_label, per_cam_dict in gt_dict.items():
             num_obb3 = len(per_cam_dict["category_ids"])
             for i_obj in range(num_obb3):
-                if per_cam_dict["category_names"][i_obj] in self.OBB_LABELS_TO_IGNORE:
+                category_name = per_cam_dict["category_names"][i_obj].split(":")[0]
+                if category_name in self.obb_labels_to_ignore:
                     continue
+                if (
+                    len(self.obb_labels_to_include)
+                    and category_name not in self.obb_labels_to_include
+                ):
+                    continue
+                print(f"category_name: {category_name}")
+                print("obb_labels_to_include:", self.obb_labels_to_include)
                 # Assign obb3 pose info
                 T_world_obj = SE3.from_matrix3x4(
                     per_cam_dict["ts_world_object"][i_obj].numpy()

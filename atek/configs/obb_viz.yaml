@@ -6,3 +6,5 @@ plot_types:
   - "semidense_points"
   - "obb2_gt"
   - "obb3_gt"
+obb_labels_to_ignore:
+  - "other"

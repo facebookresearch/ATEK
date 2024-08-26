@@ -175,7 +175,7 @@ def run_inference(args):
                 timestamp_ns = gt_sample.camera_rgb.capture_timestamps_ns.item()
                 # GT boxes from input data (because input data is filtered)
                 model_input_gt = CubeRCNNModelAdaptor.cubercnn_gt_to_atek_gt(
-                    cubercnn_pred_dict=single_cubercnn_input,
+                    cubercnn_dict=single_cubercnn_input,
                     T_world_camera_np=single_cubercnn_input["T_world_camera"],
                     camera_label="camera-rgb",
                 )
@@ -183,7 +183,7 @@ def run_inference(args):
                     continue
 
                 prediction_in_atek_format = CubeRCNNModelAdaptor.cubercnn_gt_to_atek_gt(
-                    cubercnn_pred_dict=single_cubercnn_output,
+                    cubercnn_dict=single_cubercnn_output,
                     T_world_camera_np=single_cubercnn_input["T_world_camera"],
                     camera_label="camera-rgb",
                 )
@@ -235,14 +235,8 @@ def run_inference(args):
                     atek_viz.plot_gtdata(
                         atek_gt_dict=model_input_gt,
                         timestamp_ns=gt_sample.camera_rgb.capture_timestamps_ns.item(),
-                        plot_line_color=NativeAtekSampleVisualizer.COLOR_BLUE,
+                        plot_line_color=NativeAtekSampleVisualizer.COLOR_GREEN,
                         suffix="_model_input",
-                        plot_types=[
-                            "camera_rgb",
-                            "mps_traj",
-                            "obb2_gt",
-                            "obb3_gt",
-                        ],
                     )
 
                     # put pred_samples' category name and confidence together in obb2_gt and obb3_gt
@@ -265,7 +259,7 @@ def run_inference(args):
                     ):
                         prediction_in_atek_format["obb3_gt"]["camera-rgb"][
                             "category_names"
-                        ][i] += f": {prediction_in_atek_format['scores'][i]:.2f}"
+                        ][i] += f":{prediction_in_atek_format['scores'][i]:.2f}"
 
                     # Visualize the prediction results, only visualize the GT part
                     atek_viz.plot_gtdata(
