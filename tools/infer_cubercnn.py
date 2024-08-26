@@ -134,7 +134,14 @@ def run_inference(args):
 
     # set up visualization
     if args.viz_flag:
-        atek_viz = NativeAtekSampleVisualizer()
+        atek_viz = NativeAtekSampleVisualizer(
+            plot_types=[
+                "camera_rgb",
+                "mps_traj",
+                "obb2_gt",
+                "obb3_gt",
+            ]
+        )
 
     # set up prediction writer
     pred_writer = GroupAtekObb3CsvWriter(
