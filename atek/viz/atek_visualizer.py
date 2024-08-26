@@ -359,8 +359,6 @@ class NativeAtekSampleVisualizer:
                     and category_name not in self.obb_labels_to_include
                 ):
                     continue
-                print(f"category_name: {category_name}")
-                print("obb_labels_to_include:", self.obb_labels_to_include)
                 # Assign obb3 pose info
                 T_world_obj = SE3.from_matrix3x4(
                     per_cam_dict["ts_world_object"][i_obj].numpy()

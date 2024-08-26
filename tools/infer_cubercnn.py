@@ -49,6 +49,18 @@ logging.basicConfig(
 logger = logging.getLogger("infer_cubercnn")
 
 
+# create visualization config
+def create_default_viz_conf():
+    conf = OmegaConf.create(
+        {
+            "plot_types": ["camera_rgb", "mps_traj", "obb2_gt", "obb3_gt"],
+            "obb_labels_to_include": ["table", "chair", "sofa"],
+            "obb_labels_to_ignore": [],
+        }
+    )
+    return conf
+
+
 def create_inference_model(config_file, ckpt_dir, use_cpu_only=False):
     """
     Create the model for inference pipeline, with the model config.
@@ -134,14 +146,10 @@ def run_inference(args):
 
     # set up visualization
     if args.viz_flag:
-        atek_viz = NativeAtekSampleVisualizer(
-            plot_types=[
-                "camera_rgb",
-                "mps_traj",
-                "obb2_gt",
-                "obb3_gt",
-            ]
-        )
+        viz_conf = create_default_viz_conf()
+        atek_viz = NativeAtekSampleVisualizer(conf=viz_conf)
+        if args.save_viz_path:
+            atek_viz.save_viz(args.save_viz_path)
 
     # set up prediction writer
     pred_writer = GroupAtekObb3CsvWriter(
@@ -343,6 +351,11 @@ def get_args():
         type=int,
         default=0,
         help="the rank of this machine (unique per machine)",
+    )
+    parser.add_argument(
+        "--save-viz-path",
+        default=None,
+        help="Path to save the visualization output.",
     )
 
     return parser.parse_args()
