@@ -74,9 +74,11 @@ class NativeAtekSampleVisualizer:
             "camera_slam_right",
             "mps_traj",
             "semidense_points",
+            "camera_rgb_depth",
             "obb2_gt",
             "obb3_gt",
             "obb3_in_camera_view",
+            "efm_gt",
         ]
         if conf and conf.plot_types:
             self.plot_types = conf.plot_types
@@ -120,6 +122,8 @@ class NativeAtekSampleVisualizer:
             and "camera_slam_right" in self.plot_types
         ):
             self.plot_multi_frame_camera_data(atek_data_sample.camera_slam_right)
+        if atek_data_sample.camera_rgb_depth and "camera_rgb_depth" in self.plot_types:
+            self.plot_multi_frame_camera_data(atek_data_sample.camera_rgb_depth)
         if atek_data_sample.mps_traj_data and "mps_traj" in self.plot_types:
             self.plot_mps_traj_data(atek_data_sample.mps_traj_data)
         if (
@@ -137,7 +141,7 @@ class NativeAtekSampleVisualizer:
                 suffix=suffix,
             )
         if (
-            atek_data_sample.gt_data["obb3_gt"]
+            "obb3_gt" in atek_data_sample.gt_data
             and atek_data_sample.camera_rgb
             and ("camera_rgb" in self.plot_types)
             and ("obb3_in_camera_view" in self.plot_types)
@@ -148,8 +152,8 @@ class NativeAtekSampleVisualizer:
                 mps_traj_data=atek_data_sample.mps_traj_data,
             )
         elif (
-            atek_data_sample.gt_data["obb2_gt"]
-            and atek_data_sample.gt_data["obb2_gt"]
+            "obb2_gt" in atek_data_sample.gt_data
+            and "obb2_gt" in atek_data_sample.gt_data
             and ("obb2_gt" in self.plot_types)
         ):
             self.plot_obb2_gt(
@@ -160,21 +164,15 @@ class NativeAtekSampleVisualizer:
                 plot_color=plot_line_color,
                 suffix=suffix,
             )
-        # TODO: Yang will handle the EFM GT visualization logic in other diffs
-        # if atek_data_sample.gt_data["efm_gt"] and "efm_gt" in self.plot_types:
-        #     self.plot_efm_gt(
-        #         atek_data_sample.gt_data["efm_gt"],
-        #         plot_color=plot_line_color,
-        #         suffix=suffix,
-        #     )
-        # self.plot_efm_gt(
-        #         atek_gt_dict["efm_gt"],
-        #         plot_color=plot_line_color,
-        #         suffix=suffix,
-        #     )
+        elif "efm_gt" in atek_data_sample.gt_data and ("efm_gt" in self.plot_types):
+            self.plot_gtdata(
+                atek_data_sample.gt_data,
+                atek_data_sample.camera_rgb.capture_timestamps_ns[0].item(),
+                plot_line_color=plot_line_color,
+                suffix=suffix,
+            )
 
     def plot_gtdata(self, atek_gt_dict, timestamp_ns, plot_line_color, suffix) -> None:
-
         if "obb2_gt" in atek_gt_dict:
             self.plot_obb2_gt(
                 atek_gt_dict["obb2_gt"],
@@ -214,10 +212,16 @@ class NativeAtekSampleVisualizer:
             # Plot image
             # HWC -> CWH
             image = camera_data.images[i_frame].detach().cpu().permute(1, 2, 0).numpy()
-            rr.log(
-                f"{camera_label}_image",
-                rr.Image(image),
-            )
+            if "depth" in camera_label:
+                rr.log(
+                    f"{camera_label}_image",
+                    rr.DepthImage(image),
+                )
+            else:
+                rr.log(
+                    f"{camera_label}_image",
+                    rr.Image(image),
+                )
 
         # Plot camera pose, we can keep this line, but now RGB camera pose should be very close to the device pose
         # to avoid multiple poses drawn on world/device, we will not plot poses for different cameras,
