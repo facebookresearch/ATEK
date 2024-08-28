@@ -136,7 +136,11 @@ class AtekWdsWriter:
 
         if remove_last_tar:
             tar_files = [f for f in os.listdir(self.output_path) if f.endswith(".tar")]
-            if len(tar_files) > 0:
+            # Remove the last tar file if it has less than max_samples_per_shard samples
+            if (
+                len(tar_files) > 0
+                and self.current_sample_idx % self.max_samples_per_shard != 0
+            ):
                 last_tar_file = os.path.join(self.output_path, tar_files[-1])
                 os.remove(last_tar_file)
             else:
