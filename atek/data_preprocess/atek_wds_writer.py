@@ -41,6 +41,10 @@ def convert_atek_sample_dict_to_wds_dict(
                 wds_dict[f"gt_data#{tensor_key}.pth"] = tensor_value
             continue
 
+        # Depth images should be directly saved as tensors
+        elif atek_key.endswith("depth+images"):
+            wds_dict[f"{atek_key}.pth"] = atek_value
+
         # Images needs to be separated into per-frame jpeg files
         elif atek_key.endswith("images"):
             assert isinstance(atek_value, torch.Tensor)

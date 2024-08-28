@@ -24,16 +24,17 @@ class DepthImageProcessor:
         self,
         depth_vrs: str,
         image_transform: Callable,
+        camera_label: str,
         conf: DictConfig,
     ):
         # Parse in conf
         self.conf = conf
         self.image_transform = image_transform
+        self.camera_label = camera_label
 
         # setting up vrs data provider
         self.depth_vrs = depth_vrs
-        self.stream_id = StreamId(conf.sensor_stream_id)
-        self.data_provider = self.setup_vrs_data_provider()
+        self.data_provider, self.stream_id = self.setup_vrs_data_provider()
 
         # Cache capture timestamps
         self.time_domain = getattr(TimeDomain, conf.time_domain)
@@ -48,11 +49,35 @@ class DepthImageProcessor:
         """
         provider = data_provider.create_vrs_data_provider(self.depth_vrs)
         assert provider is not None, f"Cannot open {self.depth_vrs}"
-        assert (
-            self.stream_id in provider.get_all_streams()
-        ), f"Specified stream id {self.stream_id} is not in vrs {self.depth_vrs}'s stream id list: {provider.get_all_streams()}"
 
-        return provider
+        # Find depth stream in provider
+        result_stream_id = None
+        # If conf specified `depth_stream_id`, use it directly
+        if "depth_stream_id" in self.conf:
+            result_stream_id = StreamId(self.conf.depth_stream_id)
+            assert (
+                result_stream_id in provider.get_all_streams()
+            ), f"Specified stream id {result_stream_id} is not in vrs {self.depth_vrs}'s stream id list: {provider.get_all_streams()}"
+        # If conf specified `depth_stream_type_id`, check if any of the existing streams match the type id, as $TYPE_ID-*
+        elif "depth_stream_type_id" in self.conf:
+            for stream_id in provider.get_all_streams():
+                stream_numeric_name = str(stream_id)
+                type_numeric_name = stream_numeric_name.split("-")[
+                    0
+                ]  # obtain the "214" out of "214-1"
+                if type_numeric_name == self.conf.depth_stream_type_id:
+                    result_stream_id = stream_id
+
+                    break
+            # check valid stream id is found
+            assert (
+                result_stream_id is not None
+            ), f"Specified stream type id {self.conf.depth_stream_type_id} is not in vrs {self.depth_vrs}'s stream id list: {provider.get_all_streams()}"
+        # If none of the above
+        else:
+            raise ValueError("No depth stream id or type id is specified in config")
+
+        return provider, result_stream_id
 
     def get_depth_data_by_timestamps_ns(
         self, timestamps_ns: List[int]
@@ -85,7 +110,12 @@ class DepthImageProcessor:
             # Handle uint16 not supported by torch
             np_image = image_data_and_record[0].to_numpy_array()
             if np_image.dtype == np.uint16:
-                np_image = np_image.astype(np.uint32)
+                np_image = np_image.astype(np.float32)
+
+            # Convert depth units from mm to meters, if specified in config
+            if "unit_scaling" in self.conf:
+                np_image = np_image * self.conf.unit_scaling
+
             image = torch.from_numpy(np_image)
             if len(image.shape) == 2:
                 # single channel image: [h,w] -> [c, h, w]
@@ -114,4 +144,7 @@ class DepthImageProcessor:
             ),
             frame_ids=torch.tensor(frame_id_list, dtype=torch.int64),
         )
+
+        # Fill in camera calibration information
+        result.camera_label = self.camera_label
         return result

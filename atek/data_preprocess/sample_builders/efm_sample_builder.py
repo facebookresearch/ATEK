@@ -114,7 +114,7 @@ class EfmSampleBuilder:
             )
 
         # Depth processor
-        if "rgb-depth" in conf and conf.rgb_depth.selected:
+        if "rgb_depth" in conf and conf.rgb_depth.selected:
             assert (
                 self.depth_vrs_file != ""
             ), "need to specify depth vrs file to use depth processor"
@@ -123,13 +123,14 @@ class EfmSampleBuilder:
             assert (
                 "camera-rgb" in processors
             ), "rgb_depth depends on camera_rgb processor to obtain camera calibration"
-            depth_image_transform_list = processors[
-                "camera-rgb"
-            ].get_image_transform_list(rescale_interpolation=InterpolationMode.NEAREST)
+            depth_image_transform = processors["camera-rgb"].get_image_transform(
+                rescale_interpolation=InterpolationMode.NEAREST
+            )
 
             processors["rgb_depth"] = DepthImageProcessor(
                 depth_vrs=self.depth_vrs_file,
-                image_transform_list=depth_image_transform_list,
+                image_transform=depth_image_transform,
+                camera_label="camera-rgb-depth",
                 conf=conf.rgb_depth,
             )
 

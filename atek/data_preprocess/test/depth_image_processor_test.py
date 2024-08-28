@@ -57,10 +57,13 @@ class DepthImageProcessorTest(unittest.TestCase):
 
         # Construct DepthImageProcessor
         depth_conf = conf.processors.rgb_depth
-        depth_conf = OmegaConf.merge(depth_conf, {"sensor_stream_id": "345-1"})
+        # replace type id with exact stream id, in order to work with ADT data.
+        depth_conf.pop("depth_stream_type_id")
+        depth_conf = OmegaConf.merge(depth_conf, {"depth_stream_id": "345-1"})
         rgb_depth_processor = DepthImageProcessor(
             depth_vrs=os.path.join(TEST_FOLDER, "test_ADT_depth_rgb_only.vrs"),
             image_transform=depth_image_transform,
+            camera_label="camera-rgb-depth",
             conf=depth_conf,
         )
 
