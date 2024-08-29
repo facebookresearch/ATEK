@@ -25,7 +25,7 @@ def process_wds_sample(sample: Dict):
     sample_as_dict = {}
     to_be_stacked_images = {}
     for k, v in sample.items():
-        if k in ["__key__", "__url__"]:
+        if k in ["__key__", "__local_path__", "__url__"]:
             sample_as_dict[k] = v
         else:
             key_wo_extension, extension_name = k.rsplit(".", 1)
