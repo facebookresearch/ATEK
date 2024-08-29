@@ -2,10 +2,36 @@ import argparse
 import json
 import logging
 import os
+import random
 from typing import Dict, List
+
+import yaml
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def save_yaml(data: Dict, file_path: str):
+    import yaml
+
+    with open(file_path, "w") as file:
+        yaml.dump(data, file, default_flow_style=False)
+
+
+def split_data(tar_urls: dict, ratio: float, seed: int):
+    """
+    Given a dictionary of tar URLs, split it into train and validation sets based on the specified ratio and random seed.
+    """
+    random.seed(seed)
+    sequences = list(tar_urls.keys())
+    sequences.sort()
+    random.shuffle(sequences)
+    split_point = int(len(sequences) * ratio)
+    train_sequences = sequences[:split_point]
+    valid_sequences = sequences[split_point:]
+    train_data = {sequence: tar_urls[sequence] for sequence in train_sequences}
+    valid_data = {sequence: tar_urls[sequence] for sequence in valid_sequences}
+    return train_data, valid_data
 
 
 def extract_tar_urls(json_data, config_name) -> Dict[str, List[str]]:
@@ -22,6 +48,8 @@ def extract_tar_urls(json_data, config_name) -> Dict[str, List[str]]:
 def main(
     config_name: str,
     input_json_path: str,
+    train_val_split_ratio: float,
+    random_seed: int,
     output_folder_path: str,
 ):
     assert os.path.exists(
@@ -42,6 +70,15 @@ def get_args():
         "--input-json-path", type=str, help="Path to the input JSON file"
     )
     parser.add_argument(
+        "--train-val-split-ratio",
+        type=float,
+        default=0.9,
+        help="Train-validation split ratio",
+    )
+    parser.add_argument(
+        "--random-seed", type=int, default=42, help="Random seed for shuffling data"
+    )
+    parser.add_argument(
         "--output-folder-path", type=str, help="Output folder path for YAML files"
     )
 
@@ -54,5 +91,7 @@ if __name__ == "__main__":
     main(
         args.config_name,
         args.input_json_path,
+        args.train_val_split_ratio,
+        args.random_seed,
         args.output_folder_path,
     )
