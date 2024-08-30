@@ -40,7 +40,7 @@ processors:
     # depth_stream_id: "345-1" # 345-1 for ADT data
     tolerance_ns: 10_000_000
     time_domain: "DEVICE_TIME"
-    convert_zdepth_to_dist: false
+    convert_zdepth_to_distance: false
     unit_scaling: 0.001 # for ADT and ASEv1 data, convert from mm to meters
   efm_gt:
     selected: true

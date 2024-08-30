@@ -126,11 +126,13 @@ class EfmSampleBuilder:
             depth_image_transform = processors["camera-rgb"].get_image_transform(
                 rescale_interpolation=InterpolationMode.NEAREST
             )
+            depth_camera_calib = processors["camera-rgb"].get_final_camera_calib()
 
             processors["rgb_depth"] = DepthImageProcessor(
                 depth_vrs=self.depth_vrs_file,
                 image_transform=depth_image_transform,
-                camera_label="camera-rgb-depth",
+                depth_camera_calib=depth_camera_calib,
+                depth_camera_label="camera-rgb-depth",
                 conf=conf.rgb_depth,
             )
 

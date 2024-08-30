@@ -11,6 +11,7 @@ from atek.data_preprocess.atek_data_sample import MultiFrameCameraData
 
 from omegaconf.omegaconf import DictConfig
 from projectaria_tools.core import calibration, data_provider
+from projectaria_tools.core.calibration import CameraCalibration
 from projectaria_tools.core.sensor_data import TimeDomain, TimeQueryOptions  # @manual
 from projectaria_tools.core.stream_id import StreamId
 from torchvision.transforms import InterpolationMode, v2
@@ -24,13 +25,20 @@ class DepthImageProcessor:
         self,
         depth_vrs: str,
         image_transform: Callable,
-        camera_label: str,
+        depth_camera_calib: CameraCalibration,
+        depth_camera_label: str,
         conf: DictConfig,
     ):
         # Parse in conf
         self.conf = conf
         self.image_transform = image_transform
-        self.camera_label = camera_label
+        self.depth_camera_label = depth_camera_label
+        self.depth_camera_calib = depth_camera_calib
+
+        self.convert_zdepth_to_distance_flag = (
+            "convert_zdepth_to_distance" in self.conf
+            and self.conf.convert_zdepth_to_distance is True
+        )
 
         # setting up vrs data provider
         self.depth_vrs = depth_vrs
@@ -41,6 +49,13 @@ class DepthImageProcessor:
         self.camera_timestamps = self.data_provider.get_timestamps_ns(
             self.stream_id, self.time_domain
         )
+
+        # Cache the unprojected rays from every pixel location in the image
+        if self.convert_zdepth_to_distance_flag:
+            self.cached_unprojected_ray_norm = self._unproject_and_cache_pixels_to_rays(
+                H=self.depth_camera_calib.get_image_size()[1],
+                W=self.depth_camera_calib.get_image_size()[0],
+            )
 
     def setup_vrs_data_provider(self):
         """
@@ -80,6 +95,57 @@ class DepthImageProcessor:
             raise ValueError("No depth stream id or type id is specified in config")
 
         return provider, result_stream_id
+
+    def _unproject_and_cache_pixels_to_rays(self, H: int, W: int):
+        """
+        A helper function to unproject all pixels in an image to rays, store the norm, and cache the results so that we don't need to recompute for every frame.
+        """
+        logger.info("Caching unprojected rays from all pixels in the image")
+        unprojected_ray_image = torch.zeros((H, W), dtype=torch.float32)
+
+        # height: [0 to H-1], width: [0 to W-1]
+        height_coor, width_coor = torch.meshgrid(torch.arange(H), torch.arange(W))
+        # all_pixel_coords: [H*W, 2]
+        all_pixel_coords = torch.stack(
+            [height_coor.reshape(-1), width_coor.reshape(-1)], dim=-1
+        )
+        for i in range(all_pixel_coords.shape[0]):
+            single_pixel = all_pixel_coords[i].numpy()  # (h, w)
+            unprojected_ray = torch.from_numpy(
+                self.depth_camera_calib.unproject_no_checks(single_pixel)
+            )
+            unprojected_ray_image[single_pixel[0], single_pixel[1]] = torch.linalg.norm(
+                unprojected_ray
+            )
+
+        logger.info("Completed computing unprojected rays")
+        return unprojected_ray_image
+
+    def _convert_from_zdepth_to_distance(
+        self, z_depth_images: torch.Tensor
+    ):  # [num_frames, 1, H, W]
+        """
+        Helper function to convert z-depth to distance (to camera). units are kept. (I think default is mm)
+        """
+        num_frames, C, H, W = (
+            z_depth_images.shape[0],
+            z_depth_images.shape[1],
+            z_depth_images.shape[2],
+            z_depth_images.shape[3],
+        )
+        assert (
+            C == 1
+        ), f"Only support single channel depth image, got {C} channels instead"
+        distance_images = torch.zeros_like(z_depth_images, dtype=torch.float32)
+
+        # Loop over all frames
+        for i_frame in range(num_frames):
+            # Channel is 1, no need to loop. Just loop over all pixel coordinates, and use cached unprojected rays results
+            distance_images[i_frame, 0, :, :] = (
+                z_depth_images[i_frame, 0, :, :] * self.cached_unprojected_ray_norm
+            )
+
+        return distance_images
 
     def get_depth_data_by_timestamps_ns(
         self, timestamps_ns: List[int]
@@ -138,6 +204,12 @@ class DepthImageProcessor:
         batched_depth_tensor = torch.stack(image_list, dim=0)
         batched_depth_tensor = self.image_transform(batched_depth_tensor)
 
+        # Z-depth to distance conversion
+        if self.convert_zdepth_to_distance_flag:
+            batched_depth_tensor = self._convert_from_zdepth_to_distance(
+                batched_depth_tensor
+            )
+
         # properly clean output to desired dtype and shapes
         result = MultiFrameCameraData(
             images=batched_depth_tensor,
@@ -148,5 +220,5 @@ class DepthImageProcessor:
         )
 
         # Fill in camera calibration information
-        result.camera_label = self.camera_label
+        result.camera_label = self.depth_camera_label
         return result

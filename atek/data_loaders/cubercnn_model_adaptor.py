@@ -36,6 +36,7 @@ class CubeRCNNModelAdaptor:
             "mfcd#camera-rgb+frame_ids": "frame_id",
             "mfcd#camera-rgb+capture_timestamps_ns": "timestamp_ns",
             "mtd#ts_world_device": "ts_world_device",
+            "sequence_name": "sequence_name",
             "gt_data": "gt_data",
         }
         return dict_key_mapping
