@@ -48,7 +48,9 @@ class DepthImageProcessor:
         Returns: vrs_data_provider, stream_id
         """
         provider = data_provider.create_vrs_data_provider(self.depth_vrs)
-        assert provider is not None, f"Cannot open {self.depth_vrs}"
+        assert (
+            provider is not None
+        ), f"Cannot open depth vrs under path [{self.depth_vrs}]"
 
         # Find depth stream in provider
         result_stream_id = None

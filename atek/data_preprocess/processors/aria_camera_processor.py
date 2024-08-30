@@ -85,9 +85,13 @@ class AriaCameraProcessor:
         Returns: vrs_data_provider, stream_id
         """
         provider = data_provider.create_vrs_data_provider(self.video_vrs)
-        assert provider is not None, f"Cannot open {self.video_vrs}"
+        assert (
+            provider is not None
+        ), f"Cannot open video.vrs file under path [{self.video_vrs}]"
         stream_id = provider.get_stream_id_from_label(self.camera_label)
-        assert stream_id is not None, f"Cannot find stream id for {self.camera_label}"
+        assert (
+            stream_id is not None
+        ), f"Cannot find stream id for camera [{self.camera_label}]"
 
         return provider, stream_id
 
