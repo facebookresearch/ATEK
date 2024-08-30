@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import random
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import yaml
 
@@ -34,14 +34,23 @@ def split_data(tar_urls: dict, ratio: float, seed: int):
     return train_data, valid_data
 
 
-def extract_tar_urls(json_data, config_name) -> Dict[str, List[str]]:
-    wds_file_urls = json_data["atek_data_for_all_configs"][config_name]["wds_file_urls"]
+def extract_tar_urls(
+    wds_file_urls: Dict, max_num_sequences: Optional[int]
+) -> Dict[str, List[str]]:
     result = {}
+    cur_sequence_num = 0
     for sequence, shards in wds_file_urls.items():
+        if (
+            max_num_sequences
+            and max_num_sequences >= 0
+            and cur_sequence_num >= max_num_sequences
+        ):
+            break
         result[sequence] = []
         for shard, details in shards.items():
             if "download_url" in details:
                 result[sequence].append(details["download_url"])
+        cur_sequence_num += 1
     return result
 
 
@@ -51,6 +60,7 @@ def main(
     train_val_split_ratio: float,
     random_seed: int,
     output_folder_path: str,
+    max_num_sequences: Optional[int] = None,
 ):
     assert os.path.exists(
         input_json_path
@@ -58,9 +68,21 @@ def main(
     assert (
         os.path.exists(output_folder_path) is False
     ), f"Output folder {output_folder_path} already exists."
-    with open(input_json_path, "r") as f:
-        json_data = json.load(f)
-    tar_urls = extract_tar_urls(json_data, config_name)
+
+    with open(input_json_path, "r") as file:
+        data = json.load(file)
+    wds_file_urls = data["atek_data_for_all_configs"][config_name]["wds_file_urls"]
+    tar_urls = extract_tar_urls(wds_file_urls, max_num_sequences)
+
+    train_tars, valid_tars = split_data(tar_urls, train_val_split_ratio, random_seed)
+    if not os.path.exists(output_folder_path):
+        os.makedirs(output_folder_path)
+    # Save the YAML files
+    save_yaml({"tars": train_tars}, os.path.join(output_folder_path, "train_tars.yaml"))
+    save_yaml(
+        {"tars": valid_tars}, os.path.join(output_folder_path, "validation_tars.yaml")
+    )
+    save_yaml(tar_urls, os.path.join(output_folder_path, "all_tars.yaml"))
 
 
 def get_args():
@@ -81,7 +103,9 @@ def get_args():
     parser.add_argument(
         "--output-folder-path", type=str, help="Output folder path for YAML files"
     )
-
+    parser.add_argument(
+        "--max-num-sequences", type=int, help="Maximum number of sequences"
+    )
     args = parser.parse_args()
     return args
 
@@ -94,4 +118,5 @@ if __name__ == "__main__":
         args.train_val_split_ratio,
         args.random_seed,
         args.output_folder_path,
+        args.max_num_sequences,
     )
