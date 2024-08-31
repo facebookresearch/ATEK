@@ -5,7 +5,10 @@ import os
 import random
 from typing import Dict, List, Optional
 
+import requests
 import yaml
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -52,6 +55,47 @@ def extract_tar_urls(
                 result[sequence].append(details["download_url"])
         cur_sequence_num += 1
     return result
+
+
+def download_files(urls: List[str], output_dir: str) -> List[str]:
+    """
+    For each sequence, download all the files to a directory with the same name.
+    Return a dictionary mapping sequence names to lists of downloaded file paths.
+    """
+    tar_paths = []
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    # Set up retry strategy
+    retries = Retry(
+        total=5,
+        backoff_factor=2,  # final try is 2*(2**5) = 64 seconds
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    http = requests.Session()
+    http.mount("http://", adapter)
+    http.mount("https://", adapter)
+    failed_urls = []
+    for url in urls:
+        # example url: https://scontent.xx.fbcdn.net/m1/v/t6/An92pagofYCrOb2p5Wi6XZqzs2yet9MR6TV0wkTSD95IuFoLzcp919pyqJETBPkmpzeNO5TPFQKRYPNb3XkofExI8EsNBtHEYl9j-YGUexjP02L2rbT44ZYQpsBHH6c236pmTk1-qmCz1VTIyOZst-wk8kCDEEE3hsPAeUywuA.tar/AriaSyntheticEnvironment_1_0_ATEK_cubercnn_ase_simulation_0_device0_shards-0004.tar?ccb=10-5&oh=00_AYA9J2fVup3ZyOV-SaIzKK9Zyj7FyiaBUcaSB7dMWvEDug&oe=66F64C41&_nc_sid=c228f2
+        # Extract the filename from the URL
+        # example filename: AriaSyntheticEnvironment_1_0_ATEK_cubercnn_ase_simulation_0_device0_shards-0004.tar
+        filename = url.split("/")[-1].split("?")[0].split("_")[-1]
+        filepath = os.path.join(output_dir, filename)
+        # Initialize the list for this sequence if not already done
+        try:
+            response = http.get(url, stream=True)
+            response.raise_for_status()  # Raise an exception for bad status codes
+            with open(filepath, "wb") as f:
+                for chunk in response.iter_content(1024):
+                    f.write(chunk)
+            tar_paths.append(os.path.join(output_dir.split("/")[-1], filename))
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to download {url}: {e}")
+            failed_urls.append(url)
+    if failed_urls:
+        logger.error(f"Failed to download {len(failed_urls)}")
+    return tar_paths
 
 
 def main(
