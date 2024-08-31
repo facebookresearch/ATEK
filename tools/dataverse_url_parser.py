@@ -10,6 +10,13 @@ import yaml
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s-%(levelname)s:%(message)s",  # Format of the log messages
+    handlers=[
+        logging.StreamHandler(),  # Output logs to console
+    ],
+)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -77,7 +84,7 @@ def download_files(urls: List[str], output_dir: str) -> List[str]:
     http.mount("https://", adapter)
     failed_urls = []
     for url in urls:
-        # example url: https://scontent.xx.fbcdn.net/m1/v/t6/An92pagofYCrOb2p5Wi6XZqzs2yet9MR6TV0wkTSD95IuFoLzcp919pyqJETBPkmpzeNO5TPFQKRYPNb3XkofExI8EsNBtHEYl9j-YGUexjP02L2rbT44ZYQpsBHH6c236pmTk1-qmCz1VTIyOZst-wk8kCDEEE3hsPAeUywuA.tar/AriaSyntheticEnvironment_1_0_ATEK_cubercnn_ase_simulation_0_device0_shards-0004.tar?ccb=10-5&oh=00_AYA9J2fVup3ZyOV-SaIzKK9Zyj7FyiaBUcaSB7dMWvEDug&oe=66F64C41&_nc_sid=c228f2
+        # example url: https://scontent.xx.fbcdn.net/m1/v/t6/xxx.tar/AriaSyntheticEnvironment_1_0_ATEK_cubercnn_ase_simulation_0_device0_shards-0004.tar?xxx
         # Extract the filename from the URL
         # example filename: AriaSyntheticEnvironment_1_0_ATEK_cubercnn_ase_simulation_0_device0_shards-0004.tar
         filename = url.split("/")[-1].split("?")[0].split("_")[-1]
@@ -105,6 +112,7 @@ def main(
     random_seed: int,
     output_folder_path: str,
     max_num_sequences: Optional[int] = None,
+    download_wds_to_local: bool = False,
 ):
     assert os.path.exists(
         input_json_path
@@ -121,16 +129,56 @@ def main(
     train_tars, valid_tars = split_data(tar_urls, train_val_split_ratio, random_seed)
     if not os.path.exists(output_folder_path):
         os.makedirs(output_folder_path)
-    # Save the YAML files
-    save_yaml({"tars": train_tars}, os.path.join(output_folder_path, "train_tars.yaml"))
-    save_yaml(
-        {"tars": valid_tars}, os.path.join(output_folder_path, "validation_tars.yaml")
-    )
-    save_yaml(tar_urls, os.path.join(output_folder_path, "all_tars.yaml"))
+    if download_wds_to_local is True:
+        # Download files
+        new_train_tars = {}
+        new_valid_tars = {}
+        for sequence_name, urls in train_tars.items():
+            logger.info(f"Downloading {sequence_name}")
+            sequence_dir = os.path.join(output_folder_path, sequence_name)
+            os.makedirs(sequence_dir)
+            tar_paths = download_files(urls, sequence_dir)
+            new_train_tars[sequence_name] = tar_paths
+
+        for sequence_name, urls in valid_tars.items():
+            logger.info(f"Downloading {sequence_name}")
+            sequence_dir = os.path.join(output_folder_path, sequence_name)
+            os.makedirs(sequence_dir)
+            tar_paths = download_files(urls, sequence_dir)
+            new_valid_tars[sequence_name] = tar_paths
+        new_all_tars = new_train_tars | new_valid_tars
+        # Save the YAML files
+        with open(
+            os.path.join(output_folder_path, "local_train_tars.yaml"), "w"
+        ) as file:
+            yaml.dump({"tars": new_train_tars}, file, default_flow_style=False)
+        with open(
+            os.path.join(output_folder_path, "local_validation_tars.yaml"), "w"
+        ) as file:
+            yaml.dump({"tars": new_valid_tars}, file, default_flow_style=False)
+        with open(os.path.join(output_folder_path, "local_all_tars.yaml"), "w") as file:
+            yaml.dump({"tars": new_all_tars}, file, default_flow_style=False)
+        logger.info("Downloaded all files successfully.")
+
+    else:
+        with open(
+            os.path.join(output_folder_path, "streamable_train_tars.yaml"), "w"
+        ) as file:
+            yaml.dump({"tars": train_tars}, file, default_flow_style=False)
+        with open(
+            os.path.join(output_folder_path, "streamable_validation_tars.yaml"), "w"
+        ) as file:
+            yaml.dump({"tars": valid_tars}, file, default_flow_style=False)
+        with open(
+            os.path.join(output_folder_path, "streamable_all_tars.yaml"), "w"
+        ) as file:
+            yaml.dump({"tars": tar_urls}, file, default_flow_style=False)
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description="Process some integers.")
+    parser = argparse.ArgumentParser(
+        description="Parse dataverse urls to generate yaml file for training, validation and combined"
+    )
     parser.add_argument("--config-name", type=str, help="Configuration name")
     parser.add_argument(
         "--input-json-path", type=str, help="Path to the input JSON file"
@@ -145,7 +193,12 @@ def get_args():
         "--random-seed", type=int, default=42, help="Random seed for shuffling data"
     )
     parser.add_argument(
-        "--output-folder-path", type=str, help="Output folder path for YAML files"
+        "--output-folder-path",
+        type=str,
+        help="Output folder path for YAML files and downloaded wds",
+    )
+    parser.add_argument(
+        "--download-wds-to-local", action="store_true", help="Download WDS files"
     )
     parser.add_argument(
         "--max-num-sequences", type=int, help="Maximum number of sequences"
@@ -163,4 +216,5 @@ if __name__ == "__main__":
         args.random_seed,
         args.output_folder_path,
         args.max_num_sequences,
+        args.download_wds_to_local,
     )
