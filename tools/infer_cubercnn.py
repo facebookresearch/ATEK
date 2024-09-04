@@ -24,7 +24,10 @@ from atek.data_preprocess.atek_data_sample import (
 )
 from atek.evaluation.static_object_detection.obb3_csv_io import GroupAtekObb3CsvWriter
 from atek.util.atek_constants import ATEK_CATEGORY_NAME_TO_ID
-from atek.util.file_io_utils import load_category_mapping_from_csv
+from atek.util.file_io_utils import (
+    load_category_mapping_from_csv,
+    load_yaml_and_extract_tar_list,
+)
 
 from atek.viz.atek_visualizer import NativeAtekSampleVisualizer
 
@@ -97,15 +100,6 @@ def create_inference_model(config_file, ckpt_dir, use_cpu_only=False):
     return model_config, model
 
 
-def get_tars(tar_yaml, use_relative_path=False):
-    with open(tar_yaml, "r") as f:
-        tar_files = yaml.safe_load(f)["tars"]
-    if use_relative_path:
-        data_dir = os.path.dirname(tar_yaml)
-        tar_files = [os.path.join(data_dir, x) for x in tar_files]
-    return tar_files
-
-
 def run_inference(args):
     # parse in config file
     conf = OmegaConf.load(args.config_file)
@@ -116,7 +110,7 @@ def run_inference(args):
     )
 
     # set up data loaders from eval dataset
-    infer_tars = get_tars(args.input_wds_tar, use_relative_path=True)
+    infer_tars = load_yaml_and_extract_tar_list(args.input_wds_tar)
     infer_wds_atek_format = load_atek_wds_dataset(
         urls=infer_tars,
         batch_size=args.batch_size,

@@ -2,9 +2,12 @@
 
 import copy
 import csv
+import os
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import torch
+import yaml
 
 
 def load_category_mapping_from_csv(
@@ -97,3 +100,29 @@ def merge_tensors_into_dict(gt_dict_no_tensors: Dict, tensor_dict: Dict) -> Dict
         set_nested_dict_value(gt_dict, keys_as_path, tensor_value)
 
     return gt_dict
+
+
+def load_yaml_and_extract_tar_list(yaml_path: str) -> List[str]:
+    """
+    Load a YAML file and extract URLs or convert relative paths to absolute paths
+    from the specified number of sequences. If num_sequences is not specified or
+    is larger than the available sequences, all sequences will be processed.
+    Args:
+    yaml_path (str): The path to the YAML file.
+    num_sequences (Optional[int]): The number of sequences to extract data from. Defaults to None.
+    Returns:
+    List[str]: A list of URLs or absolute paths from the specified number of sequences.
+    """
+    with open(yaml_path, "r") as file:
+        data = yaml.safe_load(file)
+    urls_or_paths = []
+    yaml_dir = os.path.dirname(yaml_path)
+    sequences = data.get("tars", {})
+    for sequence_name, sequence_paths_or_urls in sequences.items():
+        for single_sequence_path_or_url in sequence_paths_or_urls:
+            if urlparse(single_sequence_path_or_url).scheme in ["http", "https"]:
+                urls_or_paths.append(single_sequence_path_or_url)
+            else:
+                absolute_path = os.path.join(yaml_dir, single_sequence_path_or_url)
+                urls_or_paths.append(absolute_path)
+    return urls_or_paths
