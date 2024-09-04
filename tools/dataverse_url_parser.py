@@ -1,4 +1,5 @@
 import argparse
+import copy
 import json
 import logging
 import os
@@ -24,17 +25,15 @@ logger.setLevel(logging.INFO)
 
 
 def save_yaml(data: Dict, file_path: str):
-    import yaml
-
     with open(file_path, "w") as file:
         yaml.dump(data, file, default_flow_style=False)
 
 
-def split_train_val_sequences(
-    sequences_tar_info_dict: Dict[str, Dict[str, str]], ratio: float, seed: int
-) -> Tuple[Dict[str, Dict[str, str]], Dict[str, Dict[str, str]]]:
+def split_train_val_sequences_with_ratio(
+    sequences_tar_info_dict: Dict[str, Dict[str, List[str]]], ratio: float, seed: int
+) -> Tuple[Dict[str, Dict[str, List[str]]], Dict[str, Dict[str, List[str]]]]:
     """
-    Given a dictionary of tar URLs, split it into train and validation sets based on the specified ratio and random seed.
+    Given a dictionary of sequences, split it into train and validation sets based on the specified ratio and random seed.
     """
     random.seed(seed)
     sequences = list(sequences_tar_info_dict.keys())
@@ -50,6 +49,25 @@ def split_train_val_sequences(
         sequence: sequences_tar_info_dict[sequence] for sequence in valid_sequences
     }
     return train_sequences_tar_info_dict, validation_sequences_tar_info_dict
+
+
+def split_train_val_sequences_by_json(
+    sequences_tar_info_dict: Dict, train_val_split_json_path: str
+) -> Tuple[Dict, Dict]:
+    """
+    Given a dictionary of sequences, split it into train and validation sets based on the specified json file.
+    """
+    with open(train_val_split_json_path, "r") as file:
+        train_val_split_data = json.load(file)
+        train_tars_sequence_names = train_val_split_data["train_sequences"]
+        validation_tars_sequence_names = train_val_split_data["val_sequences"]
+        train_sequences = find_tar_info_with_sequence_names(
+            sequences_tar_info_dict, train_tars_sequence_names
+        )
+        validation_sequences = find_tar_info_with_sequence_names(
+            sequences_tar_info_dict, validation_tars_sequence_names
+        )
+    return train_sequences, validation_sequences
 
 
 def extract_first_K_sequences(
@@ -107,7 +125,8 @@ def download_wds_files_for_single_sequence(
 
 
 def download_sequences(
-    download_sequences_tar_info_dict: Dict[str, Dict[str, str]], output_folder_path: str
+    download_sequences_tar_info_dict: Dict[str, Dict[str, List[str]]],
+    output_folder_path: str,
 ) -> Tuple[Dict, Dict]:
     """
     Each sequence will be downloaded into a new directory named after the sequence within the specified output folder.
@@ -117,7 +136,7 @@ def download_sequences(
     success_sequences_with_tars = {}
     failed_sequences_with_tars = {}
     # Wrap the loop with tqdm for a progress bar
-    for sequence_name, urls in tqdm(
+    for sequence_name, sequence_info in tqdm(
         download_sequences_tar_info_dict.items(), desc="Downloading sequences"
     ):
         logger.info(f"Downloading {sequence_name}")
@@ -126,7 +145,7 @@ def download_sequences(
             sequence_dir, exist_ok=True
         )  # Added exist_ok=True to avoid error if directory already exists
         successful_tar_list, failed_tar_list = download_wds_files_for_single_sequence(
-            urls, sequence_dir, sequence_name
+            sequence_info, sequence_dir, sequence_name
         )
         success_sequences_with_tars[sequence_name] = successful_tar_list
         if len(failed_tar_list) > 0:
@@ -144,6 +163,64 @@ def get_url_from_tars_info(tars_info: Dict) -> Dict:
     return tar_urls
 
 
+def write_tar_yaml(
+    output_folder_path,
+    train_tars,
+    validation_tars,
+    all_tars,
+    train_tars_yaml_name,
+    validation_tars_yaml_name,
+    all_tars_yaml_name,
+):
+    with open(os.path.join(output_folder_path, train_tars_yaml_name), "w") as file:
+        yaml.dump({"tars": train_tars}, file, default_flow_style=False)
+
+    with open(os.path.join(output_folder_path, validation_tars_yaml_name), "w") as file:
+        yaml.dump({"tars": validation_tars}, file, default_flow_style=False)
+    with open(os.path.join(output_folder_path, all_tars_yaml_name), "w") as file:
+        yaml.dump({"tars": all_tars}, file, default_flow_style=False)
+    logger.info(
+        f"{train_tars_yaml_name}, {validation_tars_yaml_name}, {all_tars_yaml_name} are written successfully."
+    )
+
+
+def find_tar_info_with_sequence_names(
+    tars_info: Dict, sequence_names: List[str]
+) -> Dict:
+    """
+    Find the tar info with the specified sequence names in the given dictionary.
+    """
+    result = {}
+    for sequence_name in sequence_names:
+        if sequence_name in tars_info.keys():
+            result[sequence_name] = tars_info[sequence_name]
+    return result
+
+
+def split_train_val_sequences(
+    sequences_tar_info_dict: Dict,
+    train_val_split_json_path: Optional[str],
+    train_val_split_ratio: Optional[float],
+    random_seed: Optional[int],
+) -> Tuple[Dict, Dict]:
+    """
+    split data, user has two options:
+    1. use the train_val_split_json_path to specify the train and validation split
+    2. use the train_val_split_ratio to split the data
+    """
+    if train_val_split_json_path is not None:
+        train_sequences, validation_sequences = split_train_val_sequences_by_json(
+            sequences_tar_info_dict, train_val_split_json_path
+        )
+    else:
+        assert train_val_split_ratio is not None, "train_val_split_ratio is None"
+        assert random_seed is not None, "random_seed is None"
+        train_sequences, validation_sequences = split_train_val_sequences_with_ratio(
+            sequences_tar_info_dict, train_val_split_ratio, random_seed
+        )
+    return train_sequences, validation_sequences
+
+
 def main(
     config_name: str,
     input_json_path: str,
@@ -152,6 +229,7 @@ def main(
     output_folder_path: str,
     max_num_sequences: Optional[int] = None,
     download_wds_to_local: bool = False,
+    train_val_split_json_path: Optional[str] = None,
 ):
     assert os.path.exists(
         input_json_path
@@ -160,6 +238,7 @@ def main(
         os.path.exists(output_folder_path) is False
     ), f"Output folder {output_folder_path} already exists."
 
+    # extract tar urls
     with open(input_json_path, "r") as file:
         data = json.load(file)
     sequence_to_tar_info = data["atek_data_for_all_configs"][config_name][
@@ -171,7 +250,10 @@ def main(
 
     train_sequences_tar_info_dict, validation_sequences_tar_info_dict = (
         split_train_val_sequences(
-            sequences_tar_info_dict, train_val_split_ratio, random_seed
+            sequences_tar_info_dict,
+            train_val_split_json_path,
+            train_val_split_ratio,
+            random_seed,
         )
     )
     # Save the tars failed to download
@@ -231,21 +313,16 @@ def main(
         validation_sequences_tar_url = get_url_from_tars_info(
             validation_sequences_tar_info_dict
         )
-        all_sequences_tar_url = get_url_from_tars_info(sequences_tar_info_dict)
-        with open(
-            os.path.join(output_folder_path, "streamable_train_tars.yaml"), "w"
-        ) as file:
-            yaml.dump({"tars": train_sequences_tar_url}, file, default_flow_style=False)
-        with open(
-            os.path.join(output_folder_path, "streamable_validation_tars.yaml"), "w"
-        ) as file:
-            yaml.dump(
-                {"tars": validation_sequences_tar_url}, file, default_flow_style=False
-            )
-        with open(
-            os.path.join(output_folder_path, "streamable_all_tars.yaml"), "w"
-        ) as file:
-            yaml.dump({"tars": all_sequences_tar_url}, file, default_flow_style=False)
+        all_sequences_tar_url = train_sequences_tar_url | validation_sequences_tar_url
+        write_tar_yaml(
+            output_folder_path=output_folder_path,
+            train_tars=train_sequences_tar_url,
+            validation_tars=validation_sequences_tar_url,
+            all_tars=all_sequences_tar_url,
+            train_tars_yaml_name="streamable_train_tars.yaml",
+            validation_tars_yaml_name="streamable_validation_tars.yaml",
+            all_tars_yaml_name="streamable_all_tars.yaml",
+        )
 
 
 def get_args():
@@ -276,6 +353,11 @@ def get_args():
     parser.add_argument(
         "--max-num-sequences", type=int, help="Maximum number of sequences"
     )
+    parser.add_argument(
+        "--train-val-split-json-path",
+        type=str,
+        help="Path to the train validation split JSON file",
+    )
     args = parser.parse_args()
     return args
 
@@ -290,4 +372,5 @@ if __name__ == "__main__":
         args.output_folder_path,
         args.max_num_sequences,
         args.download_wds_to_local,
+        args.train_val_split_json_path,
     )
