@@ -39,3 +39,6 @@ In Atek env, setup the jupyter
 ```
 jupyter lab --no-browser --port 9095 --ServerApp.token=''
 ```
+
+## License
+ATEK is Apache 2.0 licensed, as found in the LICENSE file.
