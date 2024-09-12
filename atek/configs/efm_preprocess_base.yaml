@@ -49,3 +49,4 @@ processors:
 wds_writer:
   prefix_string: ""
   max_samples_per_shard: 8
+  remove_last_tar_if_not_full: true
