@@ -97,6 +97,11 @@ def _create_efm_type_preprocessor(
 
     # Create Sample Builder
     # TODO: refactor to let the sample builder take the data paths object as an input
+    depth_vrs_file = (
+        atek_data_paths["depth_vrs_file"]
+        if "depth_vrs_file" in atek_data_paths
+        else None
+    )
     sample_builder = EfmSampleBuilder(
         conf=conf.processors,
         sequence_name=sequence_name,
@@ -115,7 +120,7 @@ def _create_efm_type_preprocessor(
             "instance_json_file": atek_data_paths["gt_instance_json_file"],
             "category_mapping_file": category_mapping_file,
         },
-        depth_vrs_file=atek_data_paths["depth_vrs_file"],
+        depth_vrs_file=depth_vrs_file,
     )
 
     # Create temporal subsampler

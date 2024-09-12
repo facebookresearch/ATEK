@@ -14,17 +14,21 @@ def _get_possible_file_conventions() -> Dict[str, List[str]]:
     Get the file location conventions for various datasets:
     - ADT
     - ASE
+    - AEO
     """
     return {
         "video_vrs_file": ["video.vrs"],
         # MPS files
-        "mps_closedloop_traj_file": ["aria_trajectory.csv"],
+        "mps_closedloop_traj_file": [
+            "aria_trajectory.csv",
+            "mps/slam/closed_loop_trajectory.csv",  # AEO
+        ],
         "mps_semidense_points_file": [
-            "mps/slam/semidense_points.csv.gz",  # ADT
+            "mps/slam/semidense_points.csv.gz",  # ADT, AEO
             "maps/maps_v1/globalcloud_GT.csv.gz",  # ASE
         ],
         "mps_semidense_observations_file": [
-            "mps/slam/semidense_observations.csv.gz",  # ADT
+            "mps/slam/semidense_observations.csv.gz",  # ADT, AEO
             "maps/maps_v1/observations.csv.gz",  # ASE
         ],
         "mps_online_calib_file": [
