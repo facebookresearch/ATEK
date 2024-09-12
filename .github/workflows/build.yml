@@ -1,0 +1,33 @@
+name: Build package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name : Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: 3.9
+          auto-activate-base: false
+      - name: Install dependencies
+        shell: bash
+        run: |
+          conda init bash
+          conda install mamba -n base -c conda-forge
+          mamba init
+          mamba env create -f env_atek.yml
+          mamba activate atek
+      - name: Install ATEK lib
+        shell: bash
+        run: |
+          python3 -m pip install .
