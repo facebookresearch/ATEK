@@ -44,15 +44,12 @@ def save_yaml(data: Dict, file_path: str):
 
 
 def split_train_val_sequences_with_ratio(
-    sequences_tar_info_dict: Dict[str, Dict[str, List[str]]], ratio: float, seed: int
+    sequences_tar_info_dict: Dict[str, Dict[str, List[str]]], ratio: float
 ) -> Tuple[Dict[str, Dict[str, List[str]]], Dict[str, Dict[str, List[str]]]]:
     """
     Given a dictionary of sequences, split it into train and validation sets based on the specified ratio and random seed.
     """
-    random.seed(seed)
     sequences = list(sequences_tar_info_dict.keys())
-    sequences.sort()
-    random.shuffle(sequences)
     split_point = int(len(sequences) * ratio)
     train_sequences = sequences[:split_point]
     valid_sequences = sequences[split_point:]
@@ -128,6 +125,9 @@ def download_wds_files_for_single_sequence(
         try:
             response = http.get(tar_info["download_url"], stream=True)
             response.raise_for_status()  # Raise an exception for bad status codes
+            directory = os.path.dirname(filepath)
+            if not os.path.exists(directory):
+                os.makedirs(directory)
             with open(filepath, "wb") as f:
                 for chunk in response.iter_content(1024):
                     f.write(chunk)
@@ -194,7 +194,7 @@ def write_tar_yaml(
     with open(os.path.join(output_folder_path, all_tars_yaml_name), "w") as file:
         yaml.dump({"tars": all_tars}, file, default_flow_style=False)
     logger.info(
-        f"{train_tars_yaml_name}, {validation_tars_yaml_name}, {all_tars_yaml_name} are written successfully."
+        f"{train_tars_yaml_name}, {validation_tars_yaml_name}, {all_tars_yaml_name} are written successfully to {output_folder_path}."
     )
 
 
@@ -215,7 +215,6 @@ def split_train_val_sequences(
     sequences_tar_info_dict: Dict,
     train_val_split_json_path: Optional[str],
     train_val_split_ratio: Optional[float],
-    random_seed: Optional[int],
 ) -> Tuple[Dict, Dict]:
     """
     split data, user has two options:
@@ -228,11 +227,24 @@ def split_train_val_sequences(
         )
     else:
         assert train_val_split_ratio is not None, "train_val_split_ratio is None"
-        assert random_seed is not None, "random_seed is None"
         train_sequences, validation_sequences = split_train_val_sequences_with_ratio(
-            sequences_tar_info_dict, train_val_split_ratio, random_seed
+            sequences_tar_info_dict, train_val_split_ratio
         )
     return train_sequences, validation_sequences
+
+
+def randomize_sequence_order(sequences_tar_info_dict: Dict, random_seed: int) -> Dict:
+    """
+    Randomize the order of sequences in the given dictionary.
+    """
+    random.seed(random_seed)
+    sequences = list(sequences_tar_info_dict.keys())
+    sequences.sort()
+    random.shuffle(sequences)
+    randomized_sequences_tar_info_dict = {
+        sequence: sequences_tar_info_dict[sequence] for sequence in sequences
+    }
+    return randomized_sequences_tar_info_dict
 
 
 def main(
@@ -245,12 +257,6 @@ def main(
     download_wds_to_local: bool = False,
     train_val_split_json_path: Optional[str] = None,
 ):
-    assert os.path.exists(
-        input_json_path
-    ), f"Input JSON file {input_json_path} does not exist."
-    assert (
-        os.path.exists(output_folder_path) is False
-    ), f"Output folder {output_folder_path} already exists."
 
     # extract tar urls
     with open(input_json_path, "r") as file:
@@ -258,6 +264,9 @@ def main(
     sequence_to_tar_info = data["atek_data_for_all_configs"][config_name][
         "wds_file_urls"
     ]
+
+    sequence_to_tar_info = randomize_sequence_order(sequence_to_tar_info, random_seed)
+
     sequences_tar_info_dict = extract_first_K_sequences(
         sequence_to_tar_info, max_num_sequences
     )
@@ -267,7 +276,6 @@ def main(
             sequences_tar_info_dict,
             train_val_split_json_path,
             train_val_split_ratio,
-            random_seed,
         )
     )
     # Save the tars failed to download
