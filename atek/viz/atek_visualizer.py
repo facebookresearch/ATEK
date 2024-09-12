@@ -45,6 +45,7 @@ class NativeAtekSampleVisualizer:
     COLOR_GREEN = [30, 255, 30]
     COLOR_RED = [255, 30, 30]
     COLOR_BLUE = [30, 30, 255]
+    COLOR_GRAY = [200, 200, 200, 100]
     AXIS_LENGTH = 0.5
     MAX_OBB_PER_BATCH = 30  # max number of obb2d/obb3d per entity can render with label
 
@@ -539,18 +540,18 @@ class NativeAtekSampleVisualizer:
                 rr.LineStrips2D(
                     self._box_points_to_lines(projected_box),
                     colors=[
-                        [255, 0, 0],
-                        [0, 0, 255],
-                        [255, 0, 0],
-                        [0, 0, 255],
-                        [255, 0, 0],
-                        [0, 0, 255],
-                        [255, 0, 0],
-                        [0, 0, 255],
-                        [0, 255, 0],
-                        [0, 255, 0],
-                        [0, 255, 0],
-                        [0, 255, 0],
+                        self.COLOR_RED,
+                        self.COLOR_GRAY,
+                        self.COLOR_GRAY,
+                        self.COLOR_GREEN,
+                        self.COLOR_GRAY,
+                        self.COLOR_GRAY,
+                        self.COLOR_GRAY,
+                        self.COLOR_GRAY,
+                        self.COLOR_BLUE,
+                        self.COLOR_GRAY,
+                        self.COLOR_GRAY,
+                        self.COLOR_GRAY,
                     ],
                     radii=1,
                 ),
