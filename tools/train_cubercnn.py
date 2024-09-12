@@ -193,7 +193,10 @@ def do_val(cfg, model, iteration, writers, max_iter=100):
                 x for x in orig_data if x["instances"].get("gt_classes").numel() > 0
             ]
             if len(data) == 0:
-                raise ValueError("data contains 0 valid samples.")
+                # logger.debug(
+                #    "validation data sample does not contains valid detections, skipping sample"
+                # )
+                continue
             loss_dict = model(data)
 
             # reduce
@@ -304,7 +307,9 @@ def do_train(cfg, model, resume=False):
                     x for x in orig_data if x["instances"].get("gt_classes").numel() > 0
                 ]
                 if len(data) == 0:
-                    logger.warning("data contains 0 valid samples, skipping iteration")
+                    # logger.debug(
+                    #    "train data sample does not contains valid detections, skipping sample"
+                    # )
                     continue
 
                 loss_dict = model(data)

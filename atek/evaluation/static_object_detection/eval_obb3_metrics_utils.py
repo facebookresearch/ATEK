@@ -323,8 +323,10 @@ def print_obb3_metrics_to_logger(metrics) -> None:
     log_messages = "Object Detection Model Performance Summary\n"
     log_messages += "=======Overall mAP Scores across all classes=======\n"
     log_messages += f"mAP (Average across IoU thresholds, defined by MeanAveragePrecision3D class, default is [0.05, 0.10, 0.15, ..., 0.5]): {metrics['map_3D']:.4f}\n"
-    log_messages += f"mAP (IoU=0.25): {metrics['map_25_3D']:.4f}\n"
-    log_messages += f"mAP (IoU=0.50): {metrics['map_50_3D']:.4f}\n"
+    # log_messages += f"mAP (IoU=0.25): {metrics['map_25_3D']:.4f}\n"
+    # log_messages += f"mAP (IoU=0.50): {metrics['map_50_3D']:.4f}\n"
+    log_messages += f"Average precision (IoU=0.20): {metrics['precision@IoU0.2']:.4f}\n"
+    log_messages += f"Average recall (IoU=0.20): {metrics['recall@IoU0.2']:.4f}\n"
     log_messages += (
         "===mAP across IoU thresholds [0.05, 0.10, 0.15, ..., 0.5]) per Class===\n"
     )
@@ -338,6 +340,9 @@ def print_obb3_metrics_to_logger(metrics) -> None:
     )  # Sort by value in ascending order
 
     for key, value in sorted_class_map:
+        # Skip entries of -1
+        if value < 0.0:
+            continue
         class_name = key.split("@")[1].replace("_3D", "").replace("_", " ").title()
         log_messages += f"{class_name}: {value:.4f}\n"
 
