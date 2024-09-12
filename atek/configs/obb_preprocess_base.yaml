@@ -1,3 +1,4 @@
+atek_config_name: "cubercnn"
 camera_temporal_subsampler:
   main_camera_label: "camera-rgb"
   time_domain: "DEVICE_TIME"
@@ -19,11 +20,13 @@ processors:
     sensor_label: "camera-slam-left"
     tolerance_ns: 10_000_000
     time_domain: "DEVICE_TIME"
+    rotate_image_cw90deg: false  # if set, rotate image by 90 degrees clockwise
   slam_right:
     selected: true
     sensor_label: "camera-slam-right"
     tolerance_ns: 10_000_000
     time_domain: "DEVICE_TIME"
+    rotate_image_cw90deg: false  # if set, rotate image by 90 degrees clockwise
   mps_traj:
     selected: true
     tolerance_ns: 10_000_000

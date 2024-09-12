@@ -116,11 +116,12 @@ def create_inference_model(config_file, ckpt_dir, use_cpu_only=False):
 
 def run_inference(args):
     # parse in config file
-    conf = OmegaConf.load(args.config_file)
+    model_config_file = os.path.join(args.ckpt_dir, "config.yaml")
+    conf = OmegaConf.load(model_config_file)
 
     # setup config and model
     model_config, model = create_inference_model(
-        args.config_file, args.ckpt_dir, args.num_gpus == 0
+        model_config_file, args.ckpt_dir, args.num_gpus == 0
     )
 
     # set up data loaders from eval dataset
@@ -330,12 +331,6 @@ def get_args():
     )
     parser.add_argument(
         "--ckpt-dir", default=None, help="Directory for model checkpoint"
-    )
-    parser.add_argument(
-        "--config-file",
-        default=None,
-        metavar="FILE",
-        help="Path to Omega config file",
     )
     parser.add_argument(
         "--viz-flag",

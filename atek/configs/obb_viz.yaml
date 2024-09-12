@@ -4,8 +4,8 @@ plot_types:
   - "camera_slam_right"
   - "mps_traj"
   - "semidense_points"
-  - "obb2_gt"
   - "obb3_gt"
+  - "obb3_in_camera_view"
 obb_labels_to_ignore:
   - "other"
 obb_labels_to_include:
