@@ -14,18 +14,16 @@
 
 # pyre-strict
 
-ATEK_CONFIGS_AND_LASTEST_VERSIONS = {
-    "cubercnn": "v0.1.0",
-    "efm": "v0.1.0",
-}
 
-"""
-class AtekWdsConfigNameAndVersions:
-    
-    A class to record configuration for ATEK WDS dataset.
-    
-        self.config_name_and_lastest_version = {
-            "cubercnn": "v0.1.0",
-            "efm": "v0.1.0",
-        }
-"""
+# Release notes:
+#   - v0.1.1:
+#       - Add "atek_config_name" to config content.
+#       - ASE scene id are remapped to external release.
+#       - Add 2 new "*_eval" configs
+#
+ATEK_CONFIGS_AND_LASTEST_VERSIONS = {
+    "cubercnn": "v0.1.1",
+    "cubercnn_eval": "v0.1.1",
+    "efm": "v0.1.1",
+    "efm_eval": "v0.1.1",
+}
