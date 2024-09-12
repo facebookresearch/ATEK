@@ -28,7 +28,7 @@ from atek.data_preprocess.atek_data_sample import (
     MultiFrameCameraData,
 )
 from atek.util.tensor_utils import compute_bbox_corners_in_world
-from atek.util.viz_utils import box_points_to_lines, check_projected_points_out_of_image
+from atek.util.viz_utils import box_points_to_lines, obtain_visible_line_segs_of_obb3
 from omegaconf.omegaconf import DictConfig
 
 from projectaria_tools.core.calibration import CameraModelType, CameraProjection
@@ -482,7 +482,7 @@ class NativeAtekSampleVisualizer:
         object_dimensions = obb3d_gt_dict["object_dimensions"]
         category_names = obb3d_gt_dict["category_names"]
         num_instances = len(object_dimensions)
-        T_World_Object = obb3d_gt_dict["ts_world_object"]
+        Ts_World_Object = obb3d_gt_dict["ts_world_object"]
 
         # TODO: support more camera types
         camera_label = "camera-rgb"
@@ -490,13 +490,17 @@ class NativeAtekSampleVisualizer:
         # we only support single timestamp for now
 
         assert len(object_dimensions) == len(
-            T_World_Object
+            Ts_World_Object
         ), "The length of object_dimensions and T_World_Object should be the same"
 
-        corners_world = compute_bbox_corners_in_world(
-            object_dimensions, T_World_Object
-        )  # torch.Size([num_of_instance, 8, 3])
-        projected_boxes = []
+        rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
+        idx = 0  # id for the box rerun is drawing
+        rr.log(f"{camera_label}_image/project3d", rr.Clear(recursive=True))
+
+        corners_in_world = compute_bbox_corners_in_world(
+            object_dimensions, Ts_World_Object
+        )
+
         for i_instance in range(num_instances):
             category_name = category_names[i_instance].split(":")[0]
             if self.obb_labels_to_ignore and category_name in self.obb_labels_to_ignore:
@@ -507,61 +511,20 @@ class NativeAtekSampleVisualizer:
             ):
                 continue
 
-            projected_points = []
-            for corner in corners_world[i_instance]:
-                corner = np.array(corner)  # 3x1 array (3D point)
-                corner_camera = T_World_Camera.inverse() @ corner
-                # Skip points behind the camera
-                if corner_camera[2] < 0:
-                    continue
-
-                projected_point = camera_projection.project(corner_camera)
-                # filter out boexes outside of the image boundary
-                # Our image coor are on pixel center.
-                """
-                if (
-                    projected_point[0] < -0.5
-                    or projected_point[0] > image_width - 0.5
-                    or projected_point[1] < -0.5
-                    or projected_point[1] > image_height - 0.5
-                ):
-                    continue
-                """
-                projected_points.append(projected_point)
-
-            # filter out boxes that have all points out of the image boundary
-            if len(projected_points) < 8:
-                continue
-            if check_projected_points_out_of_image(
-                projected_points, image_width, image_height
-            ):
-                continue
-            projected_boxes.append(projected_points)
-
-        rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
-        idx = 0  # id for the box rerun is drawing
-        rr.log(f"{camera_label}_image/project3d", rr.Clear(recursive=True))
-        for projected_box in projected_boxes:
-            idx += 1
+            visible_line_segs, line_seg_colors = obtain_visible_line_segs_of_obb3(
+                corners_in_world[i_instance].numpy(),
+                camera_projection=camera_projection,
+                T_World_Camera=T_World_Camera,
+                image_width=image_width,
+                image_height=image_height,
+            )
+            # plot edges separately
             rr.log(
-                f"{camera_label}_image/project3d/{idx}",
+                f"{camera_label}_image/project3d/instance{i_instance}",
                 rr.LineStrips2D(
-                    box_points_to_lines(projected_box),
-                    colors=[
-                        self.COLOR_RED,
-                        self.COLOR_GRAY,
-                        self.COLOR_GRAY,
-                        self.COLOR_GREEN,
-                        self.COLOR_GRAY,
-                        self.COLOR_GRAY,
-                        self.COLOR_GRAY,
-                        self.COLOR_GRAY,
-                        self.COLOR_BLUE,
-                        self.COLOR_GRAY,
-                        self.COLOR_GRAY,
-                        self.COLOR_GRAY,
-                    ],
-                    radii=0.3,
+                    visible_line_segs,
+                    colors=line_seg_colors,
+                    radii=1,
                 ),
             )
 
@@ -610,11 +573,6 @@ class NativeAtekSampleVisualizer:
             # dict is from efm_sample_builder, multi timestamp
             elif "efm_gt" in obb3d_gt_dict:
                 if str(timestamp_ns) not in obb3d_gt_dict["efm_gt"]:
-                    # For testing only
-                    x = obb3d_gt_dict["efm_gt"].keys()
-                    print(
-                        f"---------- debug: {timestamp_ns} is not within {x}, skipping"
-                    )
                     continue
                 single_obb3d_gt_dict = obb3d_gt_dict["efm_gt"][str(timestamp_ns)][
                     "camera-rgb"
