@@ -9,7 +9,7 @@ import torch
 
 from atek.data_loaders.cubercnn_model_adaptor import CubeRCNNModelAdaptor
 from atek.util.viz_utils import filter_obbs_by_confidence
-from atek.viz.atek_visualizer_base import NativeAtekSampleVisualizer
+from atek.viz.atek_visualizer import NativeAtekSampleVisualizer
 from omegaconf.omegaconf import DictConfig
 
 logger = logging.getLogger(__name__)

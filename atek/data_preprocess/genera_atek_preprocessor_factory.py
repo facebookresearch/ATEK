@@ -15,7 +15,7 @@ from atek.data_preprocess.sample_builders.obb_sample_builder import ObbSampleBui
 from atek.data_preprocess.subsampling_lib.temporal_subsampler import (
     CameraTemporalSubsampler,
 )
-from atek.viz.atek_visualizer_base import NativeAtekSampleVisualizer
+from atek.viz.atek_visualizer import NativeAtekSampleVisualizer
 from omegaconf import DictConfig
 
 logger = logging.getLogger(__name__)

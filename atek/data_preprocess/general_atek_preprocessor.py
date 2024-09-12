@@ -7,7 +7,7 @@ from typing import Optional
 
 from atek.data_preprocess.atek_data_sample import AtekDataSample
 from atek.data_preprocess.atek_wds_writer import AtekWdsWriter
-from atek.viz.atek_visualizer_base import NativeAtekSampleVisualizer
+from atek.viz.atek_visualizer import NativeAtekSampleVisualizer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
