@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import copy
+import logging
 import os
 
 from typing import Dict, List, Tuple
@@ -30,6 +31,9 @@ SEMIDENSE_POINTS_FIELDS = [
     "msdpd#points_dist_std",
     "msdpd#points_inv_dist_std",
 ]
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def convert_atek_sample_dict_to_wds_dict(
@@ -163,4 +167,4 @@ class AtekWdsWriter:
                 last_tar_file = os.path.join(self.output_path, tar_files[-1])
                 os.remove(last_tar_file)
             else:
-                print("No tar files found in the output path.")
+                logger.warning("No tar files found in the output path.")

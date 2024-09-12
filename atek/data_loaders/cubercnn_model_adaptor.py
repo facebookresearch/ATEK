@@ -100,6 +100,8 @@ class CubeRCNNModelAdaptor:
                 "width": image_width,
                 "K_matrix": k_matrix,
                 "timestamp_ns": atek_wds_sample["timestamp_ns"],
+                "frame_id": atek_wds_sample["frame_id"],
+                "sequence_name": atek_wds_sample["sequence_name"],
             }
         )
 
