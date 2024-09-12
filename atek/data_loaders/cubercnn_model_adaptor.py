@@ -17,13 +17,13 @@ from typing import Dict, List, Optional
 import numpy as np
 
 import torch
+
+import webdataset as wds
+
+from atek.data_loaders.atek_wds_dataloader import load_atek_wds_dataset
 from atek.util.atek_constants import ATEK_CATEGORY_ID_TO_NAME, ATEK_CATEGORY_NAME_TO_ID
 from detectron2.structures import Boxes, Instances
 from projectaria_tools.core.sophus import SE3
-
-from surreal.data_services.atek.atek.data_loaders.atek_wds_dataloader import (
-    load_atek_wds_dataset,
-)
 
 from webdataset.filters import pipelinefilter
 
@@ -352,8 +352,8 @@ def cubercnn_collation_fn(batch):
 
 
 def load_atek_wds_dataset_as_cubercnn(
-    urls: List, batch_size: int, repeat_flag: bool, shuffle_flag: bool = False
-):
+    urls: List, batch_size: Optional[int], repeat_flag: bool, shuffle_flag: bool = False
+) -> wds.WebDataset:
     cubercnn_model_adaptor = CubeRCNNModelAdaptor()
 
     return load_atek_wds_dataset(
@@ -364,4 +364,23 @@ def load_atek_wds_dataset_as_cubercnn(
         collation_fn=cubercnn_collation_fn,
         repeat_flag=repeat_flag,
         shuffle_flag=shuffle_flag,
+    )
+
+
+def create_atek_dataloader_as_cubercnn(
+    urls: List[str],
+    batch_size: Optional[int] = None,
+    repeat_flag: bool = False,
+    shuffle_flag: bool = False,
+    num_workers: int = 0,
+) -> torch.utils.data.DataLoader:
+    wds_dataset = load_atek_wds_dataset_as_cubercnn(
+        urls,
+        batch_size=batch_size,
+        repeat_flag=repeat_flag,
+        shuffle_flag=shuffle_flag,
+    )
+
+    return torch.utils.data.DataLoader(
+        wds_dataset, batch_size=None, num_workers=num_workers, pin_memory=True
     )

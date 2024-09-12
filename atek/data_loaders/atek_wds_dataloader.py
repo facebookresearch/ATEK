@@ -222,3 +222,31 @@ def load_atek_wds_dataset(
         wds_dataset = wds_dataset.repeat()
 
     return wds_dataset
+
+
+def create_native_atek_dataloader(
+    urls: List[str],
+    nodesplitter: Callable = wds.shardlists.single_node_only,
+    dict_key_mapping: Optional[Dict[str, str]] = None,
+    data_transform_fn: Optional[Callable] = None,
+    collation_fn: Optional[Callable] = atek_default_collation_fn,
+    batch_size: Optional[int] = None,
+    repeat_flag: bool = False,
+    shuffle_flag: bool = False,
+    num_workers: int = 0,
+) -> torch.utils.data.DataLoader:
+
+    wds_dataset = load_atek_wds_dataset(
+        urls=urls,
+        nodesplitter=nodesplitter,
+        dict_key_mapping=dict_key_mapping,
+        data_transform_fn=data_transform_fn,
+        batch_size=batch_size,
+        collation_fn=collation_fn,
+        repeat_flag=repeat_flag,
+        shuffle_flag=shuffle_flag,
+    )
+
+    return torch.utils.data.DataLoader(
+        wds_dataset, batch_size=None, num_workers=num_workers, pin_memory=True
+    )
