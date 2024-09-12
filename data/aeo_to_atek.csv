@@ -1,0 +1,26 @@
+AEO Category Name,ATEK Category Name,ATEK Category Id
+floor,floor,44
+chair,chair,1
+couch,sofa,4
+table,table,5
+bed,bed,6
+walls,walls,45
+storage,cabinet,9
+storage,container,16
+storage,shelves,12
+storage,bookcase,39
+storage,dresser,14
+door,door,32
+refrigerator,refrigerator,41
+screen,display,37
+screen,laptop,43
+window,window,8
+mirror,mirror,10
+plant,plant,13
+plant,vase,15
+lamp,lamp,2
+wallart,picture,3
+wallart,clock,25
+sink,other,0
+washerdryer,other,0
+toilet,other,0
