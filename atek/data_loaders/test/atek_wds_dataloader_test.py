@@ -18,6 +18,7 @@ import tempfile
 import unittest
 
 import torch
+from atek.data_loaders.atek_wds_dataloader import load_atek_wds_dataset
 from atek.data_preprocess.atek_wds_writer import AtekWdsWriter
 from atek.data_preprocess.sample_builders.obb_sample_builder import ObbSampleBuilder
 from atek.data_preprocess.subsampling_lib.temporal_subsampler import (
@@ -27,9 +28,6 @@ from atek.util.tensor_utils import check_dicts_same_w_tensors
 
 from omegaconf import OmegaConf
 
-from surreal.data_services.atek.atek.data_loaders.atek_wds_dataloader import (
-    load_atek_wds_dataset,
-)
 
 # test data paths
 TEST_DIR_PATH = os.path.join(os.getenv("TEST_FOLDER"))

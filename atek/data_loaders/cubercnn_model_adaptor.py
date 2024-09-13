@@ -17,13 +17,11 @@ from typing import Dict, List, Optional
 import numpy as np
 
 import torch
+
+from atek.data_loaders.atek_wds_dataloader import load_atek_wds_dataset
 from atek.util.atek_constants import ATEK_CATEGORY_ID_TO_NAME, ATEK_CATEGORY_NAME_TO_ID
 from detectron2.structures import Boxes, Instances
 from projectaria_tools.core.sophus import SE3
-
-from surreal.data_services.atek.atek.data_loaders.atek_wds_dataloader import (
-    load_atek_wds_dataset,
-)
 
 from webdataset.filters import pipelinefilter
 
