@@ -112,6 +112,13 @@ class AtekWdsWriter:
         self.max_samples_per_shard = conf.max_samples_per_shard
         self.samples_in_current_shard = 0
 
+        # A flag to indicate to remove last tar file, if it is not full. Default is False.
+        self.remove_last_tar_if_not_full = (
+            conf.remove_last_tar_if_not_full
+            if "remove_last_tar_if_not_full" in conf
+            else False
+        )
+
     def add_sample(self, data_sample: AtekDataSample):
         """
         Add a sample to the WDS writer.
@@ -139,16 +146,16 @@ class AtekWdsWriter:
     def get_num_samples(self):
         return self.current_sample_idx
 
-    def close(self, remove_last_tar: bool = False):
+    def close(self):
         """
         Close the WDS writer and flush any remaining data to disk.
         """
         if self.sink is not None:
             self.sink.close()
 
-        if remove_last_tar:
+        # Remove the last tar file if it has less than max_samples_per_shard samples
+        if self.remove_last_tar_if_not_full:
             tar_files = [f for f in os.listdir(self.output_path) if f.endswith(".tar")]
-            # Remove the last tar file if it has less than max_samples_per_shard samples
             if (
                 len(tar_files) > 0
                 and self.current_sample_idx % self.max_samples_per_shard != 0
