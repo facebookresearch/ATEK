@@ -28,7 +28,7 @@ from atek.data_preprocess.atek_data_sample import (
     MultiFrameCameraData,
 )
 from atek.util.tensor_utils import compute_bbox_corners_in_world
-from atek.util.viz_utils import box_points_to_lines, check_projected_points_out_of_image
+from atek.util.viz_utils import box_points_to_lines, obtain_visible_line_segs_of_obb3
 from omegaconf.omegaconf import DictConfig
 
 from projectaria_tools.core.calibration import CameraModelType, CameraProjection
@@ -187,6 +187,14 @@ class NativeAtekSampleVisualizer:
                 suffix=suffix,
             )
 
+        # Plot EFM GT
+        if "efm_gt" in atek_data_sample.gt_data:
+            self.plot_efm_gt(
+                atek_data_sample.gt_data["efm_gt"],
+                plot_color=plot_color,
+                suffix=suffix,
+            )
+
         # In camera 2D view, either plot obb2d, or plot projected obb3d
         plot_projected_obb3_flag = (
             ("obb_viz" in self.conf)
@@ -201,23 +209,11 @@ class NativeAtekSampleVisualizer:
                 plot_color=plot_color,
                 suffix=suffix,
             )
-        elif (
-            "obb3_gt" in atek_data_sample.gt_data
-            and atek_data_sample.camera_rgb
-            and plot_projected_obb3_flag
-        ):
+        elif atek_data_sample.camera_rgb and plot_projected_obb3_flag:
             self.plot_obb3d_in_camera_view(
-                obb3d_gt_dict=atek_data_sample.gt_data["obb3_gt"]["camera-rgb"],
+                obb3d_gt_dict=atek_data_sample.gt_data,
                 camera_data=atek_data_sample.camera_rgb,
                 mps_traj_data=atek_data_sample.mps_traj_data,
-            )
-
-        # Plot EFM GT
-        if "efm_gt" in atek_data_sample.gt_data:
-            self.plot_efm_gt(
-                atek_data_sample.gt_data["efm_gt"],
-                plot_color=plot_color,
-                suffix=suffix,
             )
 
     def plot_multi_frame_camera_data(
@@ -416,9 +412,10 @@ class NativeAtekSampleVisualizer:
                 T_world_obj = SE3.from_matrix3x4(
                     per_cam_dict["ts_world_object"][i_obj].numpy()
                 )
+
                 bb3d_centers.append(T_world_obj.translation()[0])
                 wxyz = T_world_obj.rotation().to_quat()[0]
-                bb3d_quats_xyzw.append([wxyz[3], wxyz[0], wxyz[1], wxyz[2]])
+                bb3d_quats_xyzw.append([wxyz[1], wxyz[2], wxyz[3], wxyz[0]])
                 bb3d_labels.append(per_cam_dict["category_names"][i_obj])
                 # Assign obb3 size info
                 bb3d_sizes.append(np.array(per_cam_dict["object_dimensions"][i_obj]))
@@ -472,6 +469,65 @@ class NativeAtekSampleVisualizer:
             batch_id += 1
         self.PREV_MAX_BB3D_ID = cur_batch_max_id
 
+    def _plot_obb3d_in_camera_view_single_timestamp(
+        self,
+        obb3d_gt_dict: dict,
+        timestamp_ns: int,
+        T_World_Camera: SE3,
+        camera_projection: CameraProjection,
+        image_width: int,
+        image_height: int,
+    ) -> None:
+        # we first get all matrix needed for projection
+        object_dimensions = obb3d_gt_dict["object_dimensions"]
+        category_names = obb3d_gt_dict["category_names"]
+        num_instances = len(object_dimensions)
+        Ts_World_Object = obb3d_gt_dict["ts_world_object"]
+
+        # TODO: support more camera types
+        camera_label = "camera-rgb"
+
+        # we only support single timestamp for now
+
+        assert len(object_dimensions) == len(
+            Ts_World_Object
+        ), "The length of object_dimensions and T_World_Object should be the same"
+
+        rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
+        idx = 0  # id for the box rerun is drawing
+        rr.log(f"{camera_label}_image/project3d", rr.Clear(recursive=True))
+
+        corners_in_world = compute_bbox_corners_in_world(
+            object_dimensions, Ts_World_Object
+        )
+
+        for i_instance in range(num_instances):
+            category_name = category_names[i_instance].split(":")[0]
+            if self.obb_labels_to_ignore and category_name in self.obb_labels_to_ignore:
+                continue
+            if (
+                self.obb_labels_to_include
+                and category_name not in self.obb_labels_to_include
+            ):
+                continue
+
+            visible_line_segs, line_seg_colors = obtain_visible_line_segs_of_obb3(
+                corners_in_world[i_instance].numpy(),
+                camera_projection=camera_projection,
+                T_World_Camera=T_World_Camera,
+                image_width=image_width,
+                image_height=image_height,
+            )
+            # plot edges separately
+            rr.log(
+                f"{camera_label}_image/project3d/instance{i_instance}",
+                rr.LineStrips2D(
+                    visible_line_segs,
+                    colors=line_seg_colors,
+                    radii=1,
+                ),
+            )
+
     def plot_obb3d_in_camera_view(
         self,
         obb3d_gt_dict: dict,
@@ -479,29 +535,13 @@ class NativeAtekSampleVisualizer:
         mps_traj_data: Optional[MpsTrajData],
     ) -> None:
         """
-        Project and plot 3D bounding box in camera view.We only support single
-        timestamp in obb3d_gt_dict and camera_data, becasue input for cubercnn is single tiemstamp
+        Project and plot 3D bounding box in camera view.
         we first get all matrix needed for projection, then we calcuate the corner's position in camera view
         corner_camera = T_Device_Camera.inverse() @ (T_World_Device.inverse() @ corner)
         then we project the corner to image view using camera projection model
         """
-
-        # we first get all matrix needed for projection
-        object_dimensions = obb3d_gt_dict["object_dimensions"]
-        category_names = obb3d_gt_dict["category_names"]
-        num_instances = len(object_dimensions)
-        T_World_Object = obb3d_gt_dict["ts_world_object"]
+        # Get camera information
         T_Device_Camera = SE3.from_matrix3x4(camera_data.T_Device_Camera)
-        camera_label = camera_data.camera_label
-
-        # we only support single timestamp for now
-        assert (
-            len(mps_traj_data.Ts_World_Device) == 1
-        ), "We only support single timestamp for now"
-        T_World_Device = SE3.from_matrix3x4(mps_traj_data.Ts_World_Device[0])
-        assert len(object_dimensions) == len(
-            T_World_Object
-        ), "The length of object_dimensions and T_World_Object should be the same"
         camera_model_type_dict = {
             "CameraModelType.FISHEYE624": CameraModelType.FISHEYE624,
             "CameraModelType.KANNALA_BRANDT_K3": CameraModelType.KANNALA_BRANDT_K3,
@@ -514,85 +554,42 @@ class NativeAtekSampleVisualizer:
             # which is more stable, meanwhile, some datasample may not have online calibration
             camera_data.projection_params.numpy(),
         )
+        all_timestamp_ns = camera_data.capture_timestamps_ns
+        image_width = camera_data.images.shape[2]
+        image_height = camera_data.images.shape[3]
 
-        corners_world = compute_bbox_corners_in_world(
-            object_dimensions, T_World_Object
-        )  # torch.Size([num_of_instance, 8, 3])
-        projected_boxes = []
-        for i_instance in range(num_instances):
-            category_name = category_names[i_instance].split(":")[0]
-            if self.obb_labels_to_ignore and category_name in self.obb_labels_to_ignore:
-                continue
-            if (
-                self.obb_labels_to_include
-                and category_name not in self.obb_labels_to_include
-            ):
-                continue
+        # Loop over all timestamps
+        assert len(mps_traj_data.Ts_World_Device) == len(
+            all_timestamp_ns
+        ), "timestamp count in camera data and traj does not match."
 
-            projected_points = []
-            for corner in corners_world[i_instance]:
-                corner = np.array(corner)  # 3x1 array (3D point)
-                corner_camera = T_Device_Camera.inverse() @ (
-                    T_World_Device.inverse() @ corner
-                )
-                # Skip points behind the camera
-                if corner_camera[2] < 0:
+        for i_time in range(len(all_timestamp_ns)):
+            T_World_Device = SE3.from_matrix3x4(mps_traj_data.Ts_World_Device[i_time])
+            timestamp_ns = all_timestamp_ns[i_time].item()
+            # dict is from obb_sample_builder, single timestamp
+            if "obb3_gt" in obb3d_gt_dict:
+                single_obb3d_gt_dict = obb3d_gt_dict["obb3_gt"]["camera-rgb"]
+
+            # dict is from efm_sample_builder, multi timestamp
+            elif "efm_gt" in obb3d_gt_dict:
+                if str(timestamp_ns) not in obb3d_gt_dict["efm_gt"]:
                     continue
-
-                projected_point = camera_projection.project(corner_camera)
-                # filter out boexes outside of the image boundary
-                image_width, image_height = (
-                    camera_data.images.shape[2],
-                    camera_data.images.shape[3],
+                single_obb3d_gt_dict = obb3d_gt_dict["efm_gt"][str(timestamp_ns)][
+                    "camera-rgb"
+                ]
+            else:
+                logger.error(
+                    f"Unsupported GT dict type: {obb3d_gt_dict.keys()}, skipping"
                 )
+                return
 
-                # Our image coor are on pixel center.
-                """
-                if (
-                    projected_point[0] < -0.5
-                    or projected_point[0] > image_width - 0.5
-                    or projected_point[1] < -0.5
-                    or projected_point[1] > image_height - 0.5
-                ):
-                    continue
-                """
-                projected_points.append(projected_point)
-
-            # filter out boxes that have all points out of the image boundary
-            if len(projected_points) < 8:
-                continue
-            if check_projected_points_out_of_image(
-                projected_points, image_width, image_height
-            ):
-                continue
-            projected_boxes.append(projected_points)
-
-        timestamp_ns = camera_data.capture_timestamps_ns.item()
-        rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
-        idx = 0  # id for the box rerun is drawing
-        rr.log(f"{camera_label}_image/project3d", rr.Clear(recursive=True))
-        for projected_box in projected_boxes:
-            idx += 1
-            rr.log(
-                f"{camera_label}_image/project3d/{idx}",
-                rr.LineStrips2D(
-                    box_points_to_lines(projected_box),
-                    colors=[
-                        self.COLOR_RED,
-                        self.COLOR_GRAY,
-                        self.COLOR_GRAY,
-                        self.COLOR_GREEN,
-                        self.COLOR_GRAY,
-                        self.COLOR_GRAY,
-                        self.COLOR_GRAY,
-                        self.COLOR_GRAY,
-                        self.COLOR_BLUE,
-                        self.COLOR_GRAY,
-                        self.COLOR_GRAY,
-                        self.COLOR_GRAY,
-                    ],
-                    radii=1,
-                ),
+            self._plot_obb3d_in_camera_view_single_timestamp(
+                obb3d_gt_dict=single_obb3d_gt_dict,
+                timestamp_ns=timestamp_ns,
+                T_World_Camera=T_World_Device @ T_Device_Camera,
+                camera_projection=camera_projection,
+                image_width=image_width,
+                image_height=image_height,
             )
 
     def plot_efm_gt(self, gt_dict, plot_color, suffix) -> None:
