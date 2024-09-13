@@ -15,18 +15,20 @@
 # pyre-strict
 
 import logging
-from typing import Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import rerun as rr
 import torch
 from atek.data_preprocess.atek_data_sample import (
     AtekDataSample,
+    create_atek_data_sample_from_flatten_dict,
     MpsSemiDensePointData,
     MpsTrajData,
     MultiFrameCameraData,
 )
 from atek.util.tensor_utils import compute_bbox_corners_in_world
+from atek.util.viz_utils import box_points_to_lines, check_projected_points_out_of_image
 from omegaconf.omegaconf import DictConfig
 
 from projectaria_tools.core.calibration import CameraModelType, CameraProjection
@@ -61,12 +63,9 @@ class NativeAtekSampleVisualizer:
     def __init__(
         self,
         viz_prefix: str = "",
-        viz_web_port: int = 8888,
-        viz_ws_port: int = 8899,
+        viz_web_port: Optional[int] = None,
         conf: Optional[DictConfig] = None,
-        plot_types=[],
-        obb_labels_to_ignore=[],
-        obb_labels_to_include=[],
+        output_viz_file: Optional[str] = None,
     ) -> None:
         """
         Args:
@@ -76,38 +75,25 @@ class NativeAtekSampleVisualizer:
         """
         self.viz_prefix = viz_prefix
         self.cameras_to_plot = []
+        self.conf = conf
+        self.output_viz_file = output_viz_file
 
-        # Full trajectory of the device
-        self.full_traj = []
+        # Obb related filtering
+        self.obb_labels_to_ignore = None
+        self.obb_labels_to_include = None
+        if "obb_viz" in conf:
+            if "obb_labels_to_ignore" in conf.obb_viz:
+                self.obb_labels_to_ignore = conf.obb_viz.obb_labels_to_ignore
+            if "obb_labels_to_include" in conf.obb_viz:
+                self.obb_labels_to_include = conf.obb_viz.obb_labels_to_include
 
-        # if user want to specify plot types, they can pass a config file, other wise, we will use the default plot types
-        self.plot_types = [
-            "camera_rgb",
-            "camera_slam_left",
-            "camera_slam_right",
-            "mps_traj",
-            "semidense_points",
-            "camera_rgb_depth",
-            "obb2_gt",
-            "obb3_gt",
-            "obb3_in_camera_view",
-            "efm_gt",
-        ]
-        if conf and conf.plot_types:
-            self.plot_types = conf.plot_types
-        # if the label is in the list, we will not render it
-        if conf and conf.obb_labels_to_ignore:
-            self.obb_labels_to_ignore = conf.obb_labels_to_ignore
-        else:
-            self.obb_labels_to_ignore = obb_labels_to_ignore
+        # Cached full trajectory of the device
+        self.mps_traj_cached_full = []
 
-        if conf and conf.obb_labels_to_include:
-            self.obb_labels_to_include = conf.obb_labels_to_include
-        else:
-            self.obb_labels_to_include = obb_labels_to_include
+        # Initializing ReRun.
         rr.init(f"ATEK Sample Viewer - {self.viz_prefix}", spawn=True)
-        rr.serve(web_port=viz_web_port, ws_port=viz_ws_port)
-        self.obb_labels_to_include = ["chair", "table", "sofa"]
+        if viz_web_port is not None:
+            rr.serve(web_port=viz_web_port, ws_port=viz_web_port + 1)
         return
 
     def plot_atek_sample(
@@ -121,91 +107,116 @@ class NativeAtekSampleVisualizer:
         and semidense points data, and GT data. User can specify which plots to generate.
         Currently supported GT data viz includes: obb3, obb2.
         """
+        self.plot_atek_sample_no_gt(atek_data_sample=atek_data_sample)
 
+        if atek_data_sample.camera_rgb:
+            timestamp_ns = atek_data_sample.camera_rgb.capture_timestamps_ns[0].item()
+            self.plot_atek_sample_gt(
+                atek_data_sample=atek_data_sample,
+                timestamp_ns=timestamp_ns,
+                plot_color=plot_line_color,
+                suffix=suffix,
+            )
+
+    def plot_atek_sample_as_dict(
+        self,
+        atek_data_sample_dict: Dict,
+        plot_line_color=COLOR_GREEN,
+        suffix="",
+    ) -> None:
+        # Check for dict validity
+        if not atek_data_sample_dict:
+            logger.warning("ATEK data sample dict is empty! Not plotting this sample.")
+
+        # Convert from flattened dict back to ATEK data sample
+        atek_data_sample = create_atek_data_sample_from_flatten_dict(
+            flatten_dict=atek_data_sample_dict
+        )
+
+        self.plot_atek_sample(
+            atek_data_sample=atek_data_sample,
+            plot_line_color=plot_line_color,
+            suffix=suffix,
+        )
+
+    def plot_atek_sample_no_gt(
+        self,
+        atek_data_sample: Optional[AtekDataSample],
+    ) -> None:
+        """
+        Plot an ATEK data sample instance in ReRun, including camera data, mps trajectory
+        and semidense points data, but no GT data.
+        """
         assert (
             atek_data_sample is not None
         ), "ATEK data sample is empty in plot_atek_sample"
 
-        if atek_data_sample.camera_rgb and "camera_rgb" in self.plot_types:
+        if atek_data_sample.camera_rgb:
             self.plot_multi_frame_camera_data(atek_data_sample.camera_rgb)
-        if atek_data_sample.camera_slam_left and "camera_slam_left" in self.plot_types:
+        if atek_data_sample.camera_slam_left:
             self.plot_multi_frame_camera_data(atek_data_sample.camera_slam_left)
-        if (
-            atek_data_sample.camera_slam_right
-            and "camera_slam_right" in self.plot_types
-        ):
+        if atek_data_sample.camera_slam_right:
             self.plot_multi_frame_camera_data(atek_data_sample.camera_slam_right)
-        if atek_data_sample.camera_rgb_depth and "camera_rgb_depth" in self.plot_types:
-            self.plot_multi_frame_camera_data(atek_data_sample.camera_rgb_depth)
-        if atek_data_sample.mps_traj_data and "mps_traj" in self.plot_types:
+
+        # MPS viz
+        if atek_data_sample.mps_traj_data:
             self.plot_mps_traj_data(atek_data_sample.mps_traj_data)
-        if (
-            atek_data_sample.mps_semidense_point_data
-            and "semidense_points" in self.plot_types
-        ):
+        if atek_data_sample.mps_semidense_point_data:
             self.plot_semidense_point_cloud(atek_data_sample.mps_semidense_point_data)
-        if atek_data_sample.gt_data["obb3_gt"] and "obb3_gt" in self.plot_types:
+
+        # Depth viz
+        if atek_data_sample.camera_rgb_depth:
+            self.plot_multi_frame_camera_data(atek_data_sample.camera_rgb_depth)
+
+    def plot_atek_sample_gt(
+        self,
+        atek_data_sample: AtekDataSample,
+        timestamp_ns: int,
+        plot_color: List[int],
+        suffix: str = "",
+    ) -> None:
+        """
+        Function to plot object detection GT data stored in ATEK data sample
+        """
+        # Plot obb3d in 3D view
+        if "obb3_gt" in atek_data_sample.gt_data:
             self.plot_obb3_gt(
                 atek_data_sample.gt_data["obb3_gt"],
-                timestamp_ns=atek_data_sample.camera_rgb.capture_timestamps_ns[
-                    0
-                ].item(),
-                plot_color=plot_line_color,
+                timestamp_ns=timestamp_ns,
+                plot_color=plot_color,
                 suffix=suffix,
             )
-        if (
+
+        # In camera 2D view, either plot obb2d, or plot projected obb3d
+        plot_projected_obb3_flag = (
+            ("obb_viz" in self.conf)
+            and ("plot_obb3_in_camera_view" in self.conf.obb_viz)
+            and (self.conf.obb_viz.plot_obb3_in_camera_view)
+        )
+
+        if "obb2_gt" in atek_data_sample.gt_data and not plot_projected_obb3_flag:
+            self.plot_obb2_gt(
+                atek_data_sample.gt_data["obb2_gt"],
+                timestamp_ns=timestamp_ns,
+                plot_color=plot_color,
+                suffix=suffix,
+            )
+        elif (
             "obb3_gt" in atek_data_sample.gt_data
             and atek_data_sample.camera_rgb
-            and ("camera_rgb" in self.plot_types)
-            and ("obb3_in_camera_view" in self.plot_types)
+            and plot_projected_obb3_flag
         ):
             self.plot_obb3d_in_camera_view(
                 obb3d_gt_dict=atek_data_sample.gt_data["obb3_gt"]["camera-rgb"],
                 camera_data=atek_data_sample.camera_rgb,
                 mps_traj_data=atek_data_sample.mps_traj_data,
             )
-        elif (
-            "obb2_gt" in atek_data_sample.gt_data
-            and "obb2_gt" in atek_data_sample.gt_data
-            and ("obb2_gt" in self.plot_types)
-        ):
-            self.plot_obb2_gt(
-                atek_data_sample.gt_data["obb2_gt"],
-                timestamp_ns=atek_data_sample.camera_rgb.capture_timestamps_ns[
-                    0
-                ].item(),
-                plot_color=plot_line_color,
-                suffix=suffix,
-            )
-        elif "efm_gt" in atek_data_sample.gt_data and ("efm_gt" in self.plot_types):
-            self.plot_gtdata(
-                atek_data_sample.gt_data,
-                atek_data_sample.camera_rgb.capture_timestamps_ns[0].item(),
-                plot_line_color=plot_line_color,
-                suffix=suffix,
-            )
 
-    def plot_gtdata(self, atek_gt_dict, timestamp_ns, plot_line_color, suffix) -> None:
-        if "obb2_gt" in atek_gt_dict:
-            self.plot_obb2_gt(
-                atek_gt_dict["obb2_gt"],
-                timestamp_ns=timestamp_ns,
-                plot_color=plot_line_color,
-                suffix=suffix,
-            )
-
-        if "obb3_gt" in atek_gt_dict:
-            self.plot_obb3_gt(
-                atek_gt_dict["obb3_gt"],
-                timestamp_ns=timestamp_ns,
-                plot_color=plot_line_color,
-                suffix=suffix,
-            )
-
-        if "efm_gt" in atek_gt_dict:
+        # Plot EFM GT
+        if "efm_gt" in atek_data_sample.gt_data:
             self.plot_efm_gt(
-                atek_gt_dict["efm_gt"],
-                plot_color=plot_line_color,
+                atek_data_sample.gt_data["efm_gt"],
+                plot_color=plot_color,
                 suffix=suffix,
             )
 
@@ -236,14 +247,6 @@ class NativeAtekSampleVisualizer:
                     rr.Image(image),
                 )
 
-        # Plot camera pose, we can keep this line, but now RGB camera pose should be very close to the device pose
-        # to avoid multiple poses drawn on world/device, we will not plot poses for different cameras,
-        # but keep the code incase user want to plot camera pose in the future
-
-        # rerun_T_Device_Camera = ToTransform3D(T_Device_Camera, False)
-        # rerun_T_Device_Camera.axis_length = self.AXIS_LENGTH
-        # rr.log(f"world/device/{camera_label}", rerun_T_Device_Camera)
-
     def plot_mps_traj_data(self, mps_traj_data: Optional[MpsTrajData]) -> None:
 
         # loop over all frames
@@ -267,10 +270,11 @@ class NativeAtekSampleVisualizer:
                 rerun_T_World_Device,
             )
 
-            self.full_traj.append(T_World_Device.translation()[0])
+            # Cache the full trajectory
+            self.mps_traj_cached_full.append(T_World_Device.translation()[0])
             rr.log(
                 "world/device_trajectory",
-                rr.LineStrips3D(self.full_traj),
+                rr.LineStrips3D(self.mps_traj_cached_full),
                 timeless=False,
             )
 
@@ -314,6 +318,10 @@ class NativeAtekSampleVisualizer:
         for camera_label, per_cam_dict in gt_dict.items():
             if camera_label not in self.cameras_to_plot:
                 continue
+            # Skip if this camera observation is empty
+            if not per_cam_dict:
+                continue
+
             num_obb2 = len(per_cam_dict["category_ids"])
             bb2ds_all = []
             category_names = []
@@ -321,10 +329,13 @@ class NativeAtekSampleVisualizer:
                 # re-arrange order because rerun def of bbox(XYXY) is different from ATEK(XXYY)
                 bb2d = per_cam_dict["box_ranges"][i_obj]
                 category_name = per_cam_dict["category_names"][i_obj].split(":")[0]
-                if category_name in self.obb_labels_to_ignore:
+                if (
+                    self.obb_labels_to_ignore
+                    and category_name in self.obb_labels_to_ignore
+                ):
                     continue
                 if (
-                    len(self.obb_labels_to_include) > 0
+                    self.obb_labels_to_include
                     and category_name not in self.obb_labels_to_include
                 ):
                     continue
@@ -385,13 +396,19 @@ class NativeAtekSampleVisualizer:
 
         # Loop over all cameras
         for camera_label, per_cam_dict in gt_dict.items():
+            # Skip if this camera observation is empty
+            if not per_cam_dict:
+                continue
             num_obb3 = len(per_cam_dict["category_ids"])
             for i_obj in range(num_obb3):
                 category_name = per_cam_dict["category_names"][i_obj].split(":")[0]
-                if category_name in self.obb_labels_to_ignore:
+                if (
+                    self.obb_labels_to_ignore
+                    and category_name in self.obb_labels_to_ignore
+                ):
                     continue
                 if (
-                    len(self.obb_labels_to_include)
+                    self.obb_labels_to_include
                     and category_name not in self.obb_labels_to_include
                 ):
                     continue
@@ -471,6 +488,8 @@ class NativeAtekSampleVisualizer:
 
         # we first get all matrix needed for projection
         object_dimensions = obb3d_gt_dict["object_dimensions"]
+        category_names = obb3d_gt_dict["category_names"]
+        num_instances = len(object_dimensions)
         T_World_Object = obb3d_gt_dict["ts_world_object"]
         T_Device_Camera = SE3.from_matrix3x4(camera_data.T_Device_Camera)
         camera_label = camera_data.camera_label
@@ -500,13 +519,25 @@ class NativeAtekSampleVisualizer:
             object_dimensions, T_World_Object
         )  # torch.Size([num_of_instance, 8, 3])
         projected_boxes = []
-        for instance in corners_world:
+        for i_instance in range(num_instances):
+            category_name = category_names[i_instance].split(":")[0]
+            if self.obb_labels_to_ignore and category_name in self.obb_labels_to_ignore:
+                continue
+            if (
+                self.obb_labels_to_include
+                and category_name not in self.obb_labels_to_include
+            ):
+                continue
+
             projected_points = []
-            for corner in instance:
+            for corner in corners_world[i_instance]:
                 corner = np.array(corner)  # 3x1 array (3D point)
                 corner_camera = T_Device_Camera.inverse() @ (
                     T_World_Device.inverse() @ corner
                 )
+                # Skip points behind the camera
+                if corner_camera[2] < 0:
+                    continue
 
                 projected_point = camera_projection.project(corner_camera)
                 # filter out boexes outside of the image boundary
@@ -514,7 +545,9 @@ class NativeAtekSampleVisualizer:
                     camera_data.images.shape[2],
                     camera_data.images.shape[3],
                 )
+
                 # Our image coor are on pixel center.
+                """
                 if (
                     projected_point[0] < -0.5
                     or projected_point[0] > image_width - 0.5
@@ -522,10 +555,15 @@ class NativeAtekSampleVisualizer:
                     or projected_point[1] > image_height - 0.5
                 ):
                     continue
+                """
                 projected_points.append(projected_point)
 
-            # filter out boxes that have points outside of the image boundary
-            if len(projected_points) != 8:
+            # filter out boxes that have all points out of the image boundary
+            if len(projected_points) < 8:
+                continue
+            if check_projected_points_out_of_image(
+                projected_points, image_width, image_height
+            ):
                 continue
             projected_boxes.append(projected_points)
 
@@ -538,7 +576,7 @@ class NativeAtekSampleVisualizer:
             rr.log(
                 f"{camera_label}_image/project3d/{idx}",
                 rr.LineStrips2D(
-                    self._box_points_to_lines(projected_box),
+                    box_points_to_lines(projected_box),
                     colors=[
                         self.COLOR_RED,
                         self.COLOR_GRAY,
@@ -557,42 +595,13 @@ class NativeAtekSampleVisualizer:
                 ),
             )
 
-    def _box_points_to_lines(self, projected_box) -> list[list[float]]:
-        """
-        Convert a list of 8 points to a list of lines.
-        """
-        p1, p2, p3, p4, p5, p6, p7, p8 = (
-            projected_box[0],
-            projected_box[1],
-            projected_box[2],
-            projected_box[3],
-            projected_box[4],
-            projected_box[5],
-            projected_box[6],
-            projected_box[7],
-        )
-        return [
-            [p1, p2],
-            [p2, p3],
-            [p3, p4],
-            [p4, p1],
-            [p5, p6],
-            [p6, p7],
-            [p7, p8],
-            [p8, p5],
-            [p1, p5],
-            [p2, p6],
-            [p3, p7],
-            [p4, p8],
-        ]
-
     def plot_efm_gt(self, gt_dict, plot_color, suffix) -> None:
         # EFM gt is a nested dict with "timestamp(as str) -> obb3_dict"
         for timestamp_str, obb3_dict in gt_dict.items():
             self.plot_obb3_gt(obb3_dict, int(timestamp_str), plot_color, suffix)
 
-    def save_viz(self, rrd_output_path: str) -> None:
+    def save_viz(self) -> None:
         # user can use rerun [rrd_file_path] in terminal to load the visualization
-        if rrd_output_path is not None:
-            logger.info(f"Saving visualization to {rrd_output_path}")
-            rr.save(rrd_output_path)
+        if self.output_viz_file is not None:
+            logger.info(f"Saving visualization to {self.output_viz_file}")
+            rr.save(self.output_viz_file)

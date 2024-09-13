@@ -1,11 +1,5 @@
-plot_types:
-  - "camera_rgb"
-  - "camera_slam_left"
-  - "camera_slam_right"
-  - "mps_traj"
-  - "semidense_points"
-  - "obb3_gt"
-  - "obb3_in_camera_view"
-obb_labels_to_ignore:
-  - "other"
-obb_labels_to_include:
+obb_viz:
+  plot_obb3_in_camera_view: True
+  obb_labels_to_ignore:
+    - "other"
+  obb_labels_to_include:
