@@ -182,6 +182,11 @@ def atek_default_collation_fn(samples):
     return batched_dict
 
 
+def simple_list_collation_fn(batch):
+    # Simply collate as a list
+    return list(batch)
+
+
 def load_atek_wds_dataset(
     urls: List[str],
     nodesplitter: Callable = wds.shardlists.single_node_only,
