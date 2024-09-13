@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import torch
 
@@ -143,7 +143,7 @@ class ObbSampleBuilder:
 
         return processors
 
-    def get_sample_by_timestamp_ns(self, timestamp_ns) -> Optional[AtekDataSample]:
+    def get_sample_by_timestamp_ns(self, timestamp_ns: int) -> Optional[AtekDataSample]:
         sample = AtekDataSample()
 
         # First assign sequence name
@@ -232,3 +232,15 @@ class ObbSampleBuilder:
                 )
 
         return sample
+
+    def get_sample_by_timestamps_ns(
+        self, timestamps_ns: List[int]
+    ) -> Optional[AtekDataSample]:
+        """
+        This API allows for a List[timestamp] as input, however, the list must be of length 1.
+        This is for API consistency with the other sample builders.
+        """
+        assert (
+            len(timestamps_ns) == 1
+        ), "Only support single timestamp query for ObbSampleBuilder!"
+        return self.get_sample_by_timestamp_ns(timestamps_ns[0])
