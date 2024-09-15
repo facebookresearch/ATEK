@@ -181,27 +181,3 @@ def obtain_visible_line_segs_of_obb3(
             all_seg_colors.append(plotting_colors[i_edge])
 
     return all_visible_line_segs, all_seg_colors
-
-
-def filter_obbs_by_confidence(
-    obb_dict: Dict, confidence_score: torch.Tensor, confidence_lower_threshold: float
-) -> Dict:
-    """
-    A simple filter function to filter the predictions by confidence score (lower_threshold).
-    The obb_dict follows the format of ATEK obb3_gt_processor convention
-    """
-    filtered_indices = confidence_score > confidence_lower_threshold
-    result_dict = obb_dict.copy()  # shallow copy, should be okay
-
-    for camera_label, single_cam_dict in obb_dict.items():
-        for key, val in single_cam_dict.items():
-            if isinstance(val, torch.Tensor):
-                result_dict[camera_label][key] = val[filtered_indices]
-            if isinstance(val, List):
-                result_dict[camera_label][key] = [
-                    s
-                    for s, selected_flag in zip(val, filtered_indices)
-                    if selected_flag
-                ]
-
-    return result_dict

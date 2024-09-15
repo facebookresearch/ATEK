@@ -21,7 +21,7 @@ import rerun as rr
 import torch
 
 from atek.data_loaders.cubercnn_model_adaptor import CubeRCNNModelAdaptor
-from atek.util.viz_utils import filter_obbs_by_confidence
+from atek.util.tensor_utils import filter_obbs_by_confidence_all_cams
 from atek.viz.atek_visualizer import NativeAtekSampleVisualizer
 from omegaconf.omegaconf import DictConfig
 
@@ -75,12 +75,12 @@ class CubercnnVisualizer(NativeAtekSampleVisualizer):
         )
 
         # Apply confidence filtering
-        atek_format_gt_dict["obb3_gt"] = filter_obbs_by_confidence(
+        atek_format_gt_dict["obb3_gt"] = filter_obbs_by_confidence_all_cams(
             atek_format_gt_dict["obb3_gt"],
             confidence_score=atek_format_gt_dict["scores"],
             confidence_lower_threshold=self.conf.obb_viz.confidence_lower_threshold,
         )
-        atek_format_gt_dict["obb2_gt"] = filter_obbs_by_confidence(
+        atek_format_gt_dict["obb2_gt"] = filter_obbs_by_confidence_all_cams(
             atek_format_gt_dict["obb2_gt"],
             confidence_score=atek_format_gt_dict["scores"],
             confidence_lower_threshold=self.conf.obb_viz.confidence_lower_threshold,

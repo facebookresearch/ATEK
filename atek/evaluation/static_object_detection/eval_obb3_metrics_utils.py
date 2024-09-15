@@ -13,8 +13,9 @@
 # limitations under the License.
 
 import logging
+import re
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Tuple
 
 import torch
 
@@ -318,15 +319,34 @@ def prec_recall_bb3(
     return ret
 
 
+def _extract_prec_recall_values_from_dict(metrics_results: Dict) -> Tuple:
+    """
+    A helper function to extract precision and recall values from a dictionary of metrics.
+    """
+    # Pattern to match keys starting with "Precision@IOU"
+    # for testing only
+    print(f"------- debug: {metrics_results.keys()}")
+    prec_pattern = r"^precision@IoU"
+    recall_pattern = r"^recall@IoU"
+
+    prec = -1.0
+    recall = -1.0
+    for key, val in metrics_results.items():
+        if re.match(prec_pattern, key):
+            prec = val
+        elif re.match(recall_pattern, key):
+            recall = val
+    return prec, recall
+
+
 def print_obb3_metrics_to_logger(metrics) -> None:
     # Initialize an empty string to accumulate log messages
     log_messages = "Object Detection Model Performance Summary\n"
     log_messages += "=======Overall mAP Scores across all classes=======\n"
     log_messages += f"mAP (Average across IoU thresholds, defined by MeanAveragePrecision3D class, default is [0.05, 0.10, 0.15, ..., 0.5]): {metrics['map_3D']:.4f}\n"
-    # log_messages += f"mAP (IoU=0.25): {metrics['map_25_3D']:.4f}\n"
-    # log_messages += f"mAP (IoU=0.50): {metrics['map_50_3D']:.4f}\n"
-    log_messages += f"Average precision (IoU=0.20): {metrics['precision@IoU0.2']:.4f}\n"
-    log_messages += f"Average recall (IoU=0.20): {metrics['recall@IoU0.2']:.4f}\n"
+    average_prec, average_recall = _extract_prec_recall_values_from_dict(metrics)
+    log_messages += f"Average precision (IoU=0.20): {average_prec:.4f}\n"
+    log_messages += f"Average recall (IoU=0.20): {average_recall:.4f}\n"
     log_messages += (
         "===mAP across IoU thresholds [0.05, 0.10, 0.15, ..., 0.5]) per Class===\n"
     )
