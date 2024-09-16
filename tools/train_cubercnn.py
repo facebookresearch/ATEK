@@ -28,7 +28,7 @@ import torch.distributed as dist
 import yaml
 
 from atek.data_loaders.cubercnn_model_adaptor import load_atek_wds_dataset_as_cubercnn
-from atek.util.file_io_utils import load_yaml_and_extract_paths
+from atek.util.file_io_utils import load_yaml_and_extract_tar_list
 
 from cubercnn.config import get_cfg_defaults
 from cubercnn.modeling.backbone import build_dla_from_vision_fpn_backbone
@@ -83,7 +83,7 @@ def get_tars(tar_yaml, relative_path: str = "", use_relative_path: bool = False)
     yaml_filename = os.path.basename(tar_yaml)
     if yaml_filename.startswith("streamable") or yaml_filename.startswith("local_"):
         logger.info(f"Loading new-format yaml file.")
-        tar_files = load_yaml_and_extract_paths(yaml_path=tar_yaml)
+        tar_files = load_yaml_and_extract_tar_list(yaml_path=tar_yaml)
         return tar_files
 
     with open(tar_yaml, "r") as f:
@@ -193,7 +193,7 @@ def do_val(cfg, model, iteration, writers, max_iter=100):
                 x for x in orig_data if x["instances"].get("gt_classes").numel() > 0
             ]
             if len(data) == 0:
-                raise ValueError("data contains 0 valid samples.")
+                continue
             loss_dict = model(data)
 
             # reduce
@@ -304,7 +304,6 @@ def do_train(cfg, model, resume=False):
                     x for x in orig_data if x["instances"].get("gt_classes").numel() > 0
                 ]
                 if len(data) == 0:
-                    logger.warning("data contains 0 valid samples, skipping iteration")
                     continue
 
                 loss_dict = model(data)
