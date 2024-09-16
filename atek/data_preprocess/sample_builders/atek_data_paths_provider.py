@@ -1,4 +1,17 @@
-# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 
 import logging
 import os
@@ -14,17 +27,21 @@ def _get_possible_file_conventions() -> Dict[str, List[str]]:
     Get the file location conventions for various datasets:
     - ADT
     - ASE
+    - AEO
     """
     return {
         "video_vrs_file": ["video.vrs"],
         # MPS files
-        "mps_closedloop_traj_file": ["aria_trajectory.csv"],
+        "mps_closedloop_traj_file": [
+            "aria_trajectory.csv",
+            "mps/slam/closed_loop_trajectory.csv",  # AEO
+        ],
         "mps_semidense_points_file": [
-            "mps/slam/semidense_points.csv.gz",  # ADT
+            "mps/slam/semidense_points.csv.gz",  # ADT, AEO
             "maps/maps_v1/globalcloud_GT.csv.gz",  # ASE
         ],
         "mps_semidense_observations_file": [
-            "mps/slam/semidense_observations.csv.gz",  # ADT
+            "mps/slam/semidense_observations.csv.gz",  # ADT, AEO
             "maps/maps_v1/observations.csv.gz",  # ASE
         ],
         "mps_online_calib_file": [
