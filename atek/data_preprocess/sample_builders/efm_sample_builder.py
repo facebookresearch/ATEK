@@ -13,17 +13,13 @@
 # limitations under the License.
 
 import logging
+import os
 from dataclasses import fields
 from typing import Dict, List, Optional
 
 import torch
 
-from atek.data_preprocess.atek_data_sample import (
-    AtekDataSample,
-    MpsSemiDensePointData,
-    MpsTrajData,
-    MultiFrameCameraData,
-)
+from atek.data_preprocess.atek_data_sample import AtekDataSample, MpsTrajData
 from atek.data_preprocess.processors.aria_camera_processor import AriaCameraProcessor
 from atek.data_preprocess.processors.depth_image_processor import DepthImageProcessor
 from atek.data_preprocess.processors.efm_gt_processor import EfmGtProcessor
@@ -126,7 +122,11 @@ class EfmSampleBuilder:
             )
 
         # Depth processor
-        if "rgb_depth" in conf and conf.rgb_depth.selected:
+        if (
+            "rgb_depth" in conf
+            and conf.rgb_depth.selected
+            and os.path.exists(self.depth_vrs_file)
+        ):
             assert (
                 self.depth_vrs_file != ""
             ), "need to specify depth vrs file to use depth processor"
@@ -182,7 +182,7 @@ class EfmSampleBuilder:
                     return False
 
             # Check for gt
-            if name == "gt_data":
+            if name == "gt_data" and "efm_gt" in data_field_value:
                 if len(data_field_value["efm_gt"]) != num_timestamps:
                     logger.warning(
                         f"Timestamps in {name} does not have full count of {num_timestamps}!"

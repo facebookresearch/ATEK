@@ -30,11 +30,14 @@ def _get_possible_file_conventions() -> Dict[str, List[str]]:
     - AEO
     """
     return {
-        "video_vrs_file": ["video.vrs"],
+        "video_vrs_file": [
+            "video.vrs",
+            "main.vrs",  # AEO
+        ],
         # MPS files
         "mps_closedloop_traj_file": [
             "aria_trajectory.csv",
-            "mps/slam/closed_loop_trajectory.csv",  # AEO
+            "closed_loop_trajectory.csv",  # AEO
         ],
         "mps_semidense_points_file": [
             "mps/slam/semidense_points.csv.gz",  # ADT, AEO
