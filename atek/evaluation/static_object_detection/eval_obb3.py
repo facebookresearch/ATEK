@@ -109,6 +109,8 @@ def update_from_single_sequence_obb3(
     # Count for timestamps with empty GT and empty predictions
     empty_gt_timestamp_count = 0
     empty_pred_timestamp_count = 0
+    all_precisions = []
+    all_recalls = []
     for time in all_timestamps:
         if time not in pred_obb_dict:
             logger.info(f"prediction obbs not found for timestamp {time}")
@@ -126,6 +128,17 @@ def update_from_single_sequence_obb3(
         ), "the obbs don't contain valid confidence scores for mAP calculation."
 
         # TODO: check paddings are removed for EFM data
+
+        single_timestamp_prec_recall_result = compute_prec_recall_for_single_timestamp(
+            pred_obb_dict[time],
+            gt_obb_dict[time],
+            iou=iou,
+            compute_per_class_metrics=compute_per_class_metrics,
+        )
+        all_precisions.append(
+            single_timestamp_prec_recall_result[f"precision@IoU{iou}"]
+        )
+        all_recalls.append(single_timestamp_prec_recall_result[f"recall@IoU{iou}"])
 
         # log precision-recall statistics for a single frame if needed
         if (
@@ -150,6 +163,8 @@ def update_from_single_sequence_obb3(
     result["num_timestamps"] = len(all_timestamps)
     result["num_timestamp_miss_pred"] = empty_pred_timestamp_count
     result["num_timestamp_miss_gt"] = empty_gt_timestamp_count
+    result[f"precision@IoU{iou}"] = np.mean(all_precisions)
+    result[f"recall@IoU{iou}"] = np.mean(all_recalls)
 
     return result
 
