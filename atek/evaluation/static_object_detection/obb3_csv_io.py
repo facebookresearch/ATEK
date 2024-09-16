@@ -23,6 +23,7 @@ import fsspec
 import numpy as np
 import pandas as pd
 import torch
+from atek.data_loaders.cubercnn_model_adaptor import CubeRCNNModelAdaptor
 from atek.util.tensor_utils import compute_bbox_corners_in_world
 from projectaria_tools.core.sophus import SE3
 
@@ -100,6 +101,32 @@ class AtekObb3CsvWriter:
 
         if flush_at_end:
             self.file_writer.flush()
+
+    def write_from_cubercnn_dict(
+        self,
+        cubercnn_dict: Dict,
+        timestamp_ns: int = -1,
+        flush_at_end: bool = True,
+    ) -> None:
+        """
+        write a single row to the csv file, from a cubercnn-format dict.
+        """
+        # Convert to ATEK format
+        atek_format_gt_dict = CubeRCNNModelAdaptor.cubercnn_gt_to_atek_gt(
+            cubercnn_dict=cubercnn_dict,
+            T_world_camera_np=cubercnn_dict["T_world_camera"],
+            camera_label="camera-rgb",
+        )
+
+        # write to csv
+        self.write_from_atek_dict(
+            atek_dict=atek_format_gt_dict["obb3_gt"][
+                "camera-rgb"
+            ],  # cubercnn dict has only one camera
+            confidence_score=atek_format_gt_dict["scores"],
+            timestamp_ns=timestamp_ns,
+            flush_at_end=flush_at_end,
+        )
 
     # functions for cleaning up
     def flush(self) -> None:
