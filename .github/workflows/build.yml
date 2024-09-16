@@ -17,16 +17,14 @@ jobs:
         uses: conda-incubator/setup-miniconda@v2
         with:
           auto-update-conda: true
-          python-version: 3.9
+          python-version: 3.10
           auto-activate-base: false
       - name: Install dependencies
         shell: bash
         run: |
           conda init bash
-          conda install mamba -n base -c conda-forge
-          mamba init
-          mamba env create -f env_atek.yml
-          mamba activate atek
+          conda env create -f env_atek.yml
+          conda activate atek
       - name: Install ATEK lib
         shell: bash
         run: |
