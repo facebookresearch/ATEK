@@ -236,6 +236,7 @@ class Obb3GtProcessor:
             valid_size = 0
             for i_row in range(num_instances):
                 instance_id = visible_instances[i_row]
+
                 # query bbox3d data for this instance
                 single_bbox3d_data = bbox3d_with_dt.data().get(instance_id)
                 if single_bbox3d_data is None:
