@@ -2,7 +2,9 @@ name: Build package
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - fix_ci
   pull_request:
     branches: [main]
 
@@ -12,22 +14,20 @@ jobs:
     steps:
       - name : Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@v2
+      - name: setup-micromamba
+        uses: mamba-org/setup-micromamba@v1.9.0
         with:
-          auto-update-conda: true
-          python-version: 3.9
-          auto-activate-base: false
-      - name: Install dependencies
-        shell: bash
-        run: |
-          conda init bash
-          conda install mamba -n base -c conda-forge
-          mamba init
-          mamba env create -f env_atek.yml
-          mamba activate atek
+          micromamba-version: '1.5.9-1' 
+          environment-file: env_atek.yml
+          init-shell: >-
+            bash
+          cache-environment: true
+          post-cleanup: 'all'
       - name: Install ATEK lib
         shell: bash
         run: |
           python3 -m pip install .
+      - name: Import ATEK lib
+        shell: bash
+        run: |
+          python3 -c "import atek"
