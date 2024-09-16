@@ -43,7 +43,7 @@ from atek.util.file_io_utils import (
     load_yaml_and_extract_tar_list,
 )
 
-from atek.viz.atek_visualizer import NativeAtekSampleVisualizer
+from atek.viz.cubercnn_visualizer import CubercnnVisualizer
 
 from cubercnn.config import get_cfg_defaults
 from cubercnn.modeling.backbone import build_dla_from_vision_fpn_backbone  # noqa
@@ -70,9 +70,11 @@ logger = logging.getLogger("infer_cubercnn")
 def create_default_viz_conf():
     conf = OmegaConf.create(
         {
-            "plot_types": ["camera_rgb", "mps_traj", "obb2_gt", "obb3_gt"],
-            "obb_labels_to_include": ["table", "chair", "sofa"],
-            "obb_labels_to_ignore": [],
+            "obb_viz": {
+                "plot_obb3_in_camera_view": False,
+                "obb_labels_to_ignore": ["other"],
+                "confidence_lower_threshold": 0.8,
+            }
         }
     )
     return conf
@@ -156,9 +158,7 @@ def run_inference(args):
     # set up visualization
     if args.viz_flag:
         viz_conf = create_default_viz_conf()
-        atek_viz = NativeAtekSampleVisualizer(conf=viz_conf)
-        if args.save_viz_path:
-            atek_viz.save_viz(args.save_viz_path)
+        atek_visualizer = CubercnnVisualizer(conf=viz_conf)
 
     # set up prediction writer
     pred_writer = GroupAtekObb3CsvWriter(
@@ -175,134 +175,113 @@ def run_inference(args):
     current_sequence_name = ""
 
     # Loop over all batched samples in the dataset. Feeding samples in both ATEK and Cubercnn format for visualization purpose.
-    for atek_native_data, data in tqdm.tqdm(
-        zip(atek_format_dataloader, cubercnn_format_dataloader),
-        desc="Inference progress: ",
-    ):
-        num_iters += 1
+    with torch.no_grad():
+        for atek_native_data, data in tqdm.tqdm(
+            zip(atek_format_dataloader, cubercnn_format_dataloader),
+            desc="Inference progress: ",
+        ):
+            num_iters += 1
 
-        # Log time
-        if num_iters % 100 == 0:
-            end_time = time.time()
-            logger.info(f"Time for iteration {num_iters} is {end_time - start_time}s")
-            end_time = start_time
-
-        try:
-            model_output = model(data)
-
-            # Batched samples are formulated as lists in CubeRCNN, hence fill predictions over the lists
-            for single_atek_input, single_cubercnn_input, single_cubercnn_output in zip(
-                atek_native_data, data, model_output
-            ):
-                num_samples += 1
-                gt_sample = create_atek_data_sample_from_flatten_dict(single_atek_input)
-                timestamp_ns = gt_sample.camera_rgb.capture_timestamps_ns.item()
-                # GT boxes from input data (because input data is filtered)
-                model_input_gt = CubeRCNNModelAdaptor.cubercnn_gt_to_atek_gt(
-                    cubercnn_dict=single_cubercnn_input,
-                    T_world_camera_np=single_cubercnn_input["T_world_camera"],
-                    camera_label="camera-rgb",
+            # Log time
+            if num_iters % 100 == 0:
+                end_time = time.time()
+                logger.info(
+                    f"Time for iteration {num_iters} is {end_time - start_time}s"
                 )
-                if model_input_gt is None:
-                    continue
+                end_time = start_time
 
-                prediction_in_atek_format = CubeRCNNModelAdaptor.cubercnn_gt_to_atek_gt(
-                    cubercnn_dict=single_cubercnn_output,
-                    T_world_camera_np=single_cubercnn_input["T_world_camera"],
-                    camera_label="camera-rgb",
-                )
-                if prediction_in_atek_format is None:
-                    continue
+            try:
+                model_output = model(data)
 
-                # Some printing info
-                if current_sequence_name != single_atek_input["sequence_name"]:
-                    current_sequence_name = single_atek_input["sequence_name"]
-                    logger.info(
-                        f"Starting to process sequence: {current_sequence_name}"
+                # Batched samples are formulated as lists in CubeRCNN, hence fill predictions over the lists
+                for (
+                    single_atek_input,
+                    single_cubercnn_input,
+                    single_cubercnn_output,
+                ) in zip(atek_native_data, data, model_output):
+                    num_samples += 1
+                    gt_sample = create_atek_data_sample_from_flatten_dict(
+                        single_atek_input
                     )
-
-                # --------------------- Update CsvWriter ------------------------#
-                gt_writer.write_from_atek_dict(
-                    atek_dict=model_input_gt["obb3_gt"]["camera-rgb"],
-                    timestamp_ns=timestamp_ns,
-                    sequence_name=single_atek_input["sequence_name"],
-                )
-
-                pred_writer.write_from_atek_dict(
-                    atek_dict=prediction_in_atek_format["obb3_gt"]["camera-rgb"],
-                    confidence_score=prediction_in_atek_format["scores"],
-                    timestamp_ns=timestamp_ns,
-                    sequence_name=single_atek_input["sequence_name"],
-                )
-
-                # --------------------- Update Viz ------------------------#
-                # Filter out prediction with low confidence scores
-                if args.viz_flag:
-                    # TODO: refactor this. Very ugly
-                    valid_viz_filter = prediction_in_atek_format["scores"] > 0.5
-                    for key, val in prediction_in_atek_format["obb2_gt"][
-                        "camera-rgb"
-                    ].items():
-                        if isinstance(val, torch.Tensor):
-                            prediction_in_atek_format["obb2_gt"]["camera-rgb"][key] = (
-                                val[valid_viz_filter]
-                            )
-
-                    for key, val in prediction_in_atek_format["obb3_gt"][
-                        "camera-rgb"
-                    ].items():
-                        if isinstance(val, torch.Tensor):
-                            prediction_in_atek_format["obb3_gt"]["camera-rgb"][key] = (
-                                val[valid_viz_filter]
-                            )
-
-                    atek_viz.plot_gtdata(
-                        atek_gt_dict=model_input_gt,
-                        timestamp_ns=gt_sample.camera_rgb.capture_timestamps_ns.item(),
-                        plot_line_color=NativeAtekSampleVisualizer.COLOR_GREEN,
-                        suffix="_model_input",
+                    timestamp_ns = gt_sample.camera_rgb.capture_timestamps_ns.item()
+                    # GT boxes from input data (because input data is filtered)
+                    model_input_gt = CubeRCNNModelAdaptor.cubercnn_gt_to_atek_gt(
+                        cubercnn_dict=single_cubercnn_input,
+                        T_world_camera_np=single_cubercnn_input["T_world_camera"],
+                        camera_label="camera-rgb",
                     )
+                    if model_input_gt is None:
+                        continue
 
-                    # put pred_samples' category name and confidence together in obb2_gt and obb3_gt
-                    for i in range(
-                        len(
-                            prediction_in_atek_format["obb2_gt"]["camera-rgb"][
-                                "category_names"
-                            ]
+                    prediction_in_atek_format = (
+                        CubeRCNNModelAdaptor.cubercnn_gt_to_atek_gt(
+                            cubercnn_dict=single_cubercnn_output,
+                            T_world_camera_np=single_cubercnn_input["T_world_camera"],
+                            camera_label="camera-rgb",
                         )
-                    ):
-                        prediction_in_atek_format["obb2_gt"]["camera-rgb"][
-                            "category_names"
-                        ][i] += f": {prediction_in_atek_format['scores'][i]:.2f}"
-                    for i in range(
-                        len(
-                            prediction_in_atek_format["obb3_gt"]["camera-rgb"][
-                                "category_names"
-                            ]
-                        )
-                    ):
-                        prediction_in_atek_format["obb3_gt"]["camera-rgb"][
-                            "category_names"
-                        ][i] += f":{prediction_in_atek_format['scores'][i]:.2f}"
-
-                    # Visualize the prediction results, only visualize the GT part
-                    atek_viz.plot_gtdata(
-                        atek_gt_dict=prediction_in_atek_format,
-                        timestamp_ns=gt_sample.camera_rgb.capture_timestamps_ns.item(),
-                        plot_line_color=NativeAtekSampleVisualizer.COLOR_RED,
-                        suffix="_infer",
                     )
-        except Exception as e:
-            logger.error(
-                f"processing failed for iter {num_iters}, for either {current_sequence_name} or the sequence after this. Skipping"
-                f"error message: {e}"
-            )
+                    if prediction_in_atek_format is None:
+                        continue
+
+                    # Some printing info
+                    if current_sequence_name != single_atek_input["sequence_name"]:
+                        current_sequence_name = single_atek_input["sequence_name"]
+                        logger.info(
+                            f"Starting to process sequence: {current_sequence_name}"
+                        )
+
+                    # --------------------- Update CsvWriter ------------------------#
+                    gt_writer.write_from_atek_dict(
+                        atek_dict=model_input_gt["obb3_gt"]["camera-rgb"],
+                        timestamp_ns=timestamp_ns,
+                        sequence_name=single_atek_input["sequence_name"],
+                    )
+
+                    pred_writer.write_from_atek_dict(
+                        atek_dict=prediction_in_atek_format["obb3_gt"]["camera-rgb"],
+                        confidence_score=prediction_in_atek_format["scores"],
+                        timestamp_ns=timestamp_ns,
+                        sequence_name=single_atek_input["sequence_name"],
+                    )
+
+                    # --------------------- Update Viz ------------------------#
+                    # Filter out prediction with low confidence scores
+                    if args.viz_flag:
+                        # Plot RGB image
+                        atek_visualizer.plot_cubercnn_img(
+                            single_cubercnn_input["image"], timestamp_ns=timestamp_ns
+                        )
+
+                        # Plot GT and prediction in different colors
+                        single_cubercnn_output["T_world_camera"] = (
+                            single_cubercnn_input["T_world_camera"]
+                        )  # This patch is needed for visualization
+                        atek_visualizer.plot_cubercnn_dict(
+                            cubercnn_dict=single_cubercnn_input,
+                            timestamp_ns=timestamp_ns,
+                            plot_color=atek_visualizer.COLOR_GREEN,
+                            suffix="_model_input",
+                        )
+                        atek_visualizer.plot_cubercnn_dict(
+                            cubercnn_dict=single_cubercnn_output,
+                            timestamp_ns=timestamp_ns,
+                            plot_color=atek_visualizer.COLOR_RED,
+                            suffix="_model_output",
+                        )
+
+            except Exception as e:
+                logger.error(
+                    f"processing failed for iter {num_iters}, for either {current_sequence_name} or the sequence after this. Skipping"
+                    f"error message: {e}"
+                )
 
     gt_writer.flush()
     pred_writer.flush()
 
     if args.viz_flag:
-        atek_viz.save_viz(rrd_output_path=os.path.join(args.output_dir, "viz.rrd"))
+        atek_visualizer.save_viz(
+            rrd_output_path=os.path.join(args.output_dir, "viz.rrd")
+        )
 
     # print time information
     elapsed_time = time.time() - start_time
