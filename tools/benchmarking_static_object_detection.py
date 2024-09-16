@@ -72,6 +72,11 @@ def main() -> None:
         default=0.2,
     )
     parser.add_argument(
+        "--confidence-lower-threshold",
+        type=float,
+        default=0.3,
+    )
+    parser.add_argument(
         "--max-num-sequences",
         type=int,
         default=-1,
@@ -85,7 +90,8 @@ def main() -> None:
             gt_filename=args.gt_csv,
             prediction_filename=args.pred_csv,
             iou=args.iou_threshold,
-            compute_per_class_metrics=False,
+            compute_per_class_metrics=True,
+            confidence_lower_threshold=args.confidence_lower_threshold,
             max_num_sequences=args.max_num_sequences,
         )
         logger.info(json.dumps(metrics, indent=2, sort_keys=True))
@@ -100,6 +106,7 @@ def main() -> None:
             iou=args.iou_threshold,
             log_last_frame_result=False,
             compute_per_class_metrics=True,
+            confidence_lower_threshold=args.confidence_lower_threshold,
         )
         print_obb3_metrics_to_logger(metrics)
 

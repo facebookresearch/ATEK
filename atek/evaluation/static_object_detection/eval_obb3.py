@@ -16,7 +16,7 @@
 
 import logging
 import os
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -24,13 +24,12 @@ import torch
 from atek.evaluation.static_object_detection.eval_obb3_metrics_utils import (
     prec_recall_bb3,
 )
-
 from atek.evaluation.static_object_detection.obb3_csv_io import AtekObb3CsvReader
 from atek.evaluation.static_object_detection.static_object_detection_metrics import (
     AtekObb3Metrics,
 )
-
 from atek.util.atek_constants import ATEK_CATEGORY_ID_TO_NAME
+from atek.util.tensor_utils import filter_obbs_by_confidence
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -51,13 +50,15 @@ def compute_prec_recall_for_single_timestamp(
     result = {}
 
     # perform precision recall calculation for single timestamp
-    precision, recall, match_matrix, iou_matrix, per_class_results = prec_recall_bb3(
+    tupled_results = prec_recall_bb3(
         pred_obb_dict,
         gt_obb_dict,
         iou_thres=iou,
         return_ious=True,
         per_class=compute_per_class_metrics,
     )
+    precision, recall, match_matrix, *extra_results = tupled_results
+    per_class_results = extra_results[1] if len(extra_results) > 1 else None
 
     # Compute stats including true positives, false positives from precision and recall
     true_positives = match_matrix.any(-1)
@@ -89,7 +90,8 @@ def update_from_single_sequence_obb3(
     iou: float,
     single_timestamp_to_log_result: Optional[int] = None,
     compute_per_class_metrics: bool = False,
-) -> Dict:
+    confidence_lower_threshold: float = 0.3,
+) -> Tuple[Dict, List, List]:
     """
     Core function to evaluate a single pair of obb gt vs prediction, for a single sequence,
     and update the mAP_3d metrics accordingly.
@@ -129,8 +131,25 @@ def update_from_single_sequence_obb3(
 
         # TODO: check paddings are removed for EFM data
 
-        single_timestamp_prec_recall_result = compute_prec_recall_for_single_timestamp(
+        # filter prediction's confidence scores with a lower threshold
+        filtered_pred_obb_dict = filter_obbs_by_confidence(
             pred_obb_dict[time],
+            confidence_score=confidence_score,
+            confidence_lower_threshold=confidence_lower_threshold,
+        )
+        # Skip if no prediction obbs left after filtering
+        if (
+            not filtered_pred_obb_dict
+            or filtered_pred_obb_dict["category_ids"].numel() == 0
+        ):
+            logger.debug(
+                f"no prediction obbs left after filtering for timestamp {time}, marking as empty pred timestamp"
+            )
+            empty_pred_timestamp_count += 1
+            continue
+
+        single_timestamp_prec_recall_result = compute_prec_recall_for_single_timestamp(
+            filtered_pred_obb_dict,
             gt_obb_dict[time],
             iou=iou,
             compute_per_class_metrics=compute_per_class_metrics,
@@ -163,10 +182,14 @@ def update_from_single_sequence_obb3(
     result["num_timestamps"] = len(all_timestamps)
     result["num_timestamp_miss_pred"] = empty_pred_timestamp_count
     result["num_timestamp_miss_gt"] = empty_gt_timestamp_count
-    result[f"precision@IoU{iou}"] = np.mean(all_precisions)
-    result[f"recall@IoU{iou}"] = np.mean(all_recalls)
+    result[f"precision@IoU{iou},Confidence{confidence_lower_threshold}"] = np.mean(
+        all_precisions
+    )
+    result[f"recall@IoU{iou},Cofidence{confidence_lower_threshold}"] = np.mean(
+        all_recalls
+    )
 
-    return result
+    return result, all_precisions, all_recalls
 
 
 def evaluate_obb3_for_single_csv_pair(
@@ -175,6 +198,7 @@ def evaluate_obb3_for_single_csv_pair(
     iou: float = 0.2,
     log_last_frame_result: bool = False,
     compute_per_class_metrics: bool = False,
+    confidence_lower_threshold: float = 0.3,
 ) -> Dict:
     """
     Evaluate a single pair of prediction and gt obbs csv files, and return a dict of metrics including mean average precision (mAP), precision, recall based on IOU value.
@@ -200,12 +224,13 @@ def evaluate_obb3_for_single_csv_pair(
     if log_last_frame_result:
         timestamp_to_log = max(pred_obb_dict.keys()) if pred_obb_dict else None
 
-    single_sequence_result = update_from_single_sequence_obb3(
+    single_sequence_result, _, _ = update_from_single_sequence_obb3(
         pred_obb_dict=pred_obb_dict,
         gt_obb_dict=gt_obb_dict,
         mAP_3d=mAP_3d,
         iou=iou,
         compute_per_class_metrics=compute_per_class_metrics,
+        confidence_lower_threshold=confidence_lower_threshold,
         single_timestamp_to_log_result=timestamp_to_log,
     )
     result.update(single_sequence_result)
@@ -226,6 +251,7 @@ def evaluate_obb3_over_a_dataset(
     prediction_filename: str,
     iou: float = 0.2,
     compute_per_class_metrics: bool = False,
+    confidence_lower_threshold: float = 0.3,
     max_num_sequences: int = -1,
 ) -> Dict:
     """
@@ -265,6 +291,8 @@ def evaluate_obb3_over_a_dataset(
 
     # Loop over all pred and gt csv file pairs
     logger.info("loading csv files ... ")
+    all_precisions = []
+    all_recalls = []
     for pred_csv, gt_csv in zip(pred_csv_paths, gt_csv_paths):
         # Load in prediction and gt obbs as a {timestamp -> Obb3GtDict} dict
         pred_reader = AtekObb3CsvReader(input_filename=pred_csv)
@@ -273,11 +301,19 @@ def evaluate_obb3_over_a_dataset(
         gt_obb_dict = gt_reader.read_as_obb_dict()
 
         # Update mAP metrics from this sequence
-        single_sequence_result = update_from_single_sequence_obb3(
-            pred_obb_dict=pred_obb_dict, gt_obb_dict=gt_obb_dict, mAP_3d=mAP_3d, iou=iou
+        single_sequence_result, per_seq_prec, pre_seq_recall = (
+            update_from_single_sequence_obb3(
+                pred_obb_dict=pred_obb_dict,
+                gt_obb_dict=gt_obb_dict,
+                mAP_3d=mAP_3d,
+                iou=iou,
+                confidence_lower_threshold=confidence_lower_threshold,
+            )
         )
 
-        # TODO: enable drawing of prec-recall curve figure.
+        # add prec recall to the list
+        all_precisions.extend(per_seq_prec)
+        all_recalls.extend(pre_seq_recall)
 
     # Compute mAP metrics numbers, ignore average recall (e.g. "mar_*")
     logger.info(f"computing mAP metrics numbers ... ")
@@ -287,4 +323,12 @@ def evaluate_obb3_over_a_dataset(
         k: v.item() for k, v in result_map.items() if not k.startswith("mar_")
     }
     result.update(result_map)
+
+    # Compute mean precision and recall
+    result[f"precision@IoU{iou},Confidence{confidence_lower_threshold}"] = np.mean(
+        all_precisions
+    )
+    result[f"recall@IoU{iou},Cofidence{confidence_lower_threshold}"] = np.mean(
+        all_recalls
+    )
     return result

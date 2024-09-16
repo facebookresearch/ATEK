@@ -164,3 +164,49 @@ def compute_bbox_corners_in_world(
         )  # (8, 3)
 
     return torch.stack(corners_in_world_list, dim=0)  # (num_obbs, 8, 3)
+
+
+def filter_obbs_by_confidence(
+    obb_dict: Dict, confidence_score: torch.Tensor, confidence_lower_threshold: float
+) -> Dict:
+    """
+    A simple filter function to filter the predictions by confidence score (lower_threshold).
+    The obb_dict follows the format of ATEK obb3_gt_processor convention
+    """
+    filtered_indices = confidence_score > confidence_lower_threshold
+    # Make it 1-D if it's a scalar
+    if filtered_indices.dim() == 0:
+        filtered_indices = filtered_indices.unsqueeze(0)
+
+    result_dict = {}
+
+    for key, val in obb_dict.items():
+        if isinstance(val, torch.Tensor):
+            result_dict[key] = val[filtered_indices]
+        if isinstance(val, List):
+            result_dict[key] = [
+                s for s, selected_flag in zip(val, filtered_indices) if selected_flag
+            ]
+
+    return result_dict
+
+
+def filter_obbs_by_confidence_all_cams(
+    all_cam_dict: Dict,
+    confidence_score: torch.Tensor,
+    confidence_lower_threshold: float,
+) -> Dict:
+    """
+    A simple filter function to filter the predictions by confidence score (lower_threshold).
+    The obb_dict follows the format of ATEK obb3_gt_processor convention
+    """
+    result_dict = {}
+
+    for camera_label, single_cam_dict in all_cam_dict.items():
+        result_dict[camera_label] = filter_obbs_by_confidence(
+            obb_dict=single_cam_dict,
+            confidence_score=confidence_score,
+            confidence_lower_threshold=confidence_lower_threshold,
+        )
+
+    return result_dict
