@@ -2,7 +2,9 @@ name: Build package
 
 on:
   push:
-    branches: [main]
+    branches: 
+      - main
+      - fix_ci
   pull_request:
     branches: [main]
 
