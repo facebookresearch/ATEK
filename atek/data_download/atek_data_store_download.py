@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
 import json
 import logging
 import os
@@ -86,8 +87,34 @@ def extract_first_K_sequences(
         return dict(islice(wds_file_urls.items(), max_num_sequences))
 
 
+def _check_sha_number_for_single_tar(
+    file_path: str,
+    expected_sha_number: str,
+) -> bool:
+    """
+    Helper function to check the sha number of a single tar file.
+    Return True if the sha number matches, False otherwise.
+    """
+    # Create a SHA1 hash object
+    sha1 = hashlib.sha1()
+
+    # Open the file in binary read mode
+    with open(file_path, "rb") as file:
+        # Read and update hash string value in blocks of 4K
+        for byte_block in iter(lambda: file.read(4096), b""):
+            sha1.update(byte_block)
+
+        # Get the hexadecimal representation of the SHA1 hash
+        sha_number = sha1.hexdigest()
+
+    return sha_number == expected_sha_number
+
+
 def download_wds_files_for_single_sequence(
-    urls: Dict[str, Dict[str, str]], output_dir: str, sequence_name: str
+    urls: Dict[str, Dict[str, str]],
+    output_dir: str,
+    sequence_name: str,
+    overwrite: bool = False,
 ) -> Tuple[List[str], List[str]]:
     """
     For each sequence, download all the files to a directory with the same name.
@@ -107,11 +134,29 @@ def download_wds_files_for_single_sequence(
     http.mount("http://", adapter)
     http.mount("https://", adapter)
     failed_urls = []
-    for tar_name, tar_info in urls.items():
+
+    for tar_name, tar_info in tqdm(
+        urls.items(), desc=f"Downloading shards from {sequence_name}"
+    ):
         # original tar name is shards-0000_tar, we need to change to shards-0000.tar
         tar_name = tar_name.replace("_tar", ".tar")
         filepath = os.path.join(output_dir, tar_name)
         relative_path = os.path.join(sequence_name, tar_name)
+
+        # when overwrite = False, check if the file already exists and if SHA number matches, if so, skip downloading (overwrite=False)
+        if not overwrite and os.path.exists(filepath):
+            if _check_sha_number_for_single_tar(filepath, tar_info["sha1sum"]):
+                logger.info(
+                    f"File {sequence_name}/{tar_name} already exists and SHA number matches, skipping download."
+                )
+                successful_urls.append(relative_path)
+                continue
+            else:
+                logger.info(
+                    f"File {sequence_name}/{tar_name} already exists but SHA number does not match, deleting and downloading again."
+                )
+                os.remove(filepath)
+
         # Initialize the list for this sequence if not already done
         try:
             response = http.get(tar_info["download_url"], stream=True)
@@ -132,6 +177,7 @@ def download_wds_files_for_single_sequence(
 def download_sequences(
     download_sequences_tar_info_dict: Dict[str, Dict[str, List[str]]],
     output_folder_path: str,
+    overwrite: bool = False,
 ) -> Tuple[Dict, Dict]:
     """
     Each sequence will be downloaded into a new directory named after the sequence within the specified output folder.
@@ -150,7 +196,7 @@ def download_sequences(
             sequence_dir, exist_ok=True
         )  # Added exist_ok=True to avoid error if directory already exists
         successful_tar_list, failed_tar_list = download_wds_files_for_single_sequence(
-            sequence_info, sequence_dir, sequence_name
+            sequence_info, sequence_dir, sequence_name, overwrite=overwrite
         )
         success_sequences_with_tars[sequence_name] = successful_tar_list
         if len(failed_tar_list) > 0:
@@ -247,6 +293,7 @@ def download_atek_wds_sequences(
     max_num_sequences: Optional[int] = None,
     download_wds_to_local: bool = False,
     train_val_split_json_path: Optional[str] = None,
+    overwrite: bool = False,
 ):
     # extract tar urls
     with open(input_json_path, "r") as file:
@@ -274,12 +321,16 @@ def download_atek_wds_sequences(
     if download_wds_to_local is True:
         # Download sequences to local
         failed_train_sequence_with_tars, successful_train_sequences_with_tars = (
-            download_sequences(train_sequences_tar_info_dict, output_folder_path)
+            download_sequences(
+                train_sequences_tar_info_dict, output_folder_path, overwrite=overwrite
+            )
         )
         (
             failed_validation_sequence_with_tars,
             successful_validation_sequences_with_tars,
-        ) = download_sequences(validation_sequences_tar_info_dict, output_folder_path)
+        ) = download_sequences(
+            validation_sequences_tar_info_dict, output_folder_path, overwrite=overwrite
+        )
 
         successful_all_sequences_with_tars = (
             successful_train_sequences_with_tars

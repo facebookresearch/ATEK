@@ -56,6 +56,9 @@ def get_args():
         "--download-wds-to-local", action="store_true", help="Download WDS files"
     )
     parser.add_argument(
+        "--overwrite", action="store_true", help="Always overwrite existing files"
+    )
+    parser.add_argument(
         "--max-num-sequences", type=int, help="Maximum number of sequences"
     )
     parser.add_argument(
@@ -78,4 +81,5 @@ if __name__ == "__main__":
         args.max_num_sequences,
         args.download_wds_to_local,
         args.train_val_split_json_path,
+        overwrite=args.overwrite,
     )
