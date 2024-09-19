@@ -1,16 +1,18 @@
-name: atek
+name: atek_full
 channels:
-  - https://aws-ml-conda.s3.us-west-2.amazonaws.com
   - pytorch
   - nvidia
   - conda-forge
   - defaults
+  - pytorch3d
 dependencies:
   - python=3.9
-  - pytorch=2
+  - pytorch=2.4.0
   - pytorch-cuda=12.1
   - torchmetrics=0.10.1
+  - pillow=9.5.0
   - torchvision
+  - pytorch3d
   - fvcore
   - fsspec
   - iopath
@@ -25,6 +27,6 @@ dependencies:
   - toolz
   - pip:
     - projectaria-tools
-    - git+https://github.com/facebookresearch/pytorch3d.git@stable
-    - git+https://github.com/facebookresearch/detectron2.git
     - opencv-python
+    - git+https://github.com/facebookresearch/detectron2.git
+    - git+https://github.com/YLouWashU/omni3d.git
