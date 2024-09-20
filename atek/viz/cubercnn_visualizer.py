@@ -38,10 +38,13 @@ class CubercnnVisualizer(NativeAtekSampleVisualizer):
         self,
         viz_prefix: str = "",
         viz_web_port: Optional[int] = None,
+        show_on_notebook: bool = False,
         conf: Optional[DictConfig] = None,
         output_viz_file: Optional[str] = None,
     ) -> None:
-        super().__init__(viz_prefix, viz_web_port, conf, output_viz_file)
+        super().__init__(
+            viz_prefix, viz_web_port, show_on_notebook, conf, output_viz_file
+        )
         self.cameras_to_plot = ["camera-rgb"]
 
     def plot_cubercnn_img(

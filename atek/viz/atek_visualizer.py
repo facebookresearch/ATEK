@@ -64,6 +64,7 @@ class NativeAtekSampleVisualizer:
         self,
         viz_prefix: str = "",
         viz_web_port: Optional[int] = None,
+        show_on_notebook: bool = False,
         conf: Optional[DictConfig] = None,
         output_viz_file: Optional[str] = None,
     ) -> None:
@@ -72,6 +73,7 @@ class NativeAtekSampleVisualizer:
             viz_web_port (int): port number for the Rerun web server
             viz_ws_port (int): port number for the Rerun websocket server
             viz_prefix (str): a prefix to add to re-run visualization name
+            show_on_notebook (bool): whether to show the visualization on a jupyter notebook
         """
         self.viz_prefix = viz_prefix
         self.cameras_to_plot = []
@@ -91,9 +93,12 @@ class NativeAtekSampleVisualizer:
         self.mps_traj_cached_full = []
 
         # Initializing ReRun.
-        rr.init(f"ATEK Sample Viewer - {self.viz_prefix}", spawn=True)
+        rr.init(f"ATEK Sample Viewer - {self.viz_prefix}", spawn=not show_on_notebook)
         if viz_web_port is not None:
             rr.serve(web_port=viz_web_port, ws_port=viz_web_port + 1)
+        if show_on_notebook:
+            rr.notebook_show()
+
         return
 
     def plot_atek_sample(
@@ -602,3 +607,12 @@ class NativeAtekSampleVisualizer:
         if self.output_viz_file is not None:
             logger.info(f"Saving visualization to {self.output_viz_file}")
             rr.save(self.output_viz_file)
+
+    def show_on_notebook(self) -> None:
+        try:
+            rr.notebook_show()
+        except Exception as e:
+            logger.error(
+                "To show rerun in jupyter notebook, please install rerun-sdk[notebook] package!"
+            )
+            logger.error(f"Failed to show visualization on notebook: {e}")

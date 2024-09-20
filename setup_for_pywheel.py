@@ -18,7 +18,7 @@ from setuptools import find_packages, setup
 def main():
     setup(
         name="projectaria-atek",
-        version="0.0.6",
+        version="0.0.10",
         description="Aria trainining and evaluation kits",
         author="Meta Reality Labs Research",
         packages=find_packages(),  # automatically discover all packages and subpackages
