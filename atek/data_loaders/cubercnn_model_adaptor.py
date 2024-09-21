@@ -22,7 +22,6 @@ import webdataset as wds
 
 from atek.data_loaders.atek_wds_dataloader import load_atek_wds_dataset
 from atek.util.atek_constants import ATEK_CATEGORY_ID_TO_NAME, ATEK_CATEGORY_NAME_TO_ID
-from detectron2.structures import Boxes, Instances
 from projectaria_tools.core.sophus import SE3
 
 from webdataset.filters import pipelinefilter
@@ -163,6 +162,8 @@ class CubeRCNNModelAdaptor:
         """
         updates the sample dictionary with filtered ground truth data for both 2D and 3D bounding boxes.
         """
+        from detectron2.structures import Boxes, Instances
+
         bbox2d_dict = atek_wds_sample["gt_data"]["obb2_gt"]["camera-rgb"]
         bbox3d_dict = atek_wds_sample["gt_data"]["obb3_gt"]["camera-rgb"]
 

@@ -1,13 +1,13 @@
-name: atek_core
+name: atek_full
 channels:
   - pytorch
   - nvidia
   - conda-forge
   - defaults
+  - pytorch3d
 dependencies:
-  - python=3.9
+  - python=3.10
   - pytorch=2.4.0
-  - pytorch-cuda=12.1
   - torchmetrics=0.10.1
   - pillow=9.5.0
   - torchvision
@@ -19,11 +19,13 @@ dependencies:
   - notebook
   - tqdm
   - scipy
-  - webdataset
   - trimesh
   - pybind11
   - toolz
-  - omegaconf
   - pip:
     - projectaria-tools
     - opencv-python
+    - git+https://github.com/tmbdev/webdataset.git
+    - git+https://github.com/facebookresearch/pytorch3d.git@stable
+    - git+https://github.com/facebookresearch/detectron2.git
+    - git+https://github.com/YLouWashU/omni3d.git

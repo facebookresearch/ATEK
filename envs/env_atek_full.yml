@@ -21,12 +21,12 @@ dependencies:
   - notebook
   - tqdm
   - scipy
-  - webdataset
   - trimesh
   - pybind11
   - toolz
   - pip:
     - projectaria-tools
     - opencv-python
+    - git+https://github.com/tmbdev/webdataset.git
     - git+https://github.com/facebookresearch/detectron2.git
     - git+https://github.com/YLouWashU/omni3d.git

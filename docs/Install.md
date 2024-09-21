@@ -8,19 +8,19 @@
    `conda` commands. For Mac / Linux, you can just do:
 
 ```
+cd ~/Documents/
+
 curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
 bash Miniforge3-$(uname)-$(uname -m).sh
+mamba init; # may need to reopen terminal after this
 ```
 
 2. Clone ATEK git repo.
 
 ```
-mamba init; # may need to reopen terminal after this
 cd ~/Documents/
 git clone https://github.com/facebookresearch/ATEK.git
 cd ~/Documents/ATEK
-mamba env create -f envs/env_atek_core.yml
-mamba activate atek_core
 ```
 
 3. Install dependencies in Mamba. Depending on use cases, you can choose from
@@ -37,7 +37,7 @@ mamba activate atek_core
    official installation, or use ATEK-provided mamba env file:
    ```
      mamba env create -f envs/env_atek_full.yml
-     mamba activate atek_core
+     mamba activate atek_full
    ```
    c. `aws`: if you are running on AWS, you can run the following command, it
    will install the `full` version:

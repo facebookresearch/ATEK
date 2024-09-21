@@ -18,14 +18,12 @@ from setuptools import find_packages, setup
 def main():
     setup(
         name="projectaria-atek",
-        version="0.0.10",
-        description="Aria trainining and evaluation kits",
+        version="0.0.13",
+        description="Aria training and evaluation kits",
         author="Meta Reality Labs Research",
         packages=find_packages(),  # automatically discover all packages and subpackages
         install_requires=[
-            "torch==2.4.0",
-            "torchvision",
-            "pillow==9.5.0",
+            "pillow",
             "torchmetrics==0.10.1",
             "fvcore",
             "fsspec",
