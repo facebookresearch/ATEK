@@ -1,4 +1,4 @@
-name: atek_aws
+name: atek_full
 channels:
   - https://aws-ml-conda.s3.us-west-2.amazonaws.com
   - pytorch
