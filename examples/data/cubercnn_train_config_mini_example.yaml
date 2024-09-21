@@ -1,10 +1,10 @@
 DATALOADER:
-  NUM_WORKERS: 4
+  NUM_WORKERS: 1
   REPEAT_THRESHOLD: 0.1
   SAMPLER_TRAIN: RepeatFactorTrainingSampler
 DATASETS:
   CATEGORY_NAMES: []
-  OBJECT_DETECTION_MODE: "PER_INSTANCE"
+  OBJECT_DETECTION_MODE: "PER_CATEGORY"
   IGNORE_NAMES: '[''dontcare'', ''ignore'', ''void'']'
   MIN_HEIGHT_THRES: 0.05
   TEST: ("val_tars",)
@@ -25,11 +25,11 @@ MODEL:
       - 1.0
       - 2.0
     SIZES:
-    - - 32
-    - - 64
-    - - 128
-    - - 256
-    - - 512
+    - - 44
+    - - 88
+    - - 176
+    - - 352
+    - - 704
   BACKBONE:
     FREEZE_AT: 0
     NAME: build_dla_from_vision_fpn_backbone
@@ -108,15 +108,16 @@ MODEL:
 OUTPUT_DIR:
 SOLVER:
   BASE_LR: 0.001
-  IMS_PER_BATCH: 256
+  IMS_PER_BATCH: 1
   LR_SCHEDULER_NAME: WarmupMultiStepLR
   WARMUP_ITERS: 3300
-  MAX_ITER: 20000
+  MAX_ITER: 50000
   STEPS: (12000, 16000)
   TYPE: sgd
   WEIGHT_DECAY: 0.0001
   CHECKPOINT_PERIOD: 5000
   VAL_MAX_ITER: 60
+  MAX_EPOCH: 10
 TEST:
   EVAL_PERIOD: 500
   TRUNCATION_THRES: 0.33333333

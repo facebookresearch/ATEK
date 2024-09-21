@@ -1,0 +1,5 @@
+obb_viz:
+    plot_obb3_in_camera_view: False
+    obb_labels_to_ignore:
+      - "other"
+    confidence_lower_threshold: 0.8
