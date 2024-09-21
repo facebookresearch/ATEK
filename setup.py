@@ -18,7 +18,7 @@ from setuptools import find_packages, setup
 def main():
     setup(
         name="atek",
-        version="0.2",
+        version="1.0.0",
         description="Aria train and evaluation kits",
         author="Meta Reality Labs Research",
         packages=find_packages(),  # automatically discover all packages and subpackages

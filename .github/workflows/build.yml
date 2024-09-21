@@ -18,7 +18,7 @@ jobs:
         uses: mamba-org/setup-micromamba@v1.9.0
         with:
           micromamba-version: '1.5.9-1' 
-          environment-file: env_atek.yml
+          environment-file: envs/env_atek_core.yml
           init-shell: >-
             bash
           cache-environment: true
