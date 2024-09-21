@@ -51,11 +51,6 @@ class NativeAtekSampleVisualizer:
     AXIS_LENGTH = 0.5
     MAX_OBB_PER_BATCH = 30  # max number of obb2d/obb3d per entity can render with label
 
-    # max id of obb id in each batch, we record this since the entity in
-    # the previous rendering batch will not be flushed if the next batch has less entities
-    PREV_MAX_BB3D_ID = 0
-    PREV_MAX_BB2D_ID = 0
-
     # max x, y,z limit for visualizing points in semidense point cloud
     # TODO: add to config file
     MAX_LIMIT_TO_VIZ_IN_SEMIDENSE_POINTS = 10
@@ -323,6 +318,11 @@ class NativeAtekSampleVisualizer:
             if not per_cam_dict:
                 continue
 
+            # clear all boxes
+            rr.log(
+                f"{camera_label}_image/bb2d_split_{suffix}", rr.Clear(recursive=True)
+            )
+
             num_obb2 = len(per_cam_dict["category_ids"])
             bb2ds_all = []
             category_names = []
@@ -352,7 +352,7 @@ class NativeAtekSampleVisualizer:
             while batch_id * self.MAX_OBB_PER_BATCH < len(bb2ds_all):
                 start_obb_idx = batch_id * self.MAX_OBB_PER_BATCH
                 rr.log(
-                    f"{camera_label}_image/bb2d_split_{batch_id}_{suffix}",
+                    f"{camera_label}_image/bb2d_split_{suffix}/{batch_id}",
                     rr.Boxes2D(
                         array=bb2ds_all[
                             start_obb_idx : min(
@@ -370,24 +370,13 @@ class NativeAtekSampleVisualizer:
                     ),
                 )
                 batch_id += 1
-            cur_batch_max_id = batch_id - 1
-            # flash the bb2d that is plotted in the previous batches, but has larger id
-            while batch_id <= self.PREV_MAX_BB2D_ID:
-                rr.log(
-                    f"{camera_label}_image/bb2d_split_{batch_id}_{suffix}",
-                    rr.Boxes2D(
-                        array=[],
-                        array_format=rr.Box2DFormat.XYXY,
-                        radii=0.5,
-                        labels=[],
-                    ),
-                )
-                batch_id += 1
-            self.PREV_MAX_BB2D_ID = cur_batch_max_id
 
     def plot_obb3_gt(self, gt_dict, timestamp_ns, plot_color, suffix) -> None:
 
         rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
+
+        # clear all boxes
+        rr.log(f"world/bb3d_split_{suffix}", rr.Clear(recursive=True))
 
         # These lists are the formats required by ReRun
         bb3d_sizes = []
@@ -400,6 +389,7 @@ class NativeAtekSampleVisualizer:
             # Skip if this camera observation is empty
             if not per_cam_dict:
                 continue
+
             num_obb3 = len(per_cam_dict["category_ids"])
             for i_obj in range(num_obb3):
                 category_name = per_cam_dict["category_names"][i_obj].split(":")[0]
@@ -432,7 +422,7 @@ class NativeAtekSampleVisualizer:
         while batch_id * self.MAX_OBB_PER_BATCH < len(bb3d_sizes):
             start_obb_idx = batch_id * self.MAX_OBB_PER_BATCH
             rr.log(
-                f"world/bb3d_split_{batch_id}_{suffix}",
+                f"world/bb3d_split_{suffix}/{batch_id}",
                 rr.Boxes3D(
                     sizes=bb3d_sizes[
                         start_obb_idx : min(
@@ -459,20 +449,6 @@ class NativeAtekSampleVisualizer:
                 ),
             )
             batch_id += 1
-        cur_batch_max_id = batch_id - 1
-        while batch_id <= self.PREV_MAX_BB3D_ID:
-            rr.log(
-                f"world/bb3d_split_{batch_id}_{suffix}",
-                rr.Boxes3D(
-                    sizes=[],
-                    centers=[],
-                    rotations=[],
-                    radii=0.01,
-                    labels=[],
-                ),
-            )
-            batch_id += 1
-        self.PREV_MAX_BB3D_ID = cur_batch_max_id
 
     def _plot_obb3d_in_camera_view_single_timestamp(
         self,
