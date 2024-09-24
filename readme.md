@@ -1,134 +1,57 @@
 # Aria Training and Evaluation toolkit (ATEK)
 
-Today, we’re introducing ATEK, an e2e framework for training and evaluating deep learning models on [Aria](https://www.projectaria.com/) data, for both 3D egocentric-specific and general machine perception tasks.
+ATEK is a toolbox from the `projectaria` team specially built for the Machine Learning (ML) community. It seeks to lower the frictions for users using Aria data in ML research, and accelerate their development cycle, by addressing the following pain points:
 
+- `VRS` format in open Aria datasets are **not PyTorch compatible**.
+- Users need to write a lot of **hand-crafted boiler plate code** to preprocess Aria data, which requires expertise on Aria specs.
+- It is time and resource consuming to preprocess large Aria datasets.
+- There is no fair competing ground to compare model performacnes for Aria-specific tasks.
 
-For full documentation, you can navitagete to:
+To address these issues, ATEK provides the followings to the community: ![Overview](./docs/images/overview.png)
 
-- [Installation](docs/INSTALL.md)
-- [Quick start](#quick-start)
-- [Machine learning tasks supported by ATEK](docs/ml_tasks.md)
-- [ATEK Data Store](docs/atek_data_store.md)
-- [Core code snippets](docs/core_code_snippets.md)
-- [Technical specifications](docs/technical_specifications.md)
+- An easy-to-use data preprocessing library for Aria datasets.
+- Data Store with downloadable preprocessed Aria datasets.
+- Standardized evaluation libraries that supports the following ML perception tasks for Aria:
 
-<a id="quick-start"></a>
-## Colab notebook
-Data preprocessing, inference and evaluation example
+  - static 3D object detection
+  - 3D surface reconstruction
 
-[![Aria VRS Data Provider](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/facebookresearch/ATEK/tree/main/examples/ATEK_CoLab_Notebook.ipynb)
+- Rich notebook and script examples including model training, inference, and visualization.
 
-## Quick start (TODO： add pypi installation)
+And users can engage ATEK in their projects with 3 different starting points: ![user_journey](./docs/images/user_journey.png)
 
-1. Install miniconda3
+- Just want to run some evaluation, even on non-Aria data? Check out [ATEK evaluation libraries](./docs/evaluation.md)!
 
-Follow [instructions](https://docs.anaconda.com/free/miniconda/) to install miniconda3 and re-open a new terminal after install for this to take effect
+- Want to try your trained-model on ego-centric Aria data? Just download processed data from our [Data Store](./docs/ATEK_Data_Store.md), and check out how to run [model inference](./docs/data_loading_and_inference.md)!
 
-2. Install mamba and initialize.
+- Now ready for the full ML adventure from raw Aria data? Check out our full [table of contents](#table-of-content)!
 
-Mamba is a python venv tooling that is similar to Conda, but supposed to handle dependencies more elegantly.
+## Interactive Python notebook playground (Google Colab)
 
-```bash
-export PATH=/home/$USER/miniconda3/bin:$PATH
-conda init bash
-conda install mamba -n base -c conda-forge
-mamba init
-```
+[![ColabNotebook](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/facebookresearch/ATEK/tree/main/examples/ATEK_CoLab_Notebook.ipynb)
 
-3. clone ATEK code:
+User can start with our Google Colab notebook, which shows an example of running and evaluating a 3D object detection model called `CubeRCNN`, on an Aria Digital Twin data sequence, which involes data-preprocessing, model inference, and evaluation.
 
-```
-git clone https://github.com/facebookresearch/ATEK.git
-cd ATEK
-```
+## Table of content
 
-4. Create an ATEK environment and Install ATEK lib:
+- [Installation](docs/Install.md)
+- [ATEK Data Store](./docs/ATEK_Data_Store.md)
+- Technical specifications
 
-```bash
-mamba env create -f env_atek.yml
-mamba activate atek
-python3 -m pip install -e ./
-```
+  - [Data Preprocessing](./docs/preprocessing.md)
+  - [Data Loader for inference and training](./docs/data_loading_and_inference.md)
+  - [Evaluation](./docs/evaluation.md)
 
-Verify the libs are installed correctly
+- [Machine Learning tasks supported by ATEK](docs/evaluation.md)
+  - [static 3D object detection](./ML_task_object_detection.md)
+  - [3D surface reconstruction](./ML_task_surface_recon.md)
+- Examples
 
-```bash
-mamba list atek
-```
-
-Details in [Complete installation guide](docs/INSTALL.md) includes：
-
-1. Python installation from source code, on local Fedora + Macbook.
-2. Python installation from source code on AWS.
-3. We will also provide 2 types of installation flavor: `[default]` and `[demo]`, where the latter would require more dependencies e.g. SAM2, Omni3D, etc.
-
-## Download example data
-
-To download, you should use the dataverse_url_parser.py script in ATEK's lib, with --download-wds-to-local flag. You can select which preprocessing config to download, train/validation split, and number of sequences to download. Here we will use cubercnn configuration as example. Please download input json [here, TODO: get link](link) and specify its path in atek_json_path. Replace output_data_dir with the path you want to put your data.
-
-```python
-python3 tools/dataverse_url_parser.py \
---config-name cubercnn \
---input-json-path ${atek_json_path} \
---output-folder-path ${output_data_dir}/
---max-num-sequences 2
---download-wds-to-local
-```
-To directly stream from data store, you can also use dataverse_url_parser.py script without the --download-wds_to-local flag, which will just create 3 yaml files, streamable_all/train/validation_tars.yaml, each containing the urls of the WDS shard files. These yaml files can be consumed by ATEK lib.
-
-```python
-python3 tools/dataverse_url_parser.py \
---config-name cubercnn \
---input-json-path ${atek_json_path} \
---output-folder-path ${output_data_dir}/
---max-num-sequences 2
-```
-You can visualize the WDS content, using the streamable yaml files.
-```python
-# Loading local WDS files
-tar_file_urls = load_yaml_and_extract_tar_list(yaml_path = os.path.join(data_dir, "streamable_yamls", "streamable_validation_tars.yaml"))
-
-# Batch size is None so that no collation is invoked
-atek_dataloader = create_native_atek_dataloader(urls = tar_file_urls, batch_size=None, repeat_flag=False)
-
-# Loop over all samples in DataLoader and visualize
-atek_visualizer = NativeAtekSampleVisualizer(viz_prefix = "dataloading_visualizer", conf = viz_conf)
-for atek_sample_dict in atek_dataloader:
-    # First convert it back to ATEK data sample and visualize
-    atek_visualizer.plot_atek_sample_as_dict(atek_sample_dict)
-```
-
-
-## Benchmarking, inference, and training examples
-The script expects provide 2 csv files as input, groundtruth and predictions, both in the same predefined ATEK format (see below). The benchmarking script will compute and report a number of detection metrics. See example training and evaluation [jupyter notebook](/examples/demo_3_training_and_eval.ipynb) for more details.
-
-Currently we support 2 ML tasks in benchmakring.
-1. Static 3D object detection.
-2. 3D surface reconstruction.
-
-
-Usage:
-```bash
-python tools/benchmarking_static_object_detection.py \
---pred-csv {workdir}/eval_results/prediction_obbs.csv \
---gt-csv {workdir}/eval_results/gt_obbs.csv \
---output-file {workdir}/eval_results/atek_metrics.json
-```
-
-## Data-preprocessing, and visualization examples
-Handling raw sensor data from Project Aria can be challenging due to the need for detailed knowledge of various Aria specifications, such as camera calibration, sensor behavior, and data synchronization.
-
-ATEK simplifies this process by offering robust processing functionalities for all types of Aria data. This approach replaces complex data processing pipelines with just a few API calls, using simple configuration JSON files, making it more accessible and efficient for developers to get started.
-
-Refer to the data preprocesing [jupyter notebook](examples/demo_1_data_preprocessing.ipynb) to see the details.
-
-## Machine learning tasks supported by ATEK
-
-ATEK now support static 3D object detection and surface reconstruction tasks. Find out more on [Machine learning tasks supported by ATEK](docs/ml_tasks.md) section.
-
+  - [Example: demo notebooks](./docs/example_demos.md)
+  - [Example: customization for SegmentAnything2 model](./docs/example_sam2_customization.md)
+  - [Example: customization for CubeRCNN model](./docs/example_cubercnn_customization.md)
+  - [Example: CubeRCNN model training](./docs/example_training.md)
 
 ## License
-<img alt="license" src="https://img.shields.io/badge/License-Apache--2.0-blue.svg"/>
 
-
-## Contributors
+![license](https://img.shields.io/badge/License-Apache--2.0-blue.svg)
