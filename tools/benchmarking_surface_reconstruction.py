@@ -94,9 +94,7 @@ def main() -> None:
             correct_mesh_gravity=args.is_adt_mesh,
         )
 
-        # for testing only
         logger.info(f" metrics results is {metrics}")
-        print_obb3_metrics_to_logger(metrics)
 
     # Write metrics results to file
     with open(args.output_file, "w") as f:

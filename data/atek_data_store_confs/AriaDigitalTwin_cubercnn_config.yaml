@@ -1,0 +1,33 @@
+atek_config_name: "cubercnn"
+camera_temporal_subsampler:
+  main_camera_label: "camera-rgb"
+  time_domain: "DEVICE_TIME"
+  main_camera_target_freq_hz: 10.0
+  sample_length_in_num_frames: 1
+  stride_length_in_num_frames: 2
+processors:
+  rgb:
+    selected: true
+    sensor_label: "camera-rgb"
+    time_domain: "DEVICE_TIME"
+    tolerance_ns: 10_000_000
+    undistort_to_linear_camera: true  # if set, undistort to a linear camera model
+    target_camera_resolution: [] # if set, rescale to [image_width, image_height]
+    rotate_image_cw90deg: true  # if set, rotate image by 90 degrees clockwise
+  slam_left:
+    selected: false 
+  slam_right:
+    selected: false 
+  mps_traj:
+    selected: true
+    tolerance_ns: 10_000_000
+  mps_semidense:
+    selected: false
+  obb_gt:
+    selected: true
+    tolerance_ns : 10_000_000
+    category_mapping_field_name: prototype_name # {prototype_name, category}
+    bbox2d_num_samples_on_edge: 10
+wds_writer:
+  prefix_string: "AdtPublicRelease2023"
+  max_samples_per_shard: 32
