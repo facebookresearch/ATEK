@@ -17,9 +17,9 @@ Before ATEK, users will need to hand-craft all these code on their own, which is
 
 ## Simple customization through preprocessing config
 
-ATEK allows user to **customize the preprocessing workflow by simply modifying the preprocessing configuration yaml file** (see [preprocessing_configurations.md](./preprocessing_configurations.md) for details).
+ATEK allows user to **customize the preprocessing workflow by simply modifying the preprocessing configuration yaml file** (see [Preprocessing configurations page](./preprocessing_configurations.md) for details).
 
-The following is the core code to load an open Aria data sequence, preprocess according to a given configuration file, and write the preprocessed results to disk as WebDataset ([full example](../examples/Demo_1_data_preprocessing.ipynb)). We also use a visualization library based on `ReRun` to visualize the preprocessed results. The results are stored as `Dict` in memory containing tensors, strings, and sub-dicts, and also saved to local disk in WebDataset (WDS) format for further use.
+The following is the core code to load an open Aria data sequence, preprocess according to a given configuration file, and write the preprocessed results to disk as WebDataset. We also use a visualization library based on `ReRun` to visualize the preprocessed results. The results are stored as `Dict` in memory containing tensors, strings, and sub-dicts, and also saved to local disk in WebDataset (WDS) format for further use.
 
 ```python
 from omegaconf import OmegaConf
@@ -35,11 +35,11 @@ num_samples = preprocessor.process_all_samples(write_to_wds_flag = True, viz_fla
 
 ### `create_general_atek_preprocessor_from_conf`
 
-This is a factory method that initializes a `GeneralAtekPreprocessor` based on a configuration object. It selects the appropriate preprocessor configuration for ATEK using the `atek_config_name` field in the provided Omega configuration. See [here](./preprocessing_configurations.md) for currently supported configs.
+This is a factory method that initializes a `GeneralAtekPreprocessor` based on a configuration object. It selects the appropriate preprocessor configuration for ATEK using the `atek_config_name` field in the provided Omega configuration.
 
 #### Parameters
 
-- **conf** (`DictConfig`): Configuration object with preprocessing settings. The `atek_config_name` key specifies the preprocessor type,
+- **conf** (`DictConfig`): Configuration object with preprocessing settings.
 - **raw_data_folder** (`str`): Path to the folder with raw data files.
 - **sequence_name** (`str`): Name of the data sequence to process.
 - **output_wds_folder** (`Optional[str]`): Path for saving preprocessed data in WebDataset (WDS) format. If `None`, data is not saved in WDS format.

@@ -139,22 +139,18 @@ print(f"Loading WDS into CubeRCNN format, each sample contains the following key
 
 ## CuberCNN model trainng / inference
 
-With the created Pytorch DataLoader, user will be able to easily run model training / inference for CubeRCNN model:
+With the created Pytorch DataLoader, user will be able to easily run model training or inference for CubeRCNN model.
 
+**Training script**
 ```python
-# Load pre-trained model for training / inference
-model_config, model = create_inference_model(
-    model_config_file, model_ckpt_path, use_cpu_only = use_cpu_only
-)
+# Load pre-trained model for training
+model_config, model = create_training_model(model_config_file, model_ckpt_path)
 
-# training / inference loop
+# Training loop
 for cubercnn_input_data in tqdm(
     cubercnn_dataloader,
-    desc="Training / Inference progress: ",
+    desc="Training progress: ",
 ):
-    # Inference step
-    cubercnn_model_output = model(cubercnn_input_data)
-
     # Training step
     loss = model(cubercnn_input_data)
     losses = sum(loss.values())
@@ -163,3 +159,21 @@ for cubercnn_input_data in tqdm(
     optimizer.step()
 ...
 ```
+
+
+**Inference script**
+
+```python
+# Load pre-trained model for inference
+model_config, model = create_inference_model(model_config_file, model_ckpt_path)
+
+# Inference loop
+for cubercnn_input_data in tqdm(
+    cubercnn_dataloader,
+    desc="Training progress: ",
+):
+    # Inference step
+    cubercnn_model_output = model(cubercnn_input_data)
+    ...
+```
+# Inference step

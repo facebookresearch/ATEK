@@ -1,6 +1,6 @@
 # ATEK Data Store
 
-ATEK Data Store is a data platform where preprocessed open Aria datasets in WebDataset (WDS) formats, with selected preprocessing configurations, are available for users to directly download and load into PyTorch.
+ATEK Data Store is a data platform where preprocessed open Aria datasets in [WebDataset](https://github.com/webdataset/webdataset) (WDS) formats, with selected preprocessing configurations, are available for users to directly download and load into PyTorch.
 
 ## ATEK datasets in WDS format
 
@@ -26,7 +26,7 @@ To access the data:
 
 1. Click the **access link** in the above table, you can find the **Access The Dataset** button on the bottom of the page. Input your email address, you will be redirected to a page where you will find a button to download **[dataset] in ATEK format (PyTorch ready)**.
 
-  ![Download button](./images/atek_data_store_download_button.png)
+  <img src="./images/atek_data_store_download_button.png" width="600">
 
 2. This will download a json file, e.g. `[dataset_name]_ATEK_download_urls.json`, that contains the URLs of the actual preprocessed data. Note that for the same dataset, all preprocessing configuration's URLs are contained in the same json file.
 
@@ -42,14 +42,15 @@ To access the data:
 
   where :
 
-  - `--config-name` specifies which [preprocessing configuration](./preprocessing_configurations.md) you would like to download.
+  - `--config-name` specifies which [preprocessing configuration](./preprocessing_configurations.md) you would like to download. You should choose one from [this table](#atek-datasets-in-wds-format).
   - `--download-wds-to-local` user can remove this flag to create **streamable** yaml files.
 
     User can also specify other options including maximum number of sequences to download, training validation split ratio, etc. See [src code](../tools/atek_wds_data_downloader.py) for details.
 
 4. **Note that these URLs will EXPIRE AFTER 30 DAYS**, user will need to re-download and re-generate the streamable yaml files.
 
-These steps will download ATEK preprocessed WebDataset files with the following folder structure. Note that if the download breaks in the middle, simply run it again to pick up from the middle.
+## Downloaded WDS files
+Following the above steps will download ATEK preprocessed WebDataset files with the following folder structure. Note that if the download breaks in the middle, simply run it again to pick up from the middle.
 
 ```bash
 ./downloaded_local_wds

@@ -2,7 +2,7 @@
 
 We provided 2 ways to install ATEK:
 
-1. If you just need **the core functionalities of ATEK**, including data pre-processing, data loading, and visualization, you can simply [install ATEK's core lib](#core-lib-installation)
+1. If you just need the core functionalities of ATEK, including data pre-processing, data loading, and visualization, you can simply [install **ATEK core lib**](#core-lib-installation)
 2. If you want to run the CubeRCNN demos and all task-specific evaluation benchmarking, you can follow this guide to [install **full dependencies**](#install-all-dependencies-using-mambaconda).
 
 ## Core lib installation

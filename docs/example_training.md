@@ -88,4 +88,4 @@ Here is the tensorboard results for ASE trained results, where the left 2 figure
 
 Once model training is finished, user can proceed to [example_inference.md] to run model inference on the trained weights.
 
-We also provided 2 sets of CubeRCNN trained weights by us, one on ASE 10K dataset, the other on ADT dataset. The weights can be downloaded [here](https://www.projectaria.com/async/sample/download/?bucket=adt&filename=ATEK_example_model_weights.tar)
+We also provided 2 sets of CubeRCNN trained weights by us, one on ASE 10K dataset, the other on ADT dataset. The weights can be downloaded [here](https://www.projectaria.com/async/sample/download/?bucket=atek&filename=ATEK_example_model_weights.tar). By downloading this file, you acknowledge that you have read, understood, and agree to be bound by the terms of the [CC-BY-NC 4.0 license](https://creativecommons.org/licenses/by-nc/4.0/deed.en) software license.
