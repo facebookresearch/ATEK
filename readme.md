@@ -1,9 +1,6 @@
 # Aria Training and Evaluation toolkit (ATEK)
 
-<video width="800" controls autoplay muted>
-  <source src="./docs/images/atek_github_video_small.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+https://github.com/user-attachments/assets/a3613d17-d272-471e-9e9f-fffb23b1990d
 
 The Aria Training and Evaluation Kit (ATEK) is a toolbox for accelerating the development of Machine Learning tasks using Aria datasets. Specifically, it provides
 
