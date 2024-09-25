@@ -1,7 +1,7 @@
 # Aria Training and Evaluation toolkit (ATEK)
 
 <video width="800" controls autoplay muted>
-  <source src="./docs/images/atek_github_video_small.webm" type="video/webm">
+  <source src="./docs/images/atek_github_video_small.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
 
