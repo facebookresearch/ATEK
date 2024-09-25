@@ -1,0 +1,38 @@
+ASE Category Name,ATEK Category Name,ATEK Category Id
+chair,chair,1
+lamp,lamp,2
+picture_frame_or_painting,picture,3
+sofa,sofa,4
+table,table,5
+bed,bed,6
+pillow,pillow,7
+window,window,8
+mirror,mirror,10
+cabinet,cabinet,9
+rug,floor mat,11
+ottoman,chair,1
+shelf,shelves,12
+plant_or_flower_pot,plant,13
+dresser,dresser,14
+vase,vase,15
+cart,cart,17
+clothes_rack,clothes_rack,18
+container_or_basket,container,16
+bench,chair,1
+ladder,ladder,19
+exercise_weight,exercise_weight,20
+fan,fan,21
+container,container,16
+storage_furniture,cabinet,9
+air_conditioner,air_conditioner,22
+mount,mount,23
+jar,jar,24
+floor_mat,floor mat,11
+mattress,bed,6
+sitting_furniture,chair,1
+clock,clock,25
+tent,tent,26
+electronic_device,electronic_device,27
+sleeping,bed,6
+battery_charger,battery_charger,28
+cutlery,cutlery,29

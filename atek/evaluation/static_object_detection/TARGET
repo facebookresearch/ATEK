@@ -1,0 +1,28 @@
+load("@fbcode_macros//build_defs:python_library.bzl", "python_library")
+
+oncall("surreal_atek_oncall")
+
+python_library(
+    name = "obb3_csv_io",
+    srcs = [
+        "obb3_csv_io.py",
+    ],
+    base_module = "atek.evaluation.static_object_detection",
+    tags = ["noautodeps"],
+    deps = [
+        "//caffe2:torch",
+    ],
+)
+
+python_library(
+    name = "eval_obb3_metrics_utils",
+    srcs = [
+        "eval_obb3_metrics_utils.py",
+    ],
+    base_module = "atek.evaluation.static_object_detection",
+    tags = ["noautodeps"],
+    deps = [
+        "//caffe2:torch",
+        "//vision/fair/pytorch3d/pytorch3d:pytorch3d",
+    ],
+)

@@ -1,0 +1,5 @@
+obb_viz:
+  plot_obb3_in_camera_view: True
+  obb_labels_to_ignore:
+    - "other"
+  obb_labels_to_include:

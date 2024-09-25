@@ -1,0 +1,33 @@
+name: Build package
+
+on:
+  push:
+    branches:
+      - main
+      - fix_ci
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name : Checkout
+        uses: actions/checkout@v4
+      - name: setup-micromamba
+        uses: mamba-org/setup-micromamba@v1.9.0
+        with:
+          micromamba-version: '1.5.9-1' 
+          environment-file: envs/env_atek_core.yml
+          init-shell: >-
+            bash
+          cache-environment: true
+          post-cleanup: 'all'
+      - name: Install ATEK lib
+        shell: bash
+        run: |
+          python3 -m pip install .
+      - name: Import ATEK lib
+        shell: bash
+        run: |
+          python3 -c "import atek"

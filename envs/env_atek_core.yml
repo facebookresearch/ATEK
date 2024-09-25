@@ -1,0 +1,29 @@
+name: atek_core
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pytorch=2.4.0
+  - pytorch-cuda=12.1
+  - torchmetrics=0.10.1
+  - pillow=9.5.0
+  - torchvision
+  - fvcore
+  - fsspec
+  - iopath
+  - pip
+  - seaborn
+  - notebook
+  - tqdm
+  - scipy
+  - webdataset
+  - trimesh
+  - pybind11
+  - toolz
+  - omegaconf
+  - pip:
+    - projectaria-tools
+    - opencv-python

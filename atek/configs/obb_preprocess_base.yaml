@@ -1,0 +1,45 @@
+atek_config_name: "cubercnn"
+camera_temporal_subsampler:
+  main_camera_label: "camera-rgb"
+  time_domain: "DEVICE_TIME"
+  main_camera_target_freq_hz: 10.0
+  sample_length_in_num_frames: 1
+  stride_length_in_num_frames: 1
+processors:
+  rgb:
+    selected: true
+    sensor_label: "camera-rgb"
+    time_domain: "DEVICE_TIME"
+    tolerance_ns: 10_000_000
+    undistort_to_linear_camera: false  # if set, undistort to a linear camera model
+    target_camera_resolution: [] # if set, rescale to [image_width, image_height]
+    # rescale_antialias: true[default] controls whether to perform antialiasing during image rescaling.
+    rotate_image_cw90deg: true  # if set, rotate image by 90 degrees clockwise
+  slam_left:
+    selected: true
+    sensor_label: "camera-slam-left"
+    tolerance_ns: 10_000_000
+    time_domain: "DEVICE_TIME"
+    rotate_image_cw90deg: false  # if set, rotate image by 90 degrees clockwise
+  slam_right:
+    selected: true
+    sensor_label: "camera-slam-right"
+    tolerance_ns: 10_000_000
+    time_domain: "DEVICE_TIME"
+    rotate_image_cw90deg: false  # if set, rotate image by 90 degrees clockwise
+  mps_traj:
+    selected: true
+    tolerance_ns: 10_000_000
+  mps_semidense:
+    selected: false
+  mps_online_calib:
+    tolerance_ns: 10_000_000
+  obb_gt:
+    selected: true
+    tolerance_ns : 10_000_000
+    category_mapping_field_name: prototype_name # {prototype_name, category}
+    bbox2d_num_samples_on_edge: 10
+wds_writer:
+  prefix_string: ""
+  max_samples_per_shard: 32
+  remove_last_tar_if_not_full: false
