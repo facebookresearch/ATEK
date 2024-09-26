@@ -15,8 +15,8 @@ The Aria Training and Evaluation Kit (ATEK) is a toolbox for accelerating the de
 
 ATEK users can engage ATEK in their projects with 3 different starting points:
 
-- Just want to run some evaluation, even on non-Aria data? Check out [ATEK evaluation libraries](http://./docs/evaluation.md)\!
-- Want to try your trained-model on ego-centric Aria data? Just download processed data from our [Data Store](http://./docs/ATEK_Data_Store.md), and check out how to run [model inference](http://./docs/data_loading_and_inference.md)\!
+- Just want to run some evaluation, even on non-Aria data? Check out [ATEK evaluation libraries](./docs/evaluation.md)\!
+- Want to try your trained-model on ego-centric Aria data? Just download processed data from our [Data Store](./docs/ATEK_Data_Store.md), and check out how to run [model inference](./docs/data_loading_and_inference.md)\!
 - Now ready for the full ML adventure from raw Aria data? Check out our full [table of contents](#table-of-content)\!
 
 <img src="./docs/images/user_journey.png" width="640">
