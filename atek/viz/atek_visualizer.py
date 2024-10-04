@@ -244,7 +244,6 @@ class NativeAtekSampleVisualizer:
                 )
 
     def plot_mps_traj_data(self, mps_traj_data: Optional[MpsTrajData]) -> None:
-
         # loop over all frames
         for i_frame in range(len(mps_traj_data.capture_timestamps_ns)):
             # Setting timestamp
@@ -277,7 +276,6 @@ class NativeAtekSampleVisualizer:
     def plot_semidense_point_cloud(
         self, mps_semidense_point_data: Optional[MpsSemiDensePointData]
     ) -> None:
-
         # loop over all frames
         for i_frame in range(len(mps_semidense_point_data.capture_timestamps_ns)):
             # Setting timestamp
@@ -308,7 +306,6 @@ class NativeAtekSampleVisualizer:
         pass
 
     def plot_obb2_gt(self, gt_dict, timestamp_ns, plot_color, suffix) -> None:
-
         rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
         # Loop over all cameras
         for camera_label, per_cam_dict in gt_dict.items():
@@ -372,7 +369,6 @@ class NativeAtekSampleVisualizer:
                 batch_id += 1
 
     def plot_obb3_gt(self, gt_dict, timestamp_ns, plot_color, suffix) -> None:
-
         rr.set_time_seconds("frame_time_s", timestamp_ns * 1e-9)
 
         # clear all boxes

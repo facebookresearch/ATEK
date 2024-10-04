@@ -41,7 +41,6 @@ def convert_atek_sample_dict_to_wds_dict(
     atek_sample_dict: Dict,
     prefix_string: str,
 ) -> Dict:
-
     wds_dict = {"__key__": f"{prefix_string}_AtekDataSample_{index:06}"}
 
     for atek_key, atek_value in atek_sample_dict.items():

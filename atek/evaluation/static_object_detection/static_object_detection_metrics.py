@@ -171,7 +171,11 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         self.ret_all_prec_rec = ret_all_prec_rec
         self.eval_imgs = [] if self.ret_all_prec_rec else None
 
-    def update(self, preds: List[Dict[str, torch.Tensor]], target: List[Dict[str, torch.Tensor]]) -> None:  # type: ignore
+    def update(
+        self,
+        preds: List[Dict[str, torch.Tensor]],
+        target: List[Dict[str, torch.Tensor]],
+    ) -> None:  # type: ignore
         """Add detections and ground truth to the metric.
 
         Args:

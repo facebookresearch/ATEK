@@ -216,7 +216,6 @@ class Obb2GtProcessor:
         """
         bbox2d_dict = {}
         for cam_label, stream_id in self.camera_label_to_stream_ids.items():
-
             bbox2d_with_dt = (
                 self.adt_gt_provider.get_object_2d_boundingboxes_by_timestamp_ns(
                     timestamp_ns,
@@ -259,9 +258,9 @@ class Obb2GtProcessor:
                 bbox2d_dict[cam_label]["instance_ids"][i_row] = instance_id
                 bbox2d_dict[cam_label]["category_names"].append(cat_name)
                 bbox2d_dict[cam_label]["category_ids"][i_row] = cat_id
-                bbox2d_dict[cam_label]["visibility_ratios"][
-                    i_row
-                ] = bbox2d_data.visibility_ratio
+                bbox2d_dict[cam_label]["visibility_ratios"][i_row] = (
+                    bbox2d_data.visibility_ratio
+                )
                 bbox2d_dict[cam_label]["box_ranges"][i_row] = (
                     self._apply_transforms_to_bbox2d(cam_label, bbox2d_data.box_range)
                 )

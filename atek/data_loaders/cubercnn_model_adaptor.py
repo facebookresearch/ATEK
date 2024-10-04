@@ -293,12 +293,12 @@ class CubeRCNNModelAdaptor:
                 atek_id_list, dtype=torch.int32
             )
         else:
-            atek_dict["obb3_gt"][camera_label][
-                "category_ids"
-            ] = cubercnn_instances.pred_classes.detach().cpu()
-            atek_dict["obb2_gt"][camera_label][
-                "category_ids"
-            ] = cubercnn_instances.pred_classes.detach().cpu()
+            atek_dict["obb3_gt"][camera_label]["category_ids"] = (
+                cubercnn_instances.pred_classes.detach().cpu()
+            )
+            atek_dict["obb2_gt"][camera_label]["category_ids"] = (
+                cubercnn_instances.pred_classes.detach().cpu()
+            )
 
         # Fill category names
         atek_dict["obb3_gt"][camera_label]["category_names"] = [

@@ -72,7 +72,6 @@ class MpsOnlineCalibProcessor:
             camera_calibs = online_calib.camera_calibs
 
             for camera_calib in camera_calibs:
-
                 projection_params = camera_calib.projection_params()
                 projection_params_per_timestamp_list.append(projection_params)
 

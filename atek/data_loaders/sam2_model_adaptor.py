@@ -77,7 +77,6 @@ def create_atek_dataloader_as_sam2(
     num_workers: int = 0,
     num_prompt_boxes: int = 5,
 ) -> torch.utils.data.DataLoader:
-
     adaptor = Sam2ModelAdaptor(num_boxes=num_prompt_boxes)
     wds_dataset = load_atek_wds_dataset(
         urls,

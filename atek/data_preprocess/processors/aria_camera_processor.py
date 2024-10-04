@@ -275,7 +275,6 @@ class AriaCameraProcessor:
             self.target_camera_resolution is not None
             and len(self.target_camera_resolution) == 2
         ):
-
             pixel_transform_list.append(
                 lambda pixels: rescale_pixel_coords(pixels, scale=self.scale)
             )

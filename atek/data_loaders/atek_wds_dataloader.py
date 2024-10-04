@@ -240,7 +240,6 @@ def create_native_atek_dataloader(
     shuffle_flag: bool = False,
     num_workers: int = 0,
 ) -> torch.utils.data.DataLoader:
-
     wds_dataset = load_atek_wds_dataset(
         urls=urls,
         nodesplitter=nodesplitter,

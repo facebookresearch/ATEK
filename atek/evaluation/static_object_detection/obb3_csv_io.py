@@ -30,9 +30,7 @@ from projectaria_tools.core.sophus import SE3
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-ATEK_OBB3_CSV_HEADER_STR: str = (
-    "time_ns,tx_world_object,ty_world_object,tz_world_object,qw_world_object,qx_world_object,qy_world_object,qz_world_object,scale_x,scale_y,scale_z,name,instance,sem_id,prob"
-)
+ATEK_OBB3_CSV_HEADER_STR: str = "time_ns,tx_world_object,ty_world_object,tz_world_object,qw_world_object,qx_world_object,qy_world_object,qz_world_object,scale_x,scale_y,scale_z,name,instance,sem_id,prob"
 
 
 class AtekObb3CsvWriter:
